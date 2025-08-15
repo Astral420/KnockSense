@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "567130767561",
+    "project_id": "knocksense-21180",
+    "storage_bucket": "knocksense-21180.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:567130767561:android:11cc5bca867b19b816cd18",
+        "android_client_info": {
+          "package_name": "com.example.knocksense"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAUOYdwvNhV6jr_SFSEkdax7GnvryZNwaE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
