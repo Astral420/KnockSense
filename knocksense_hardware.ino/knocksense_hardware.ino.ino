@@ -23,8 +23,9 @@ const char* WIFI_PASS = "tJSRQ4zY";
 byte ssPins [] = {SS_1, SS_2};
 byte rstPins [] = {RST_1, RST_2};
 
-//byte fourByteUID [4] = {0x22,0x0C,0x10,0x01};
-//byte sevenByteUID [7] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+unsigned long doorUnlockTime = 0;
+bool isDoorUnlocked = false;
+const long doorOpenDuration = 6000;
 
 
 MFRC522 mfrc522[NR_OF_READERS];
@@ -73,11 +74,9 @@ digitalWrite(RELAY_PIN, LOW);
 
 }
 
-/**
- * Main loop
- */
 void loop() {
   checkRFID();
+  manageDoorLock();
 }
 
 void connectFirebase() {
@@ -153,6 +152,17 @@ void logAccessAttempt(String uid, String result) {
   Firebase.RTDB.pushJSON(&fbdo, path, &json);
 }
 
+void manageDoorLock() {
+  // If the door is unlocked and 6 seconds have passed...
+  if (isDoorUnlocked && (millis() - doorUnlockTime >= doorOpenDuration)) {
+    Serial.println("6 seconds have passed. Locking the door.");
+    digitalWrite(RELAY_PIN, LOW); // Lock the door
+    isDoorUnlocked = false;       // Update the state
+  }
+}
+
+
+
 
 void doorLogic(String uid) { // We no longer need the 'reader' index here.
   String path = "/rfid_tags/" + uid;
@@ -181,8 +191,9 @@ void doorLogic(String uid) { // We no longer need the 'reader' index here.
   if (accessGranted) {
     Serial.println("ACCESS GRANTED");
     digitalWrite(RELAY_PIN, HIGH);
-    delay(6000);
-    digitalWrite(RELAY_PIN, LOW);
+    isDoorUnlocked = true;         
+    doorUnlockTime = millis();  
+    //digitalWrite(RELAY_PIN, LOW);
   } else {
     Serial.println("ACCESS DENIED");
   }
@@ -195,15 +206,10 @@ void checkRFID() {
   for (uint8_t reader = 0; reader < NR_OF_READERS; reader++) {
     // Look for new cards and read their serial number
     if (mfrc522[reader].PICC_IsNewCardPresent() && mfrc522[reader].PICC_ReadCardSerial()) {
-      
-      // <<< --- BULLETPROOF FIX STARTS HERE --- >>>
-      
-      // A valid MIFARE card UID is either 4 or 7 bytes long.
-      // We will check the size BEFORE converting it to a string.
+
       byte uidSize = mfrc522[reader].uid.size;
 
       if (uidSize == 4 || uidSize == 7) {
-        // The UID size is valid, so we proceed as normal.
         String uid = uidToString(mfrc522[reader].uid.uidByte, uidSize);
         
         Serial.print("\nReader " + String(reader) + ": Valid Card Scanned. UID: " + uid);
@@ -214,26 +220,17 @@ void checkRFID() {
         doorLogic(uid);
 
       } else {
-        // The UID size is invalid (e.g., 8 bytes from a concatenation).
-        // We will ignore this faulty reading completely.
         Serial.print("\nReader " + String(reader) + ": Invalid UID size detected (" + String(uidSize) + " bytes). Ignoring scan.");
       }
       
-      // <<< --- BULLETPROOF FIX ENDS HERE --- >>>
-      
-      // Halt PICC communication to prepare for the next clean read.
       mfrc522[reader].PICC_HaltA();
       mfrc522[reader].PCD_StopCrypto1();
       
-      // A small delay is still good practice to prevent overwhelming the loop.
       delay(500); 
     }
   }
 }
 
-/**
- * Helper routine to dump a byte array as hex values to Serial
- */
 void dump_byte_array(byte *buffer, byte bufferSize) {
   for (byte i = 0; i < bufferSize; i++) {
     Serial.print(buffer[i] < 0x10 ? " 0" : " ");
