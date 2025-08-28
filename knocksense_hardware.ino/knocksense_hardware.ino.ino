@@ -143,11 +143,22 @@ void addOrUpdateRfidTag(String uid) {
   }
 }
 
-void logAccessAttempt(String uid, String result) {
+void logAccessAttempt(String uid, String result, uint8_t reader) {
   String path = "/access_logs";
+  String readerRole = "";
   FirebaseJson json;
+
+  if(reader == 0){
+    readerRole = "Entry";
+  }else if (reader == 1){
+    readerRole = "Exit";
+  }else{
+    Serial.println("Reader detection failed");
+  }
+
   json.set("uid", uid);
   json.set("result", result);
+  json.set("readerRole", readerRole);
   json.set("timestamp/.sv", "timestamp");
   Firebase.RTDB.pushJSON(&fbdo, path, &json);
 }
@@ -164,7 +175,7 @@ void manageDoorLock() {
 
 
 
-void doorLogic(String uid) { // We no longer need the 'reader' index here.
+void doorLogic(String uid, uint8_t reader) { // We no longer need the 'reader' index here.
   String path = "/rfid_tags/" + uid;
   bool accessGranted = false;
   String reason = "Not Found";
@@ -199,7 +210,7 @@ void doorLogic(String uid) { // We no longer need the 'reader' index here.
   }
   
   // Log the final result of the attempt
-  logAccessAttempt(uid, reason);
+  logAccessAttempt(uid, reason, reader);
 }
 
 void checkRFID() {
@@ -217,7 +228,7 @@ void checkRFID() {
         
         addOrUpdateRfidTag(uid);
         
-        doorLogic(uid);
+        doorLogic(uid, reader);
 
       } else {
         Serial.print("\nReader " + String(reader) + ": Invalid UID size detected (" + String(uidSize) + " bytes). Ignoring scan.");
