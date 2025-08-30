@@ -45,6 +45,7 @@ dependencies:
   dio: ^5.9.0
   flutter_custom_tabs: ^2.4.0
   flutter_riverpod: ^2.6.1
+  google_sign_in: ^6.2.1
 
 
 dev_dependencies:
