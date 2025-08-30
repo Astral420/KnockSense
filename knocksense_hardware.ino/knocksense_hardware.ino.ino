@@ -40,8 +40,8 @@ FirebaseConfig config;
 #define DATABASE_URL ""
 
 
-#define ADMIN_EMAIL "fateh8er201@gmail.com" //ESP32 email
-#define ADMIN_PASSWORD "Cv250a178abcd!"
+#define ADMIN_EMAIL "" //ESP32 email
+#define ADMIN_PASSWORD ""
 
 String uidToString(byte *buffer, byte bufferSize) {
   String localUID = "";  // Use local variable instead of global
