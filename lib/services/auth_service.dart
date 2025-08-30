@@ -16,11 +16,12 @@ class AuthService {
       // Configure Microsoft provider
       final microsoftProvider = OAuthProvider('microsoft.com');
       microsoftProvider.setCustomParameters({
-        'tenant': '', // Replace with your Azure AD tenant ID
+        'tenant': '3663e35d-c7bc-4b90-90e0-a67a1d53bb77', 
+        'prompt': 'select_account',
       });
 
       // Sign in with redirect
-      final userCredential = await _auth.signInWithPopup(microsoftProvider);
+      final userCredential = await _auth.signInWithProvider(microsoftProvider);
 
       if (userCredential.user != null) {
         return await _createOrUpdateUser(userCredential.user!);
@@ -60,7 +61,7 @@ class AuthService {
 
   // Create or update user in Realtime Database
   Future<UserModel> _createOrUpdateUser(
-    User firebaseUser, {
+    User firebaseUser, {  
     bool isAdmin = false,
   }) async {
     final String uid = firebaseUser.uid;
@@ -70,6 +71,7 @@ class AuthService {
     // Determine role
     UserRole role;
     String? studentNumber;
+
 
     if (isAdmin) {
       role = UserRole.admin;

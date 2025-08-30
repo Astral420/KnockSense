@@ -6,7 +6,6 @@ class UserModel {
   final String? studentNumber;
   final DateTime createdAt;
   final DateTime lastLogin;
-
   UserModel({
     required this.uid,
     required this.email,

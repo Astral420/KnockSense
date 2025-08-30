@@ -45,18 +45,16 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	
 	<key>CFBundleURLTypes</key>
-<array>
-  <dict>
-    <key>CFBundleURLName</key>
-    <string>com.example.knocksense</string>
-    <key>CFBundleURLSchemes</key>
-    <array>
-      <string>com.example.knocksense</string>
-    </array>
-  </dict>
-</array>
-
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.example.knocksense</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>app-1-567130767561-ios-af05f2e26e8a66ed16cd18</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -32,6 +32,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       if (user != null && mounted) {
         // Navigate to appropriate screen based on role
+         ref.invalidate(currentUserProvider);
         _navigateBasedOnRole(user.role);
       }
     } catch (e) {
@@ -63,6 +64,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
 
       if (user != null && mounted) {
+         ref.invalidate(currentUserProvider);
         _navigateBasedOnRole(user.role);
       }
     } catch (e) {
@@ -123,11 +125,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   height: 50,
                   child: ElevatedButton.icon(
                     onPressed: _isLoading ? null : _signInWithMicrosoft,
-                    icon: Image.asset(
-                      'assets/microsoft_logo.png',
-                      height: 24,
-                      width: 24,
-                    ),
+
                     label: const Text('Sign in with Microsoft'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
