@@ -1,5 +1,4 @@
 // main.dart
-
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,15 +7,34 @@ import 'package:knocksense/screens/dashbaord/admin_dashboard.dart';
 import 'package:knocksense/widgets/auth/auth_wrapper.dart';
 import 'package:knocksense/screens/dashbaord/student_dashboard.dart';
 import 'package:knocksense/screens/dashbaord/teacher_dashboard.dart';
+import 'package:flutter_custom_tabs/flutter_custom_tabs.dart';
+
+
+
+
 
 void main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
   // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  warmup();
+  
   // Wrap the entire app in a ProviderScope for Riverpod state management
   runApp(const ProviderScope(child: MyApp()));
 }
+ void warmup() async{
+  try {
+    await warmupCustomTabs(); 
+
+  } catch (e) {
+
+    print('Custom tabs warmup failed: $e');
+  }
+
+ }
+
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});

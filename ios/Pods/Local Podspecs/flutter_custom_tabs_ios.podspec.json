@@ -1,0 +1,34 @@
+{
+  "name": "flutter_custom_tabs_ios",
+  "version": "2.4.0",
+  "summary": "iOS platform implementation of flutter_custom_tabs.",
+  "description": "iOS platform implementation of flutter_custom_tabs.",
+  "homepage": "https://github.com/droibit/flutter_custom_tabs/",
+  "license": {
+    "type": "Apache-2.0",
+    "file": "../LICENSE"
+  },
+  "authors": "Shinya Kumagai",
+  "source": {
+    "http": "https://github.com/droibit/flutter_custom_tabs/tree/develop/flutter_custom_tabs_ios"
+  },
+  "documentation_url": "https://pub.dev/packages/flutter_custom_tabs",
+  "source_files": "flutter_custom_tabs_ios/Sources/**/*.swift",
+  "dependencies": {
+    "Flutter": []
+  },
+  "platforms": {
+    "ios": "12.0"
+  },
+  "swift_versions": "5.0",
+  "resource_bundles": {
+    "flutter_custom_tabs_ios_privacy": [
+      "flutter_custom_tabs_ios/Sources/flutter_custom_tabs_ios/Resources/PrivacyInfo.xcprivacy"
+    ]
+  },
+  "pod_target_xcconfig": {
+    "DEFINES_MODULE": "YES",
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": "i386"
+  },
+  "swift_version": "5.0"
+}

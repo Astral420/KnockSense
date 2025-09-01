@@ -13,23 +13,28 @@ class AuthService {
   // Microsoft Sign In (for teachers and students)
   Future<UserModel?> signInWithMicrosoft() async {
     try {
-      // Configure Microsoft provider
-      final microsoftProvider = OAuthProvider('microsoft.com');
+      
+      final microsoftProvider = MicrosoftAuthProvider();
       microsoftProvider.setCustomParameters({
-        'tenant': '3663e35d-c7bc-4b90-90e0-a67a1d53bb77', 
-        'prompt': 'select_account',
+        'tenant': '3663e35d-c7bc-4b90-90e0-a67a1d53bb77',
+        'prompt' : 'select_account' 
       });
 
-      // Sign in with redirect
-      final userCredential = await _auth.signInWithProvider(microsoftProvider);
+    
+        final userCredential = await 
+        _auth.signInWithProvider(microsoftProvider);
 
-      if (userCredential.user != null) {
+        if (userCredential.user != null) {
         return await _createOrUpdateUser(userCredential.user!);
-      }
+        }
+
       return null;
-    } catch (e) {
+
+      }
+    catch (e) {
       throw Exception('Microsoft sign in failed: $e');
     }
+
   }
 
   // Email/Password Sign In (for admin only)
