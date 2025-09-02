@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
+import 'package:knocksense/widgets/common/useravatar_widget.dart';
 
 class StudentDashboard extends ConsumerWidget {
   const StudentDashboard({Key? key}) : super(key: key);
@@ -33,7 +34,7 @@ class StudentDashboard extends ConsumerWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.person, size: 80, color: Colors.green),
+                const UserAvatar(radius: 96),
                 const SizedBox(height: 20),
                 Text(
                   'Welcome, ${userData.displayName}!',

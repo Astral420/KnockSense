@@ -46,6 +46,7 @@ dependencies:
   flutter_riverpod: ^2.6.1
   dartz: ^0.10.1
   flutter_custom_tabs: ^2.4.0
+  microsoft_graph_api: ^0.0.13
   
 
 

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -30,10 +29,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final authService = ref.read(authServiceProvider);
       final user = await authService.signInWithMicrosoft();
 
-      if (user != null && mounted) {
-        // Navigate to appropriate screen based on role
-         ref.invalidate(currentUserProvider);
-        _navigateBasedOnRole(user.role);
+      if (user == null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sign in cancelled')),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -63,9 +62,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _passwordController.text,
       );
 
-      if (user != null && mounted) {
-         ref.invalidate(currentUserProvider);
-        _navigateBasedOnRole(user.role);
+      if (user == null && mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invalid Admin Creds')),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -77,7 +77,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
+/*
   void _navigateBasedOnRole(UserRole role) {
     switch (role) {
       case UserRole.admin:
@@ -91,7 +91,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         break;
     }
   }
-
+*/
   @override
   Widget build(BuildContext context) {
     return Scaffold(

@@ -6,6 +6,7 @@ import 'package:knocksense/screens/auth/login_screen.dart';
 import 'package:knocksense/screens/dashbaord/admin_dashboard.dart';
 import 'package:knocksense/screens/dashbaord/student_dashboard.dart';
 import 'package:knocksense/screens/dashbaord/teacher_dashboard.dart';
+import 'package:knocksense/widgets/common/loading_widget.dart';
 
 class AuthWrapper extends ConsumerWidget {
   const AuthWrapper({Key? key}) : super(key: key);
@@ -17,19 +18,34 @@ class AuthWrapper extends ConsumerWidget {
     return authState.when(
       data: (user) {
         if (user == null) {
+          // No authenticated user, show login screen
           return const LoginScreen();
         }
 
-        // Get current user data to determine role
-        final currentUser = ref.watch(currentUserProvider);
+        // User is authenticated, get their details
+        final userDetails = ref.watch(currentUserProvider);
 
-        return currentUser.when(
-          data: (userData) {
-            if (userData == null) {
-              return const Center(child: CircularProgressIndicator());
+        return userDetails.when(
+          data: (userModel) {
+            // If userModel is null, it means either:
+            // 1. The database record doesn't exist (shouldn't happen after proper sign-in)
+            // 2. There's a temporary loading state
+            // In either case, we should sign out and return to login
+            if (userModel == null) {
+              // Sign out the user to force them to re-authenticate
+              // This ensures the database record gets created properly
+              Future.microtask(() async {
+                final authService = ref.read(authServiceProvider);
+                await authService.signOut();
+              });
+              
+              return const Scaffold(
+                body: LoadingWidget(message: 'Initializing...'),
+              );
             }
 
-            switch (userData.role) {
+            // Once we have the data, navigate to the correct dashboard
+            switch (userModel.role) {
               case UserRole.admin:
                 return const AdminDashboard();
               case UserRole.teacher:
@@ -38,12 +54,36 @@ class AuthWrapper extends ConsumerWidget {
                 return const StudentDashboard();
             }
           },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, __) => const LoginScreen(),
+          loading: () => const Scaffold(
+            body: LoadingWidget(message: 'Loading user profile...'),
+          ),
+          error: (err, stack) {
+            // On error, sign out and return to login
+            Future.microtask(() async {
+              final authService = ref.read(authServiceProvider);
+              await authService.signOut();
+            });
+            
+            return const Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('Error loading user data'),
+                    SizedBox(height: 16),
+                    Text('Please try signing in again'),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => const LoginScreen(),
+      // While checking the initial Firebase auth state, show a spinner
+      loading: () => const Scaffold(body: LoadingWidget(message: 'Connecting...')),
+      error: (err, stack) => const Scaffold(
+        body: Center(child: Text('Authentication failed. Please restart the app.')),
+      ),
     );
   }
 }

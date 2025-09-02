@@ -1,41 +1,81 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
 import 'package:knocksense/models/user_models.dart';
+import 'package:knocksense/services/microsoft_graph_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth;
   final FirebaseDatabase _database;
+  final GraphService _graphService;
 
-  AuthService({required FirebaseAuth auth, required FirebaseDatabase database})
-    : _auth = auth,
-      _database = database;
+  AuthService({
+    required FirebaseAuth auth,
+    required FirebaseDatabase database,
+    required GraphService graphService,
+  })  : _auth = auth,
+        _database = database,
+        _graphService = graphService;
 
   // Microsoft Sign In (for teachers and students)
   Future<UserModel?> signInWithMicrosoft() async {
     try {
-      
       final microsoftProvider = MicrosoftAuthProvider();
       microsoftProvider.setCustomParameters({
         'tenant': '3663e35d-c7bc-4b90-90e0-a67a1d53bb77',
-        'prompt' : 'select_account' 
+        'prompt': 'select_account'
       });
 
-    
-        final userCredential = await 
-        _auth.signInWithProvider(microsoftProvider);
+      final userCredential = await _auth.signInWithProvider(microsoftProvider);
 
-        if (userCredential.user != null) {
-        return await _createOrUpdateUser(userCredential.user!);
+      if (userCredential.user != null) {
+       String? accessToken;
+         if (userCredential.credential != null) {
+          // Cast the generic AuthCredential to the specific OAuthCredential
+          // to make the accessToken property available.
+          final oauthCredential = userCredential.credential as dynamic;
+          accessToken = oauthCredential.accessToken;
+          debugPrint("✅ Successfully extracted access token!");
+        } else {
+          debugPrint("❌ userCredential.credential was null.");
         }
 
-      return null;
+        // 1. Create user immediately without the photo URL. This is fast.
+        final user = await _createOrUpdateUser(
+          firebaseUser: userCredential.user!,
+          principalName: userCredential.additionalUserInfo?.profile?['upn'] as String?,
+        );
 
+        // 2. Fetch the photo in the background. Don't await it.
+        if (accessToken != null) {
+          print('🔑 AuthService: Preparing to pass access token: $accessToken');
+          _graphService.getProfilePhotoUrl(
+            accessToken: accessToken,
+            userId: userCredential.user!.uid,
+          ).then((photoUrl) {
+            if (photoUrl != null) {
+              // 3. Once fetched, update the user's profile in the database.
+              _updateUserPhotoUrl(uid: userCredential.user!.uid, photoUrl: photoUrl);
+            }
+          }).catchError((e){
+             print('Failed to fetch and update profile photo in background: $e');
+          });
+        }
+        
+        return user; // Return the user immediately.
       }
-    catch (e) {
+      return null;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'web-context-cancelled') {
+        print('Microsoft sign in cancelled by user.');
+        return null;
+      }
+      rethrow;
+    } catch (e) {
       throw Exception('Microsoft sign in failed: $e');
     }
-
   }
+
 
   // Email/Password Sign In (for admin only)
   Future<UserModel?> signInWithEmailPassword(
@@ -51,7 +91,10 @@ class AuthService {
       if (userCredential.user != null) {
         // Check if admin (non-domain email)
         if (!_isSchoolEmail(email)) {
-          return await _createOrUpdateUser(userCredential.user!, isAdmin: true);
+          return await _createOrUpdateUser(
+            firebaseUser: userCredential.user!,
+            isAdmin: true,
+          );
         } else {
           // Not admin, sign out
           await _auth.signOut();
@@ -65,18 +108,22 @@ class AuthService {
   }
 
   // Create or update user in Realtime Database
-  Future<UserModel> _createOrUpdateUser(
-    User firebaseUser, {  
+  Future<UserModel> _createOrUpdateUser({
+    required User firebaseUser,
+    String? principalName,
+    String? photoUrl,
     bool isAdmin = false,
   }) async {
     final String uid = firebaseUser.uid;
     final String email = firebaseUser.email ?? '';
-    final String displayName = firebaseUser.displayName ?? email.split('@')[0];
+
+    // Prioritize principalName for the displayName, with fallbacks
+    final String displayName =
+        principalName ?? firebaseUser.displayName ?? email.split('@')[0];
 
     // Determine role
     UserRole role;
     String? studentNumber;
-
 
     if (isAdmin) {
       role = UserRole.admin;
@@ -92,20 +139,18 @@ class AuthService {
 
     UserModel user;
     if (snapshot.exists) {
-      // Update last login
-      final existingData = Map<String, dynamic>.from(snapshot.value as Map);
-      user = UserModel.fromJson(existingData);
-      user = UserModel(
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName,
-        role: user.role,
-        studentNumber: user.studentNumber,
-        createdAt: user.createdAt,
+      // User exists: update their data
+      final existingUser =
+          UserModel.fromJson(Map<String, dynamic>.from(snapshot.value as Map));
+
+      // Only update photoUrl if we have a new one, otherwise keep existing
+      user = existingUser.copyWith(
         lastLogin: DateTime.now(),
+        displayName: displayName,
+        photoUrl: photoUrl ?? existingUser.photoUrl,
       );
     } else {
-      // Create new user
+      // New user: create their data
       user = UserModel(
         uid: uid,
         email: email,
@@ -114,25 +159,52 @@ class AuthService {
         studentNumber: studentNumber,
         createdAt: DateTime.now(),
         lastLogin: DateTime.now(),
+        photoUrl: photoUrl,
       );
     }
 
-    // Save to database
+    // Save the complete user object to the database
     await userRef.set(user.toJson());
 
-    // Add to role-specific list for easy querying
-    await _database.ref('roles/${role.name}/$uid').set({
+    // Update role index
+    final Map<String, dynamic> roleIndexData = {
       'email': email,
       'displayName': displayName,
-      'studentNumber': studentNumber,
-    });
+    };
+
+    if (role == UserRole.teacher) {
+      roleIndexData['rfid_uid'] = null;
+      roleIndexData['active_status'] = "offline";
+      roleIndexData['teacher_msg'] = null;
+    } else if (role == UserRole.student) {
+      roleIndexData['studentNumber'] = studentNumber;
+    } 
+
+    // Write the index data to the database
+    if (role != UserRole.admin) {
+      await _database.ref('roles/${role.name}/$uid').set(roleIndexData);
+    }
 
     return user;
   }
 
+  // Update user's photo URL in the database
+  Future<void> _updateUserPhotoUrl({
+    required String uid,
+    required String photoUrl,
+  }) async {
+    try {
+      // Update the user's photoUrl in the database
+      await _database.ref('users/$uid/photoUrl').set(photoUrl);
+      
+      print('Successfully updated user photo URL for $uid');
+    } catch (e) {
+      print('Failed to update user photo URL: $e');
+    }
+  }
+
   // Determine role from email
   Map<String, dynamic> _determineRole(String email) {
-    // Check if it's a school email
     if (_isSchoolEmail(email)) {
       // Extract student number using regex
       final studentNumberMatch = RegExp(r'\.(\d{6})@').firstMatch(email);
@@ -147,7 +219,7 @@ class AuthService {
       }
     }
 
-    // Default to teacher if not school email (shouldn't happen with Microsoft auth)
+    // Default to teacher if not school email
     return {'role': UserRole.teacher, 'studentNumber': null};
   }
 

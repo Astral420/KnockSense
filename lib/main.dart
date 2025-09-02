@@ -1,4 +1,6 @@
 // main.dart
+import 'dart:io';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,21 +18,25 @@ import 'package:flutter_custom_tabs/flutter_custom_tabs.dart';
 void main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
+  if(Platform.isAndroid){
+    await warmup_customtabs();
+  }
   // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  warmup();
+  
   
   // Wrap the entire app in a ProviderScope for Riverpod state management
   runApp(const ProviderScope(child: MyApp()));
 }
- void warmup() async{
-  try {
-    await warmupCustomTabs(); 
-
+ Future <void> warmup_customtabs() async{
+   try {
+    // Try the session-based warmup first (more thorough)
+    await warmupCustomTabs();
+    print('Custom tabs session warmup successful');
   } catch (e) {
-
-    print('Custom tabs warmup failed: $e');
+    print('Custom tabs session warmup failed: $e');
+    
   }
 
  }
