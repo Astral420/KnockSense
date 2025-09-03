@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:microsoft_graph_api/microsoft_graph_api.dart';
 import 'package:microsoft_graph_api/models/models.dart';
 
-import 'package:firebase_auth/firebase_auth.dart';
+
 
 class GraphService {
   final FirebaseStorage _storage;

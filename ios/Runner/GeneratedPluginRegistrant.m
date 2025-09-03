@@ -36,6 +36,12 @@
 @import flutter_custom_tabs_ios;
 #endif
 
+#if __has_include(<nfc_manager/NfcManagerPlugin.h>)
+#import <nfc_manager/NfcManagerPlugin.h>
+#else
+@import nfc_manager;
+#endif
+
 #if __has_include(<path_provider_foundation/PathProviderPlugin.h>)
 #import <path_provider_foundation/PathProviderPlugin.h>
 #else
@@ -56,6 +62,7 @@
   [FLTFirebaseDatabasePlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTFirebaseDatabasePlugin"]];
   [FLTFirebaseStoragePlugin registerWithRegistrar:[registry registrarForPlugin:@"FLTFirebaseStoragePlugin"]];
   [CustomTabsPlugin registerWithRegistrar:[registry registrarForPlugin:@"CustomTabsPlugin"]];
+  [NfcManagerPlugin registerWithRegistrar:[registry registrarForPlugin:@"NfcManagerPlugin"]];
   [PathProviderPlugin registerWithRegistrar:[registry registrarForPlugin:@"PathProviderPlugin"]];
   [SqflitePlugin registerWithRegistrar:[registry registrarForPlugin:@"SqflitePlugin"]];
 }

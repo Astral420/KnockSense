@@ -33,6 +33,7 @@ void main() async {
    try {
     // Try the session-based warmup first (more thorough)
     await warmupCustomTabs();
+    Future.delayed(const Duration(seconds: 10));
     print('Custom tabs session warmup successful');
   } catch (e) {
     print('Custom tabs session warmup failed: $e');

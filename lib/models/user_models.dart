@@ -4,6 +4,7 @@ class UserModel {
   final String displayName;
   final UserRole role;
   final String? studentNumber;
+  final String? teacherID;
   final String? photoUrl;
   final DateTime createdAt;
   final DateTime lastLogin;
@@ -14,6 +15,7 @@ class UserModel {
     required this.displayName,
     required this.role,
     this.studentNumber,
+    this.teacherID, 
     this.photoUrl,
     required this.createdAt,
     required this.lastLogin,
@@ -25,6 +27,7 @@ class UserModel {
     String? displayName,
     UserRole? role,
     String? studentNumber,
+    String? teacherID, 
     String? photoUrl,
     DateTime? createdAt,
     DateTime? lastLogin,
@@ -36,6 +39,7 @@ class UserModel {
       displayName: displayName ?? this.displayName,
       role: role ?? this.role,
       studentNumber: studentNumber ?? this.studentNumber,
+      teacherID: teacherID ?? this.teacherID,
       photoUrl: photoUrl ?? this.photoUrl,
       createdAt: createdAt ?? this.createdAt,
       lastLogin: lastLogin ?? this.lastLogin,
@@ -49,6 +53,7 @@ class UserModel {
     'displayName': displayName,
     'role': role.name,
     'studentNumber': studentNumber,
+    'teacherID': teacherID,
     'photoUrl' : photoUrl,
     'createdAt': createdAt.toIso8601String(),
     'lastLogin': lastLogin.toIso8601String(),
@@ -61,6 +66,7 @@ class UserModel {
     displayName: json['displayName'],
     role: UserRole.values.firstWhere((e) => e.name == json['role']),
     studentNumber: json['studentNumber'],
+    teacherID: json['teacherID'],
     photoUrl: json['photoUrl'],
     createdAt: DateTime.parse(json['createdAt']),
     lastLogin: DateTime.parse(json['lastLogin']),

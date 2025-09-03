@@ -27,18 +27,8 @@ class AuthWrapper extends ConsumerWidget {
 
         return userDetails.when(
           data: (userModel) {
-            // If userModel is null, it means either:
-            // 1. The database record doesn't exist (shouldn't happen after proper sign-in)
-            // 2. There's a temporary loading state
-            // In either case, we should sign out and return to login
+           
             if (userModel == null) {
-              // Sign out the user to force them to re-authenticate
-              // This ensures the database record gets created properly
-              Future.microtask(() async {
-                final authService = ref.read(authServiceProvider);
-                await authService.signOut();
-              });
-              
               return const Scaffold(
                 body: LoadingWidget(message: 'Initializing...'),
               );

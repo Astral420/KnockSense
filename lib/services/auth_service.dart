@@ -107,6 +107,33 @@ class AuthService {
     }
   }
 
+  Future<String> _generateTeacherId() async {
+  try {
+    final counterRef = _database.ref('counters/teacherIdCounter');
+    
+    // Use transaction to ensure atomic increment
+    final transactionResult = await counterRef.runTransaction((currentValue) {
+      int nextId = 1;
+      if (currentValue != null && currentValue is int) {
+        nextId = currentValue + 1;
+      }
+      return Transaction.success(nextId);
+    });
+    
+    if (transactionResult.committed && transactionResult.snapshot.value != null) {
+      final teacherNumber = transactionResult.snapshot.value as int;
+      return 'Teacher_${teacherNumber.toString().padLeft(3, '0')}';
+    } else {
+      throw Exception('Failed to generate teacher ID');
+    }
+  } catch (e) {
+    print('Error generating teacher ID: $e');
+    // Fallback: use timestamp-based ID
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    return 'Teacher_${timestamp.toString().substring(timestamp.toString().length - 6)}';
+  }
+}
+
   // Create or update user in Realtime Database
   Future<UserModel> _createOrUpdateUser({
     required User firebaseUser,
@@ -124,6 +151,7 @@ class AuthService {
     // Determine role
     UserRole role;
     String? studentNumber;
+    String? teacherID;
 
     if (isAdmin) {
       role = UserRole.admin;
@@ -150,6 +178,10 @@ class AuthService {
         photoUrl: photoUrl ?? existingUser.photoUrl,
       );
     } else {
+
+      if (role == UserRole.teacher) {
+      teacherID = await _generateTeacherId();
+    }
       // New user: create their data
       user = UserModel(
         uid: uid,
@@ -157,6 +189,7 @@ class AuthService {
         displayName: displayName,
         role: role,
         studentNumber: studentNumber,
+        teacherID: teacherID,
         createdAt: DateTime.now(),
         lastLogin: DateTime.now(),
         photoUrl: photoUrl,
@@ -176,6 +209,7 @@ class AuthService {
       roleIndexData['rfid_uid'] = null;
       roleIndexData['active_status'] = "offline";
       roleIndexData['teacher_msg'] = null;
+      roleIndexData['teacherID'] = teacherID;
     } else if (role == UserRole.student) {
       roleIndexData['studentNumber'] = studentNumber;
     } 

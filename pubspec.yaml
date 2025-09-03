@@ -47,6 +47,8 @@ dependencies:
   dartz: ^0.10.1
   flutter_custom_tabs: ^2.4.0
   microsoft_graph_api: ^0.0.13
+  nfc_manager: ^4.0.2
+  nfc_manager_ndef: ^1.0.1
   
 
 
