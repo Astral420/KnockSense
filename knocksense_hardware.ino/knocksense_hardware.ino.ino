@@ -46,12 +46,12 @@ FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
 
-#define API_KEY "AIzaSyAUOYdwvNhV6jr_SFSEkdax7GnvryZNwaE"
-#define DATABASE_URL "https://knocksense-21180-default-rtdb.asia-southeast1.firebasedatabase.app"
+#define API_KEY ""
+#define DATABASE_URL ""
 
 
-#define ADMIN_EMAIL "fateh8er201@gmail.com" //ESP32 email
-#define ADMIN_PASSWORD "Cv250a178abcd!"
+#define ADMIN_EMAIL "" //ESP32 email
+#define ADMIN_PASSWORD ""
 
 String uidToString(byte *buffer, byte bufferSize) {
   String localUID = "";  // Use local variable instead of global
