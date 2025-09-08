@@ -3,12 +3,6 @@
 #include <MFRC522.h>
 #include <Firebase_ESP_Client.h>
 
-
-
-// ---------- WiFi ----------
-const char* WIFI_SSID = "DYWIFI";
-const char* WIFI_PASS = "tJSRQ4zY";
-
 // ---------- RFID / hardware ----------
 #define NR_OF_READERS 2
 #define SS_1  5
@@ -19,6 +13,22 @@ const char* WIFI_PASS = "tJSRQ4zY";
 
 
 #define RELAY_PIN 32 // solenoid relay pin
+
+
+// ---------- WiFi ----------
+const char* WIFI_SSID = "DYWIFI";
+const char* WIFI_PASS = "tJSRQ4zY";
+
+const char *ap_ssid = "KnockSense";
+const char *ap_password = "12345678";
+
+IPAddress ap_ip(192, 168, 4, 1);
+IPAddress ap_mask(255, 255, 255, 0);
+IPAddress ap_leaseStart(192, 168, 4, 2);
+IPAddress ap_dns(8, 8, 4, 4);
+
+#define NAPT 1000
+#define NAPT_PORT 10
 
 byte ssPins [] = {SS_1, SS_2};
 byte rstPins [] = {RST_1, RST_2};
@@ -36,12 +46,12 @@ FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
 
-#define API_KEY ""
-#define DATABASE_URL ""
+#define API_KEY "AIzaSyAUOYdwvNhV6jr_SFSEkdax7GnvryZNwaE"
+#define DATABASE_URL "https://knocksense-21180-default-rtdb.asia-southeast1.firebasedatabase.app"
 
 
-#define ADMIN_EMAIL "" //ESP32 email
-#define ADMIN_PASSWORD ""
+#define ADMIN_EMAIL "fateh8er201@gmail.com" //ESP32 email
+#define ADMIN_PASSWORD "Cv250a178abcd!"
 
 String uidToString(byte *buffer, byte bufferSize) {
   String localUID = "";  // Use local variable instead of global
@@ -64,6 +74,8 @@ while (!Serial);        // Do nothing if no serial port is opened (for ATMEGA32U
 SPI.begin();            // Init SPI bus
 initReader();
 connectWiFi();
+
+
 connectFirebase();
 
 
@@ -103,6 +115,117 @@ void connectFirebase() {
   }
 }
 
+void connectWiFi() {
+
+
+  WiFi.mode(WIFI_AP_STA);
+
+  Serial.setDebugOutput(true);
+  Network.onEvent(onEvent);
+
+  WiFi.AP.begin();
+  WiFi.AP.config(ap_ip, ap_ip, ap_mask, ap_leaseStart, ap_dns);
+  if(!WiFi.AP.waitStatusBits(ESP_NETIF_STARTED_BIT, 1000)){
+    Serial.println("Failed to start AP!");
+    return;
+  }
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+
+  Serial.print("Connecting to WiFi ..");
+
+  while (WiFi.status() != WL_CONNECTED) {
+  delay(1000);
+  Serial.print('.');
+  }
+  Serial.println();
+  Serial.println(WiFi.localIP());
+}
+
+
+void onEvent(arduino_event_id_t event, arduino_event_info_t info) {
+  switch (event) {
+    case ARDUINO_EVENT_WIFI_STA_START:
+      Serial.println("STA Started");
+      break;
+    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+      Serial.println("STA Connected");
+      break;
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+      Serial.println("STA Got IP");
+      Serial.println(WiFi.STA);
+      WiFi.AP.enableNAPT(true);
+      break;
+    case ARDUINO_EVENT_WIFI_STA_LOST_IP:
+      Serial.println("STA Lost IP");
+      WiFi.AP.enableNAPT(false);
+      break;
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+      Serial.println("STA Disconnected");
+      WiFi.AP.enableNAPT(false);
+      break;
+    case ARDUINO_EVENT_WIFI_STA_STOP:
+      Serial.println("STA Stopped");
+      break;
+
+    case ARDUINO_EVENT_WIFI_AP_START:
+      Serial.println("AP Started");
+      Serial.println(WiFi.AP);
+      break;
+    case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
+      Serial.println("AP STA Connected");
+      break;
+    case ARDUINO_EVENT_WIFI_AP_STADISCONNECTED:
+      Serial.println("AP STA Disconnected");
+      break;
+    case ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED:
+      Serial.print("AP STA IP Assigned: ");
+      Serial.println(IPAddress(info.wifi_ap_staipassigned.ip.addr));
+      break;
+    case ARDUINO_EVENT_WIFI_AP_PROBEREQRECVED:
+      Serial.println("AP Probe Request Received");
+      break;
+    case ARDUINO_EVENT_WIFI_AP_STOP:
+      Serial.println("AP Stopped");
+      break;
+      
+    default:
+      break;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 void addOrUpdateRfidTag(String uid) {
   // Construct the specific path for this UID.
@@ -126,8 +249,7 @@ void addOrUpdateRfidTag(String uid) {
       Serial.println("New RFID tag detected. Adding to database...");
       
       FirebaseJson json;
-      json.set("status", "active"); //boolean in mob/web app 1 = active | 0 = inactive
-      json.set("assignedTo", "null");
+      json.set("status", "inactive"); //boolean in mob/web app 1 = active | 0 = inactive
       json.set("createdAt/.sv", "timestamp");
 
       if (Firebase.RTDB.setJSON(&fbdo, path, &json)) {
@@ -252,18 +374,9 @@ void dump_byte_array(byte *buffer, byte bufferSize) {
 
 
 
-void connectWiFi() {
-  WiFi.mode(WIFI_AP_STA);
-  WiFi.begin();
 
-  Serial.print("Connecting to WiFi ..");
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print('.');
-    delay(1000);
-  }
-  Serial.println();
-  Serial.println(WiFi.localIP());
-}
+
+
 
   void initReader() {
   for (uint8_t reader = 0; reader < NR_OF_READERS; reader++) {
