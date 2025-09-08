@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/firebase_options.dart';
 import 'package:knocksense/screens/dashbaord/admin_dashboard.dart';
@@ -18,8 +19,14 @@ import 'package:flutter_custom_tabs/flutter_custom_tabs.dart';
 void main() async {
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
+
+    await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown
+  ]);
+
   if(Platform.isAndroid){
-    await warmup_customtabs();
+    warmup_customtabs();
   }
   // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -33,7 +40,6 @@ void main() async {
    try {
     // Try the session-based warmup first (more thorough)
     await warmupCustomTabs();
-    Future.delayed(const Duration(seconds: 10));
     print('Custom tabs session warmup successful');
   } catch (e) {
     print('Custom tabs session warmup failed: $e');
@@ -55,6 +61,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
         useMaterial3: true,
       ),
+      
       // Set AuthWrapper as the home screen.
       // It will handle showing the LoginScreen or a dashboard based on auth state.
       home: const AuthWrapper(),

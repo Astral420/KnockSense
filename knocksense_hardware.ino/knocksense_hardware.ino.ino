@@ -127,7 +127,6 @@ void addOrUpdateRfidTag(String uid) {
       
       FirebaseJson json;
       json.set("status", "active"); //boolean in mob/web app 1 = active | 0 = inactive
-      json.set("assignedTo", "null");
       json.set("createdAt/.sv", "timestamp");
 
       if (Firebase.RTDB.setJSON(&fbdo, path, &json)) {

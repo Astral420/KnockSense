@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:knocksense/models/rfid_model.dart';
-import 'package:nfc_manager_ndef/nfc_manager_ndef.dart';
 
 class NFCService {
   final FirebaseDatabase _database;
@@ -84,6 +83,7 @@ class NFCService {
             final List<int>? identifier = tagData.id as List<int>?;
 
           if (identifier == null) {
+            stopNFCScanning();
             onError('Could not find a UID in the tag data.');
             return;
           }
@@ -92,10 +92,13 @@ class NFCService {
           final String uid = bytesToUidString(identifier);
           debugPrint('Discovered tag with UID: $uid');
           onTagDiscovered(uid);
+          stopNFCScanning();
+
+
         } catch (e) {
+          stopNFCScanning();
           onError('Error processing NFC tag: $e');
-        } finally {
-          await NfcManager.instance.stopSession();
+          
         }
       },
       onSessionErrorIos: (error) {
