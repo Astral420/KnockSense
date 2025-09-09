@@ -546,58 +546,177 @@ class _AdminRFIDManagementPageState extends ConsumerState<AdminRFIDManagementPag
   }
 
   Future<void> _showAssignDialog(RFIDModel tag) async {
-    final TextEditingController assignController = TextEditingController(
-      text: tag.assignedTo ?? '',
-    );
+  // Get all teachers
+  List<Map<String, dynamic>> teachers = [];
+  String? selectedTeacherID;
+  bool isLoading = true;
+  
+  try {
+    final nfcService = ref.read(nfcServiceProvider);
+    teachers = await nfcService.getAllTeachers();
+    isLoading = false;
+    
+    // Pre-select current assignment if exists
+    if (tag.assignedTo != null) {
+      final currentTeacher = teachers.firstWhere(
+        (teacher) => teacher['teacherID'] == tag.assignedTo,
+        orElse: () => {},
+      );
+      if (currentTeacher.isNotEmpty) {
+        selectedTeacherID = tag.assignedTo;
+      }
+    }
+  } catch (e) {
+    _showSnackBar('Failed to load teachers: $e', isError: true);
+    return;
+  }
 
-    return showDialog<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Assign Tag to User'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('UID: ${tag.rfid_uid}'),
-              const SizedBox(height: 16),
-              TextField(
-                controller: assignController,
-                decoration: const InputDecoration(
-                  labelText: 'User Name/ID',
-                  hintText: 'Enter user name or ID',
-                  border: OutlineInputBorder(),
+  return showDialog<void>(
+    context: context,
+    builder: (BuildContext context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('Assign RFID to Teacher'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'RFID UID: ${tag.rfid_uid}',
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.of(context).pop(),
+                const SizedBox(height: 16),
+                
+                if (isLoading)
+                  const Center(child: CircularProgressIndicator())
+                else if (teachers.isEmpty)
+                  const Text('No teachers found in the system.')
+                else ...[
+                  const Text('Select Teacher:'),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: selectedTeacherID,
+                    hint: const Text('Choose a teacher'),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                    ),
+                    items: [
+                      // Option to unassign
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child: Text(
+                          'Unassign',
+                          style: TextStyle(fontStyle: FontStyle.italic),
+                        ),
+                      ),
+                      // Teacher options
+                      ...teachers.map((teacher) {
+                        return DropdownMenuItem<String>(
+                          value: teacher['teacherID'] as String?,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                teacher['displayName'] ?? 'Unknown Name',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                'ID: ${teacher['teacherID'] ?? 'No ID'}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                    onChanged: (String? value) {
+                      setState(() {
+                        selectedTeacherID = value;
+                      });
+                    },
+                  ),
+                  
+                  // Show current assignment info if exists
+                  if (tag.assignedTo != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, 
+                               size: 16, 
+                               color: Colors.blue.shade700),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Currently assigned to: ${tag.assignedTo}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ],
             ),
-            ElevatedButton(
-              child: const Text('Assign'),
-              onPressed: () async {
-                final assignedTo = assignController.text.trim();
-                if (assignedTo.isNotEmpty) {
+            actions: <Widget>[
+              TextButton(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              ElevatedButton(
+                child: const Text('Assign'),
+                onPressed: teachers.isEmpty ? null : () async {
                   try {
-                    // You'll need to implement this method in your NFC service
-                    // await nfcService.assignRfidTag(tag.rfid_uid, assignedTo);
-                    _showSnackBar('Tag assigned successfully!');
+                    final nfcService = ref.read(nfcServiceProvider);
+                    
+                    if (selectedTeacherID == null) {
+                      // Unassign the RFID
+                      await nfcService.unassignRfidTag(tag.rfid_uid);
+                      _showSnackBar('RFID tag unassigned successfully!');
+                    } else {
+                      // Assign to selected teacher
+                      await nfcService.assignRfidTag(tag.rfid_uid, selectedTeacherID!);
+                      _showSnackBar('RFID tag assigned successfully!');
+                    }
+                    
                     Navigator.of(context).pop();
                   } catch (e) {
-                    _showSnackBar(e.toString().replaceAll('Exception: ', ''), isError: true);
+                    _showSnackBar(
+                      e.toString().replaceAll('Exception: ', ''), 
+                      isError: true,
+                    );
                   }
-                } else {
-                  _showSnackBar('Please enter a user name or ID', isError: true);
-                }
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
+                },
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
 
   Future<void> _copyUidToClipboard(String uid) async {
     await Clipboard.setData(ClipboardData(text: uid));

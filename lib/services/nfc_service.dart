@@ -159,4 +159,97 @@ class NFCService {
       throw Exception('Failed to update RFID status');
     }
   }
+
+Future<void> assignRfidTag(String uid, String teacherID) async {
+  try {
+    // Verify the teacher exists
+    final teacherSnapshot = await _database
+        .ref('roles/teacher')
+        .orderByChild('teacherID')
+        .equalTo(teacherID)
+        .get();
+    
+    if (!teacherSnapshot.exists) {
+      throw Exception('Teacher with ID $teacherID not found');
+    }
+
+    // Check if the RFID tag exists
+    final tagSnapshot = await _database.ref('rfid_tags/$uid').get();
+    if (!tagSnapshot.exists) {
+      throw Exception('RFID tag not found');
+    }
+
+    // Update the RFID tag with the teacher assignment
+    await _database.ref('rfid_tags/$uid/assignedTo').set(teacherID);
+    
+    // Also update the teacher's role data with the RFID UID
+    final teacherData = Map<String, dynamic>.from(teacherSnapshot.children.first.value as Map);
+    final teacherUID = teacherSnapshot.children.first.key!;
+    
+    await _database.ref('roles/teacher/$teacherUID/rfid_uid').set(uid);
+    
+    debugPrint('Successfully assigned RFID UID: $uid to teacher: $teacherID');
+  } catch (e) {
+    debugPrint('Error assigning RFID tag: $e');
+    rethrow;
+  }
 }
+
+// Add this method to get all teachers for the dropdown
+Future<List<Map<String, dynamic>>> getAllTeachers() async {
+  try {
+    final snapshot = await _database.ref('roles/teacher').get();
+    
+    if (!snapshot.exists) {
+      return [];
+    }
+    
+    final teachersMap = Map<String, dynamic>.from(snapshot.value as Map);
+    return teachersMap.entries.map((entry) {
+      final teacherData = Map<String, dynamic>.from(entry.value as Map);
+      teacherData['uid'] = entry.key; // Add the UID for reference
+      return teacherData;
+    }).toList();
+  } catch (e) {
+    debugPrint('Error getting teachers: $e');
+    throw Exception('Failed to fetch teachers');
+  }
+}
+
+Future<void> unassignRfidTag(String uid) async {
+  try {
+    // Get current assignment
+    final tagSnapshot = await _database.ref('rfid_tags/$uid').get();
+    if (!tagSnapshot.exists) {
+      throw Exception('RFID tag not found');
+    }
+    
+    final tagData = Map<String, dynamic>.from(tagSnapshot.value as Map);
+    final currentAssignment = tagData['assignedTo'] as String?;
+    
+    if (currentAssignment != null) {
+      // Find and update the teacher's role data
+      final teacherSnapshot = await _database
+          .ref('roles/teacher')
+          .orderByChild('teacherID')
+          .equalTo(currentAssignment)
+          .get();
+      
+      if (teacherSnapshot.exists) {
+        final teacherUID = teacherSnapshot.children.first.key!;
+        await _database.ref('roles/teacher/$teacherUID/rfid_uid').remove();
+      }
+    }
+    
+    // Remove assignment from RFID tag
+    await _database.ref('rfid_tags/$uid/assignedTo').remove();
+    
+    debugPrint('Successfully unassigned RFID UID: $uid');
+  } catch (e) {
+    debugPrint('Error unassigning RFID tag: $e');
+    rethrow;
+  }
+}
+
+}
+
