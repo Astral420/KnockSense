@@ -31,13 +31,12 @@ class AuthService {
       if (userCredential.user != null) {
        String? accessToken;
          if (userCredential.credential != null) {
-          // Cast the generic AuthCredential to the specific OAuthCredential
-          // to make the accessToken property available.
+         
           final oauthCredential = userCredential.credential as dynamic;
           accessToken = oauthCredential.accessToken;
-          debugPrint("✅ Successfully extracted access token!");
+
         } else {
-          debugPrint("❌ userCredential.credential was null.");
+          debugPrint("Usercredential is null");
         }
 
         // 1. Create user immediately without the photo URL. This is fast.
