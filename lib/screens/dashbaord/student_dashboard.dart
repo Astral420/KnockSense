@@ -64,12 +64,7 @@ class StudentDashboard extends ConsumerWidget {
                               icon: const Icon(Icons.notifications_outlined),
                               onPressed: () {},
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.logout),
-                              onPressed: () async {
-                                await authService.signOut();
-                              },
-                            ),
+                          
                           ],
                         ),
                       ],
@@ -413,6 +408,11 @@ class StudentDashboard extends ConsumerWidget {
                     child: Center(child: Text('Error: $err')),
                   ),
                 ),
+
+                // Add extra padding at bottom to avoid content being hidden behind bottom nav
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 100),
+                ),
               ],
             );
           },
@@ -420,25 +420,7 @@ class StudentDashboard extends ConsumerWidget {
           error: (err, stack) => Center(child: Text('Error: $err')),
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.black,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.history),
-            label: 'History',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.more_horiz),
-            label: 'More',
-          ),
-        ],
-      ),
+      // Remove the bottomNavigationBar from here since it's now handled by MainNavigation
     );
   }
 

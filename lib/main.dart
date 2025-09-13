@@ -11,6 +11,8 @@ import 'package:knocksense/widgets/auth/auth_wrapper.dart';
 import 'package:knocksense/screens/dashbaord/student_dashboard.dart';
 import 'package:knocksense/screens/dashbaord/teacher_dashboard.dart';
 import 'package:flutter_custom_tabs/flutter_custom_tabs.dart';
+import 'package:knocksense/widgets/navigation/student_nav_wrapper.dart';
+
 
 
 
@@ -69,7 +71,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/admin-dashboard': (context) => const AdminDashboard(),
         '/teacher-dashboard': (context) => const TeacherDashboard(),
-        '/student-dashboard': (context) => const StudentDashboard(),
+        '/student-dashboard': (context) => const MainNavigationStudent(),
       },
     );
   }

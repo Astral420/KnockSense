@@ -190,6 +190,7 @@ if [[ "$CONFIGURATION" == "Debug" ]]; then
   install_framework "${BUILT_PRODUCTS_DIR}/RecaptchaInterop/RecaptchaInterop.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/flutter_custom_tabs_ios/flutter_custom_tabs_ios.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/leveldb-library/leveldb.framework"
+  install_framework "${BUILT_PRODUCTS_DIR}/nfc_manager/nfc_manager.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/path_provider_foundation/path_provider_foundation.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/sqflite_darwin/sqflite_darwin.framework"
 fi
@@ -208,6 +209,7 @@ if [[ "$CONFIGURATION" == "Profile" ]]; then
   install_framework "${BUILT_PRODUCTS_DIR}/RecaptchaInterop/RecaptchaInterop.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/flutter_custom_tabs_ios/flutter_custom_tabs_ios.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/leveldb-library/leveldb.framework"
+  install_framework "${BUILT_PRODUCTS_DIR}/nfc_manager/nfc_manager.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/path_provider_foundation/path_provider_foundation.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/sqflite_darwin/sqflite_darwin.framework"
 fi
@@ -226,6 +228,7 @@ if [[ "$CONFIGURATION" == "Release" ]]; then
   install_framework "${BUILT_PRODUCTS_DIR}/RecaptchaInterop/RecaptchaInterop.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/flutter_custom_tabs_ios/flutter_custom_tabs_ios.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/leveldb-library/leveldb.framework"
+  install_framework "${BUILT_PRODUCTS_DIR}/nfc_manager/nfc_manager.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/path_provider_foundation/path_provider_foundation.framework"
   install_framework "${BUILT_PRODUCTS_DIR}/sqflite_darwin/sqflite_darwin.framework"
 fi
