@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/firebase_options.dart';
 import 'package:knocksense/screens/dashbaord/admin_dashboard.dart';
 import 'package:knocksense/widgets/auth/auth_wrapper.dart';
-import 'package:knocksense/screens/dashbaord/student_dashboard.dart';
 import 'package:knocksense/screens/dashbaord/teacher_dashboard.dart';
 import 'package:flutter_custom_tabs/flutter_custom_tabs.dart';
 import 'package:knocksense/widgets/navigation/student_nav_wrapper.dart';
