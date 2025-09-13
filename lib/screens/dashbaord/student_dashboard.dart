@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/provider/teacher_provider.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
-//import 'package:knocksense/models/teacher_model.dart';
-import 'package:knocksense/widgets/student_dash/teacher_detail_modal.dart'; // Import the new modal widget
+import 'package:knocksense/widgets/student_dash/teacher_detail_modal.dart';
 
 class StudentDashboard extends ConsumerWidget {
   const StudentDashboard({Key? key}) : super(key: key);
@@ -109,7 +109,7 @@ class StudentDashboard extends ConsumerWidget {
                   ),
                 ),
 
-                // Teachers Grid
+                // Teachers Grid (Horizontal)
                 teachers.when(
                   data: (teachersList) {
                     if (teachersList.isEmpty) {
@@ -147,23 +147,48 @@ class StudentDashboard extends ConsumerWidget {
                                   children: [
                                     Stack(
                                       children: [
-                                        CircleAvatar(
-                                          radius: 40,
-                                          backgroundColor: Colors.amber,
-                                          backgroundImage: teacher.photoUrl != null
-                                              ? NetworkImage(teacher.photoUrl!)
-                                              : null,
-                                          child: teacher.photoUrl == null
-                                              ? Text(
+                                        // Updated to use CachedNetworkImage
+                                        teacher.photoUrl != null
+                                            ? CachedNetworkImage(
+                                                imageUrl: teacher.photoUrl!,
+                                                imageBuilder: (context, imageProvider) => CircleAvatar(
+                                                  radius: 40,
+                                                  backgroundImage: imageProvider,
+                                                ),
+                                                placeholder: (context, url) => CircleAvatar(
+                                                  radius: 40,
+                                                  backgroundColor: Colors.amber,
+                                                  child: const SizedBox(
+                                                    width: 30,
+                                                    height: 30,
+                                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                                  ),
+                                                ),
+                                                errorWidget: (context, url, error) => CircleAvatar(
+                                                  radius: 40,
+                                                  backgroundColor: Colors.amber,
+                                                  child: Text(
+                                                    teacher.initials,
+                                                    style: const TextStyle(
+                                                      fontSize: 24,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Colors.black87,
+                                                    ),
+                                                  ),
+                                                ),
+                                              )
+                                            : CircleAvatar(
+                                                radius: 40,
+                                                backgroundColor: Colors.amber,
+                                                child: Text(
                                                   teacher.initials,
                                                   style: const TextStyle(
                                                     fontSize: 24,
                                                     fontWeight: FontWeight.bold,
                                                     color: Colors.black87,
                                                   ),
-                                                )
-                                              : null,
-                                        ),
+                                                ),
+                                              ),
                                         Positioned(
                                           bottom: 0,
                                           right: 0,
@@ -253,7 +278,7 @@ class StudentDashboard extends ConsumerWidget {
                   ),
                 ),
 
-                // Teachers List with Status
+                // Teachers List with Status (Vertical)
                 teachers.when(
                   data: (teachersList) {
                     if (teachersList.isEmpty) {
@@ -301,23 +326,47 @@ class StudentDashboard extends ConsumerWidget {
                               elevation: 0,
                               color: Colors.white,
                               child: ListTile(
-                                leading: CircleAvatar(
-                                  radius: 24,
-                                  backgroundColor: Colors.amber,
-                                  backgroundImage: teacher.photoUrl != null
-                                      ? NetworkImage(teacher.photoUrl!)
-                                      : null,
-                                  child: teacher.photoUrl == null
-                                      ? Text(
+                                leading: teacher.photoUrl != null
+                                    ? CachedNetworkImage(
+                                        imageUrl: teacher.photoUrl!,
+                                        imageBuilder: (context, imageProvider) => CircleAvatar(
+                                          radius: 24,
+                                          backgroundImage: imageProvider,
+                                        ),
+                                        placeholder: (context, url) => CircleAvatar(
+                                          radius: 24,
+                                          backgroundColor: Colors.amber,
+                                          child: const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
+                                        ),
+                                        errorWidget: (context, url, error) => CircleAvatar(
+                                          radius: 24,
+                                          backgroundColor: Colors.amber,
+                                          child: Text(
+                                            teacher.initials,
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    : CircleAvatar(
+                                        radius: 24,
+                                        backgroundColor: Colors.amber,
+                                        child: Text(
                                           teacher.initials,
                                           style: const TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,
                                             color: Colors.black87,
                                           ),
-                                        )
-                                      : null,
-                                ),
+                                        ),
+                                      ),
                                 title: Text(
                                   teacher.displayName,
                                   style: const TextStyle(fontWeight: FontWeight.w600),

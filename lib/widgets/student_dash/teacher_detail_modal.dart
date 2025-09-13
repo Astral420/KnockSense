@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:knocksense/models/teacher_model.dart';
 import 'package:knocksense/provider/teacher_provider.dart';
 
@@ -74,23 +75,48 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                   children: [
                     Stack(
                       children: [
-                        CircleAvatar(
-                          radius: 40,
-                          backgroundColor: Colors.amber,
-                          backgroundImage: teacher.photoUrl != null
-                              ? NetworkImage(teacher.photoUrl!)
-                              : null,
-                          child: teacher.photoUrl == null
-                              ? Text(
+                        // Updated to use CachedNetworkImage
+                        teacher.photoUrl != null
+                            ? CachedNetworkImage(
+                                imageUrl: teacher.photoUrl!,
+                                imageBuilder: (context, imageProvider) => CircleAvatar(
+                                  radius: 40,
+                                  backgroundImage: imageProvider,
+                                ),
+                                placeholder: (context, url) => CircleAvatar(
+                                  radius: 40,
+                                  backgroundColor: Colors.amber,
+                                  child: const SizedBox(
+                                    width: 30,
+                                    height: 30,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) => CircleAvatar(
+                                  radius: 40,
+                                  backgroundColor: Colors.amber,
+                                  child: Text(
+                                    teacher.initials,
+                                    style: const TextStyle(
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : CircleAvatar(
+                                radius: 40,
+                                backgroundColor: Colors.amber,
+                                child: Text(
                                   teacher.initials,
                                   style: const TextStyle(
                                     fontSize: 32,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.black87,
                                   ),
-                                )
-                              : null,
-                        ),
+                                ),
+                              ),
                         // Status indicator
                         Positioned(
                           bottom: 2,
