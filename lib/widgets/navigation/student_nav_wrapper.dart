@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/screens/dashbaord/student_dashboard.dart';
 import 'package:knocksense/screens/student/student_more_screen.dart';
+import 'package:knocksense/screens/student/knocked_history_screen.dart';
 
 // Provider to manage the current tab index
 final currentTabProvider = StateProvider<int>((ref) => 0);
@@ -18,7 +19,7 @@ class MainNavigationStudent extends ConsumerWidget {
         index: currentTab,
         children: const [
           StudentDashboard(),
-          HistoryPage(), // You'll need to create this
+          KnockedHistoryPage(), // Updated to use the new history page
           MorePage(),
         ],
       ),
@@ -47,52 +48,3 @@ class MainNavigationStudent extends ConsumerWidget {
   }
 }
 
-// Placeholder for History page - you'll need to implement this
-class HistoryPage extends StatelessWidget {
-  const HistoryPage({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      body: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: const Text(
-                'History',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.history,
-                      size: 64,
-                      color: Colors.grey[400],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'History page coming soon',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

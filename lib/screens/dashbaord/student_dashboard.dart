@@ -12,7 +12,7 @@ class StudentDashboard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final authService = ref.read(authServiceProvider);
+    //final authService = ref.read(authServiceProvider);
     final teachers = ref.watch(teachersStreamProvider);
 
     return Scaffold(
