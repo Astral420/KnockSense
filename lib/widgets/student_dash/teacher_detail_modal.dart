@@ -1,8 +1,13 @@
+// widgets/student_dash/teacher_detail_modal.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:knocksense/models/teacher_model.dart';
+import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/provider/teacher_provider.dart';
+import 'package:knocksense/provider/auth_provider.dart';
+import 'package:knocksense/provider/appointment_provider.dart';
 
 class TeacherDetailModal extends ConsumerStatefulWidget {
   final TeacherModel teacher;
@@ -18,6 +23,7 @@ class TeacherDetailModal extends ConsumerStatefulWidget {
 
 class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
   final TextEditingController _noteController = TextEditingController();
+  bool _isKnocking = false;
 
   @override
   void dispose() {
@@ -29,20 +35,36 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
   Widget build(BuildContext context) {
     // Watch the specific teacher to get real-time updates
     final teacherAsync = ref.watch(teacherByUidProvider(widget.teacher.uid));
+    final currentUser = ref.watch(currentUserProvider);
+    final hasPendingAppointment = ref.watch(
+      hasPendingAppointmentProvider(widget.teacher.uid)
+    );
     
     return teacherAsync.when(
       data: (currentTeacher) {
         // Use the current teacher data if available, fallback to initial teacher
         final teacher = currentTeacher ?? widget.teacher;
         
-        return _buildModalContent(teacher);
+        return currentUser.when(
+          data: (user) => _buildModalContent(
+            teacher, 
+            user, 
+            hasPendingAppointment.value ?? false
+          ),
+          loading: () => _buildModalContent(teacher, null, false),
+          error: (_, __) => _buildModalContent(teacher, null, false),
+        );
       },
-      loading: () => _buildModalContent(widget.teacher),
-      error: (_, __) => _buildModalContent(widget.teacher),
+      loading: () => _buildModalContent(widget.teacher, null, false),
+      error: (_, __) => _buildModalContent(widget.teacher, null, false),
     );
   }
 
-  Widget _buildModalContent(TeacherModel teacher) {
+  Widget _buildModalContent(
+    TeacherModel teacher, 
+    UserModel? currentUser,
+    bool hasPendingAppointment,
+  ) {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -75,7 +97,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                   children: [
                     Stack(
                       children: [
-                        // Updated to use CachedNetworkImage
+                        // Teacher avatar with CachedNetworkImage
                         teacher.photoUrl != null
                             ? CachedNetworkImage(
                                 imageUrl: teacher.photoUrl!,
@@ -174,12 +196,94 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                 
                 const SizedBox(height: 24),
                 
+                // Show pending appointment notice if exists
+                if (hasPendingAppointment)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.orange.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.schedule,
+                          color: Colors.orange,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'You already have a pending appointment with this teacher.',
+                            style: TextStyle(
+                              color: Colors.orange[800],
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                
+                // Teacher message if available
+                if (teacher.teacherMsg != null && teacher.teacherMsg!.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.blue.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.info_outline,
+                          color: Colors.blue,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Teacher\'s Message:',
+                                style: TextStyle(
+                                  color: Colors.blue[800],
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                teacher.teacherMsg!,
+                                style: TextStyle(
+                                  color: Colors.blue[700],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                
                 // Note input field
                 TextField(
                   controller: _noteController,
                   maxLines: 3,
                   decoration: InputDecoration(
-                    hintText: 'Add a student note...',
+                    hintText: 'Add a note for your appointment request...',
                     hintStyle: TextStyle(
                       color: Colors.grey[400],
                       fontSize: 16,
@@ -207,12 +311,15 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                 // Action buttons
                 Row(
                   children: [
-                    // Knock button
+                    // Knock/Request Appointment button
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: teacher.activeStatus.toLowerCase() == 'online'
-                            ? () => _handleKnock(teacher)
-                            : null,
+                        onPressed: (_isKnocking || 
+                                   hasPendingAppointment ||
+                                   teacher.activeStatus.toLowerCase() == 'offline' ||
+                                   currentUser == null)
+                            ? null
+                            : () => _handleKnock(teacher, currentUser),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF1E293B),
                           foregroundColor: Colors.white,
@@ -223,13 +330,22 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                           disabledBackgroundColor: Colors.grey[300],
                           disabledForegroundColor: Colors.grey[500],
                         ),
-                        icon: const Icon(
-                          Icons.notifications,
-                          size: 20,
-                        ),
-                        label: const Text(
-                          'Knock',
-                          style: TextStyle(
+                        icon: _isKnocking
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : const Icon(
+                                Icons.notifications,
+                                size: 20,
+                              ),
+                        label: Text(
+                          _isKnocking ? 'Requesting...' : 'Request Appointment',
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
@@ -239,31 +355,32 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                     
                     const SizedBox(width: 12),
                     
-                    // Notify Me button
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _handleNotifyMe(teacher),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                    // Notify Me button (for when teacher is offline)
+                    if (teacher.activeStatus.toLowerCase() != 'online')
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _handleNotifyMe(teacher),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.blue,
+                            side: const BorderSide(color: Colors.blue),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
-                        ),
-                        icon: const Icon(
-                          Icons.alarm,
-                          size: 20,
-                        ),
-                        label: const Text(
-                          'Notify Me',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                          icon: const Icon(
+                            Icons.notifications_outlined,
+                            size: 20,
+                          ),
+                          label: const Text(
+                            'Notify Me',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
-                    ),
                     
                     const SizedBox(width: 12),
                     
@@ -315,30 +432,40 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
     return status[0].toUpperCase() + status.substring(1).toLowerCase();
   }
 
-  void _handleKnock(TeacherModel teacher) {
-    final note = _noteController.text.trim();
-    Navigator.pop(context);
-    
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Knock sent to ${teacher.displayName}'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    );
-    
-    // TODO: Implement actual knock functionality
-    // This would typically involve:
-    // - Sending notification to teacher
-    // - Storing the note if provided
-    // - Creating an appointment request record
-    print('Knock sent to ${teacher.displayName}');
-    if (note.isNotEmpty) {
-      print('Student note: $note');
+  Future<void> _handleKnock(TeacherModel teacher, UserModel currentUser) async {
+    if (currentUser.studentNumber == null) {
+      _showErrorMessage('Student information not found. Please contact support.');
+      return;
+    }
+
+    setState(() {
+      _isKnocking = true;
+    });
+
+    try {
+      final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
+      final note = _noteController.text.trim();
+      
+      final appointmentId = await appointmentNotifier.createAppointment(
+        student: currentUser,
+        teacher: teacher,
+        studentNote: note.isNotEmpty ? note : null,
+      );
+      
+      if (appointmentId != null) {
+        Navigator.pop(context);
+        _showSuccessMessage('Appointment request sent to ${teacher.displayName}');
+      } else {
+        _showErrorMessage('Failed to send appointment request. Please try again.');
+      }
+    } catch (e) {
+      _showErrorMessage('An error occurred: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isKnocking = false;
+        });
+      }
     }
   }
 
@@ -363,6 +490,36 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
     // - Storing user preference for notifications
     // - Scheduling local notification when status changes to online
     print('Notification set up for ${teacher.displayName}');
+  }
+
+  void _showSuccessMessage(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _showErrorMessage(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
   }
 }
 

@@ -1,100 +1,31 @@
+// screens/knocked_history_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
-
-// Model for knocked history item
-class KnockedHistoryItem {
-  final String teacherUid;
-  final String teacherName;
-  final String teacherInitials;
-  final String? teacherPhotoUrl;
-  final DateTime knockedAt;
-  final String status; // 'waiting', 'completed', 'denied', 'pending'
-  final String? requestMessage;
-  final DateTime? respondedAt;
-
-  KnockedHistoryItem({
-    required this.teacherUid,
-    required this.teacherName,
-    required this.teacherInitials,
-    this.teacherPhotoUrl,
-    required this.knockedAt,
-    required this.status,
-    this.requestMessage,
-    this.respondedAt,
-  });
-}
+import 'package:knocksense/models/appointment_model.dart';
+import 'package:knocksense/provider/appointment_provider.dart';
 
 // Provider for date range filter
 final dateRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
 
-// Provider for mock history data (will be replaced with Firebase stream)
-final knockedHistoryProvider = Provider<List<KnockedHistoryItem>>((ref) {
-  // Hard coded data for now
-  return [
-    KnockedHistoryItem(
-      teacherUid: 'uid1',
-      teacherName: 'Prof. Santos',
-      teacherInitials: 'PS',
-      teacherPhotoUrl: null,
-      knockedAt: DateTime(2025, 8, 23, 1, 4),
-      status: 'waiting',
-      requestMessage: 'Your request is waiting for Prof. Santos',
-    ),
-    KnockedHistoryItem(
-      teacherUid: 'uid2',
-      teacherName: 'Prof. Gonzales',
-      teacherInitials: 'PG',
-      teacherPhotoUrl: null,
-      knockedAt: DateTime(2025, 8, 21, 2, 6),
-      status: 'completed',
-      requestMessage: null,
-      respondedAt: DateTime(2025, 8, 21, 2, 30),
-    ),
-    KnockedHistoryItem(
-      teacherUid: 'uid3',
-      teacherName: 'Prof. Kim',
-      teacherInitials: 'PK',
-      teacherPhotoUrl: null,
-      knockedAt: DateTime(2025, 8, 21, 10, 0),
-      status: 'completed',
-      requestMessage: null,
-      respondedAt: DateTime(2025, 8, 21, 10, 15),
-    ),
-    KnockedHistoryItem(
-      teacherUid: 'uid4',
-      teacherName: 'Prof. Garcia',
-      teacherInitials: 'GG',
-      teacherPhotoUrl: null,
-      knockedAt: DateTime(2025, 8, 20, 3, 30),
-      status: 'denied',
-      requestMessage: 'Your request was denied by Prof. Garcia',
-      respondedAt: DateTime(2025, 8, 20, 3, 45),
-    ),
-    KnockedHistoryItem(
-      teacherUid: 'uid5',
-      teacherName: 'Prof. Reyes',
-      teacherInitials: 'PR',
-      teacherPhotoUrl: null,
-      knockedAt: DateTime(2025, 8, 19, 9, 15),
-      status: 'pending',
-      requestMessage: 'Your request is waiting for Prof. Reyes',
-    ),
-  ];
-});
-
 // Filtered history based on date range
-final filteredHistoryProvider = Provider<List<KnockedHistoryItem>>((ref) {
-  final history = ref.watch(knockedHistoryProvider);
+final filteredAppointmentHistoryProvider = Provider<List<AppointmentModel>>((ref) {
+  final appointments = ref.watch(studentAppointmentsProvider);
   final dateRange = ref.watch(dateRangeProvider);
   
-  if (dateRange == null) return history;
-  
-  return history.where((item) {
-    return item.knockedAt.isAfter(dateRange.start) &&
-           item.knockedAt.isBefore(dateRange.end.add(const Duration(days: 1)));
-  }).toList();
+  return appointments.when(
+    data: (appointmentList) {
+      if (dateRange == null) return appointmentList;
+      
+      return appointmentList.where((appointment) {
+        return appointment.createdAt.isAfter(dateRange.start) &&
+               appointment.createdAt.isBefore(dateRange.end.add(const Duration(days: 1)));
+      }).toList();
+    },
+    loading: () => [],
+    error: (_, __) => [],
+  );
 });
 
 class KnockedHistoryPage extends ConsumerWidget {
@@ -102,8 +33,9 @@ class KnockedHistoryPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final filteredHistory = ref.watch(filteredHistoryProvider);
+    final filteredHistory = ref.watch(filteredAppointmentHistoryProvider);
     final dateRange = ref.watch(dateRangeProvider);
+    final appointmentsAsync = ref.watch(studentAppointmentsProvider);
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -117,7 +49,7 @@ class KnockedHistoryPage extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Knocked History',
+                    'Appointment History',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -187,6 +119,17 @@ class KnockedHistoryPage extends ConsumerWidget {
                       ),
                     ],
                   ),
+                  if (dateRange != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: TextButton(
+                        onPressed: () => ref.read(dateRangeProvider.notifier).state = null,
+                        child: const Text(
+                          'Clear Filter',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -195,8 +138,10 @@ class KnockedHistoryPage extends ConsumerWidget {
 
             // History List
             Expanded(
-              child: filteredHistory.isEmpty
-                  ? Center(
+              child: appointmentsAsync.when(
+                data: (appointments) {
+                  if (filteredHistory.isEmpty) {
+                    return Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -207,7 +152,9 @@ class KnockedHistoryPage extends ConsumerWidget {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'No knocked history found',
+                            dateRange != null 
+                                ? 'No appointments found in selected date range'
+                                : 'No appointment history found',
                             style: TextStyle(
                               fontSize: 16,
                               color: Colors.grey[600],
@@ -215,18 +162,54 @@ class KnockedHistoryPage extends ConsumerWidget {
                           ),
                         ],
                       ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: filteredHistory.length,
-                      itemBuilder: (context, index) {
-                        final item = filteredHistory[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _KnockedHistoryCard(item: item),
-                        );
-                      },
-                    ),
+                    );
+                  }
+
+                  // Sort appointments by creation date (newest first)
+                  final sortedAppointments = List<AppointmentModel>.from(filteredHistory)
+                    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: sortedAppointments.length,
+                    itemBuilder: (context, index) {
+                      final appointment = sortedAppointments[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _AppointmentHistoryCard(appointment: appointment),
+                      );
+                    },
+                  );
+                },
+                loading: () => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+                error: (error, stackTrace) => Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error loading appointment history',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () => ref.invalidate(studentAppointmentsProvider),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -306,13 +289,16 @@ class _DatePickerField extends StatelessWidget {
   }
 }
 
-class _KnockedHistoryCard extends StatelessWidget {
-  final KnockedHistoryItem item;
+class _AppointmentHistoryCard extends StatelessWidget {
+  final AppointmentModel appointment;
 
-  const _KnockedHistoryCard({required this.item});
+  const _AppointmentHistoryCard({required this.appointment});
 
   @override
   Widget build(BuildContext context) {
+    // Generate initials from teacher name
+    final teacherInitials = _getInitials(appointment.teacherName);
+
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -323,48 +309,19 @@ class _KnockedHistoryCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            // Teacher Avatar
-            item.teacherPhotoUrl != null
-                ? CachedNetworkImage(
-                    imageUrl: item.teacherPhotoUrl!,
-                    imageBuilder: (context, imageProvider) => CircleAvatar(
-                      radius: 24,
-                      backgroundImage: imageProvider,
-                    ),
-                    placeholder: (context, url) => CircleAvatar(
-                      radius: 24,
-                      backgroundColor: Colors.amber,
-                      child: const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => CircleAvatar(
-                      radius: 24,
-                      backgroundColor: Colors.amber,
-                      child: Text(
-                        item.teacherInitials,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ),
-                  )
-                : CircleAvatar(
-                    radius: 24,
-                    backgroundColor: Colors.amber,
-                    child: Text(
-                      item.teacherInitials,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
+            // Teacher Avatar (placeholder with initials since we don't have photo in appointment model)
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: Colors.amber,
+              child: Text(
+                teacherInitials,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
             const SizedBox(width: 12),
             
             // Teacher Info
@@ -373,7 +330,7 @@ class _KnockedHistoryCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item.teacherName,
+                    appointment.teacherName,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -381,152 +338,171 @@ class _KnockedHistoryCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    DateFormat('M/d/yyyy, h:mm a').format(item.knockedAt),
+                    DateFormat('M/d/yyyy, h:mm a').format(appointment.createdAt),
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey[600],
                     ),
                   ),
+                  // Show student note if available
+                  if (appointment.studentNote != null && appointment.studentNote!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Note: ${appointment.studentNote}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[700],
+                          fontStyle: FontStyle.italic,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  // Show teacher response if available
+                  if (appointment.teacherResponse != null && appointment.teacherResponse!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Response: ${appointment.teacherResponse}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                 ],
               ),
             ),
             
             // Status Widget
-            _buildStatusWidget(item.status, item.requestMessage),
+            _buildStatusWidget(appointment.status, appointment.teacherAction),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatusWidget(String status, String? message) {
-    switch (status.toLowerCase()) {
-      case 'waiting':
-        return const RequestWaitingWidget();
-      case 'completed':
-        return const RequestCompletedWidget();
-      case 'denied':
-        return const RequestDeniedWidget();
-      case 'pending':
-        return const RequestPendingWidget();
+  String _getInitials(String name) {
+    final cleanedName = name.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
+
+    if (cleanedName.isEmpty) {
+      return '??';
+    }
+
+    // Handle "LastName, FirstName" format
+    if (cleanedName.contains(',')) {
+      final parts = cleanedName.split(',').map((part) => part.trim()).toList();
+      if (parts.length > 1 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
+        return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+      }
+    }
+
+    // Handle "FirstName MiddleName LastName" format
+    final matches = RegExp(r'\b\w').allMatches(cleanedName);
+    final initials = matches.map((m) => m.group(0)!).toList();
+
+    if (initials.isEmpty) {
+      return '??';
+    } else if (initials.length == 1) {
+      return initials.first.toUpperCase();
+    } else {
+      return '${initials.first}${initials.last}'.toUpperCase();
+    }
+  }
+
+  Widget _buildStatusWidget(AppointmentStatus status, TeacherAction? teacherAction) {
+    switch (status) {
+      case AppointmentStatus.pending:
+        return const _StatusChip(
+          label: 'Pending',
+          color: Colors.orange,
+          icon: Icons.schedule,
+        );
+      case AppointmentStatus.accepted:
+        return _StatusChip(
+          label: _getAcceptedStatusLabel(teacherAction),
+          color: Colors.green,
+          icon: Icons.check_circle,
+        );
+      case AppointmentStatus.denied:
+        return const _StatusChip(
+          label: 'Denied',
+          color: Colors.red,
+          icon: Icons.close,
+        );
+      case AppointmentStatus.completed:
+        return const _StatusChip(
+          label: 'Completed',
+          color: Colors.blue,
+          icon: Icons.check_circle,
+        );
+      case AppointmentStatus.cancelled:
+        return const _StatusChip(
+          label: 'Cancelled',
+          color: Colors.grey,
+          icon: Icons.cancel,
+        );
       default:
         return const SizedBox();
     }
   }
-}
 
-// Status Widget 1: Waiting
-class RequestWaitingWidget extends StatelessWidget {
-  const RequestWaitingWidget({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: const Text(
-        'Waiting',
-        style: TextStyle(
-          color: Colors.orange,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
+  String _getAcceptedStatusLabel(TeacherAction? action) {
+    switch (action) {
+      case TeacherAction.meetNow:
+        return 'Meet Now';
+      case TeacherAction.wait5Minutes:
+        return 'Wait 5 Min';
+      case TeacherAction.meetLater:
+        return 'Meet Later';
+      default:
+        return 'Accepted';
+    }
   }
 }
 
-// Status Widget 2: Completed
-class RequestCompletedWidget extends StatelessWidget {
-  const RequestCompletedWidget({Key? key}) : super(key: key);
+class _StatusChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  final IconData? icon;
+
+  const _StatusChip({
+    required this.label,
+    required this.color,
+    this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.green.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: const Text(
-        'Completed',
-        style: TextStyle(
-          color: Colors.green,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-// Status Widget 3: Denied
-class RequestDeniedWidget extends StatelessWidget {
-  const RequestDeniedWidget({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.close,
-            size: 14,
-            color: Colors.red,
-          ),
-          SizedBox(width: 4),
-          Text(
-            'Denied',
-            style: TextStyle(
-              color: Colors.red,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// Status Widget 4: Pending (Additional status for flexibility)
-class RequestPendingWidget extends StatelessWidget {
-  const RequestPendingWidget({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.amber.withOpacity(0.1),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.amber.withOpacity(0.3),
+          color: color.withOpacity(0.3),
           width: 1,
         ),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.schedule,
-            size: 14,
-            color: Colors.amber,
-          ),
-          SizedBox(width: 4),
+          if (icon != null) ...[
+            Icon(
+              icon,
+              size: 14,
+              color: color,
+            ),
+            const SizedBox(width: 4),
+          ],
           Text(
-            'Pending',
+            label,
             style: TextStyle(
-              color: Colors.amber,
+              color: color,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
