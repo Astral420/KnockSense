@@ -31,12 +31,43 @@ class AppointmentModel {
 
   factory AppointmentModel.fromJson(String id, Map<String, dynamic> json) {
 
-    DateTime? parseIntToDateTime(dynamic value) {
+    DateTime? parseToDateTime(dynamic value) {
+      if (value == null) return null;
+      
+      // Handle different timestamp formats from Firebase
       if (value is int) {
+        // Standard milliseconds timestamp
         return DateTime.fromMillisecondsSinceEpoch(value);
+      } else if (value is double) {
+        // Sometimes Firebase returns double
+        return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+      } else if (value is Map) {
+        // Handle ServerValue.timestamp placeholder (shouldn't happen when reading)
+        // This is usually only present during write operations
+        print('Warning: Received ServerValue.timestamp placeholder during read: $value');
+        return DateTime.now(); // Fallback
+      } else if (value is String) {
+        // Handle string timestamps (backup parsing)
+        try {
+          final intValue = int.parse(value);
+          return DateTime.fromMillisecondsSinceEpoch(intValue);
+        } catch (e) {
+          // Try parsing as ISO string
+          return DateTime.tryParse(value);
+        }
       }
+      
+      print('Warning: Unknown timestamp format: $value (${value.runtimeType})');
       return null;
+    }
 
+    DateTime parseRequiredDateTime(dynamic value, String fieldName) {
+      final dateTime = parseToDateTime(value);
+      if (dateTime == null) {
+        print('Warning: Could not parse $fieldName: $value, using current time');
+        return DateTime.now();
+      }
+      return dateTime;
     }
 
     return AppointmentModel(
@@ -50,10 +81,8 @@ class AppointmentModel {
         (e) => e.name == json['status'],
         orElse: () => AppointmentStatus.pending,
       ),
-      createdAt: DateTime.fromMillisecondsSinceEpoch(json['createdAt'] as int),
-      respondedAt: json['respondedAt'] != null 
-          ? parseIntToDateTime(json['respondedAt'])
-          : null,
+      createdAt: parseRequiredDateTime(json['createdAt'], 'createdAt'),
+      respondedAt: parseToDateTime(json['respondedAt']),
       studentNote: json['studentNote'] as String?,
       teacherResponse: json['teacherResponse'] as String?,
       teacherAction: json['teacherAction'] != null
@@ -62,9 +91,7 @@ class AppointmentModel {
               orElse: () => TeacherAction.pending,
             )
           : null,
-      scheduledTime: json['scheduledTime'] != null
-          ? parseIntToDateTime(json['scheduledTime'])
-          : null,
+      scheduledTime: parseToDateTime(json['scheduledTime']),
     );
   }
 
@@ -113,6 +140,11 @@ class AppointmentModel {
       teacherAction: teacherAction ?? this.teacherAction,
       scheduledTime: scheduledTime ?? this.scheduledTime,
     );
+  }
+
+  @override
+  String toString() {
+    return 'AppointmentModel(id: $appointmentId, student: $studentName, teacher: $teacherName, status: $status, createdAt: $createdAt)';
   }
 }
 

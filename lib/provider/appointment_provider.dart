@@ -6,10 +6,8 @@ import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/models/teacher_model.dart';
 
-// Date Range provider
-
+// Date Range provider (moved here to avoid duplication)
 final dateRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
-
 
 // Appointment service provider
 final appointmentServiceProvider = Provider<AppointmentService>((ref) {
@@ -194,4 +192,3 @@ final appointmentNotifierProvider = StateNotifierProvider<AppointmentNotifier, A
   final service = ref.watch(appointmentServiceProvider);
   return AppointmentNotifier(service);
 });
-

@@ -27,20 +27,20 @@ class AppointmentService {
           .ref('appointments/${student.studentNumber}')
           .push();
 
-      final appointment = AppointmentModel(
-        appointmentId: appointmentRef.key!,
-        studentUid: student.uid,
-        studentNumber: student.studentNumber!,
-        studentName: student.displayName,
-        teacherUid: teacher.teacherID,
-        teacherName: teacher.displayName,
-        status: AppointmentStatus.pending,
-        createdAt: DateTime.now(),
-        studentNote: studentNote,
-      );
+      // Create appointment data with server timestamp
+      final appointmentData = {
+        'studentUid': student.uid,
+        'studentNumber': student.studentNumber!,
+        'studentName': student.displayName,
+        'teacherUid': teacher.teacherID,
+        'teacherName': teacher.displayName,
+        'status': AppointmentStatus.pending.name,
+        'createdAt': ServerValue.timestamp,
+        'studentNote': studentNote,
+      };
 
       
-      await appointmentRef.set(appointment.toJson());
+      await appointmentRef.set(appointmentData);
 
       
       await _database
@@ -92,7 +92,7 @@ class AppointmentService {
       // Update main appointment record
       updates['appointments/$studentNumber/$appointmentId/status'] = newStatus.name;
       updates['appointments/$studentNumber/$appointmentId/respondedAt'] = 
-          ServerValue.timestamp;
+          ServerValue.timestamp; // Use server timestamp
       updates['appointments/$studentNumber/$appointmentId/teacherAction'] = action.name;
       
       if (teacherResponse != null) {
@@ -108,7 +108,7 @@ class AppointmentService {
       // Update teacher's appointment index
       updates['teacher_appointments/$teacherUid/$appointmentId/status'] = newStatus.name;
       updates['teacher_appointments/$teacherUid/$appointmentId/respondedAt'] = 
-          ServerValue.timestamp;
+          ServerValue.timestamp; // Use server timestamp
 
       // Perform atomic update
       await _database.ref().update(updates);
@@ -142,14 +142,25 @@ class AppointmentService {
         final data = Map<String, dynamic>.from(event.snapshot.value as Map);
         
         data.forEach((key, value) {
-          appointments.add(AppointmentModel.fromJson(
-            key,
-            Map<String, dynamic>.from(value as Map),
-          ));
+          try {
+            final appointmentData = Map<String, dynamic>.from(value as Map);
+            
+            // Debug print to see the data structure
+            print('Processing appointment $key: $appointmentData');
+            
+            appointments.add(AppointmentModel.fromJson(key, appointmentData));
+          } catch (e) {
+            print('Error parsing appointment $key: $e');
+          }
         });
         
         // Sort by creation date (newest first)
         appointments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        
+        print('Loaded ${appointments.length} appointments');
+        for (var apt in appointments) {
+          print('Appointment ${apt.appointmentId}: ${apt.createdAt}');
+        }
       }
       
       return appointments;

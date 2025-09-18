@@ -3,11 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:knocksense/models/appointment_model.dart';
 import 'package:knocksense/provider/appointment_provider.dart';
+import 'dart:async';
 
-// Provider for date range filter
-final dateRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
+// Debounce timer for date range updates
+Timer? _debounceTimer;
 
-// Filtered history based on date range
+// Filtered history based on date range with debouncing
 final filteredAppointmentHistoryProvider = Provider<List<AppointmentModel>>((ref) {
   final appointments = ref.watch(studentAppointmentsProvider);
   final dateRange = ref.watch(dateRangeProvider);
@@ -16,10 +17,37 @@ final filteredAppointmentHistoryProvider = Provider<List<AppointmentModel>>((ref
     data: (appointmentList) {
       if (dateRange == null) return appointmentList;
       
-      return appointmentList.where((appointment) {
-        return appointment.createdAt.isAfter(dateRange.start) &&
-               appointment.createdAt.isBefore(dateRange.end.add(const Duration(days: 1)));
+      // Create start and end of day for proper filtering
+      final startOfDay = DateTime(
+        dateRange.start.year, 
+        dateRange.start.month, 
+        dateRange.start.day, 
+        0, 0, 0, 0, 0
+      );
+      
+      final endOfDay = DateTime(
+        dateRange.end.year, 
+        dateRange.end.month, 
+        dateRange.end.day, 
+        23, 59, 59, 999, 999
+      );
+      
+      print('Filtering appointments:');
+      print('Date range: ${startOfDay} to ${endOfDay}');
+      print('Total appointments: ${appointmentList.length}');
+      
+      final filtered = appointmentList.where((appointment) {
+        final appointmentDate = appointment.createdAt;
+        final isInRange = appointmentDate.isAtSameMomentAs(startOfDay) || 
+                         appointmentDate.isAtSameMomentAs(endOfDay) ||
+                         (appointmentDate.isAfter(startOfDay) && appointmentDate.isBefore(endOfDay));
+        
+        print('Appointment ${appointment.appointmentId}: ${appointmentDate} - ${isInRange ? 'INCLUDED' : 'EXCLUDED'}');
+        return isInRange;
       }).toList();
+      
+      print('Filtered appointments: ${filtered.length}');
+      return filtered;
     },
     loading: () => [],
     error: (_, __) => [],
@@ -120,12 +148,24 @@ class KnockedHistoryPage extends ConsumerWidget {
                   if (dateRange != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
-                      child: TextButton(
-                        onPressed: () => ref.read(dateRangeProvider.notifier).state = null,
-                        child: const Text(
-                          'Clear Filter',
-                          style: TextStyle(color: Colors.red),
-                        ),
+                      child: Row(
+                        children: [
+                          TextButton(
+                            onPressed: () => _clearFilterWithDebounce(ref),
+                            child: const Text(
+                              'Clear Filter',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${filteredHistory.length} appointments found',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                 ],
@@ -157,7 +197,18 @@ class KnockedHistoryPage extends ConsumerWidget {
                               fontSize: 16,
                               color: Colors.grey[600],
                             ),
+                            textAlign: TextAlign.center,
                           ),
+                          if (dateRange != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              '${DateFormat('MMM dd, yyyy').format(dateRange.start)} - ${DateFormat('MMM dd, yyyy').format(dateRange.end)}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[500],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     );
@@ -215,8 +266,18 @@ class KnockedHistoryPage extends ConsumerWidget {
     );
   }
 
+  void _clearFilterWithDebounce(WidgetRef ref) {
+    // Cancel existing timer
+    _debounceTimer?.cancel();
+    
+    // Immediately clear the filter for better UX
+    ref.read(dateRangeProvider.notifier).state = null;
+  }
+
   Future<void> _selectDateRange(BuildContext context, WidgetRef ref) async {
-    final initialDateRange = ref.read(dateRangeProvider) ?? DateTimeRange(
+    final currentDateRange = ref.read(dateRangeProvider);
+    
+    final initialDateRange = currentDateRange ?? DateTimeRange(
       start: DateTime.now().subtract(const Duration(days: 30)),
       end: DateTime.now(),
     );
@@ -241,8 +302,21 @@ class KnockedHistoryPage extends ConsumerWidget {
     );
 
     if (picked != null) {
-      ref.read(dateRangeProvider.notifier).state = picked;
+      _updateDateRangeWithDebounce(ref, picked);
     }
+  }
+
+    void _updateDateRangeWithDebounce(WidgetRef ref, DateTimeRange dateRange) {
+    // Cancel existing timer
+    _debounceTimer?.cancel();
+    
+    print('Date range selected: ${dateRange.start} to ${dateRange.end}');
+    
+    // Set new timer with 300ms delay
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      print('Applying date filter after debounce');
+      ref.read(dateRangeProvider.notifier).state = dateRange;
+    });
   }
 }
 
@@ -271,13 +345,16 @@ class _DatePickerField extends StatelessWidget {
           children: [
             Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
             const SizedBox(width: 8),
-            Text(
-              date != null
-                  ? DateFormat('MMM dd, yyyy').format(date!)
-                  : label,
-              style: TextStyle(
-                fontSize: 14,
-                color: date != null ? Colors.black : Colors.grey[600],
+            Expanded(
+              child: Text(
+                date != null
+                    ? DateFormat('MMM dd, yyyy').format(date!)
+                    : label,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: date != null ? Colors.black : Colors.grey[600],
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

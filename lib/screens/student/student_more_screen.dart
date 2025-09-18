@@ -310,31 +310,39 @@ class MorePage extends ConsumerWidget {
   }
 
   void _handleLogout(BuildContext context, authService) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm Logout'),
-        content: const Text('Are you sure you want to logout?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Confirm Logout'),
+      content: const Text('Are you sure you want to logout?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            'Cancel',
+            style: TextStyle(color: Colors.grey[600]),
           ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await authService.signOut();
-            },
-            child: const Text(
-              'Logout',
-              style: TextStyle(color: Colors.red),
-            ),
+        ),
+        TextButton(
+          onPressed: () async {
+            Navigator.pop(context);
+            await authService.signOut();
+            
+            // Reset navigation stack and go to login/auth screen
+            if (context.mounted) {
+              Navigator.of(context).pushNamedAndRemoveUntil(
+                '/login', // or your auth screen route
+                (route) => false,
+              );
+            }
+          },
+          child: const Text(
+            'Logout',
+            style: TextStyle(color: Colors.red),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 }

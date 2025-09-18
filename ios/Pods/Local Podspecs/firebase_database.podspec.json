@@ -20,7 +20,7 @@
     "Flutter": [],
     "firebase_core": [],
     "Firebase/Database": [
-      "12.0.0"
+      "12.2.0"
     ]
   },
   "static_framework": true,

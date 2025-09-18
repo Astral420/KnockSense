@@ -7,11 +7,26 @@ import 'package:knocksense/screens/student/knocked_history_screen.dart';
 // Provider to manage the current tab index
 final currentTabProvider = StateProvider<int>((ref) => 0);
 
-class MainNavigationStudent extends ConsumerWidget {
+class MainNavigationStudent extends ConsumerStatefulWidget {
   const MainNavigationStudent({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MainNavigationStudent> createState() => _MainNavigationStudentState();
+}
+
+class _MainNavigationStudentState extends ConsumerState<MainNavigationStudent> {
+  
+  @override
+  void initState() {
+    super.initState();
+    // Reset tab to 0 whenever this widget is created (i.e., on login)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(currentTabProvider.notifier).state = 0;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final currentTab = ref.watch(currentTabProvider);
 
     return Scaffold(
@@ -47,4 +62,3 @@ class MainNavigationStudent extends ConsumerWidget {
     );
   }
 }
-
