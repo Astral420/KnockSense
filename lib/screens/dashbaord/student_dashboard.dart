@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:knocksense/models/appointment_model.dart';
+import 'package:knocksense/provider/appointment_provider.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/provider/teacher_provider.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
@@ -234,44 +236,127 @@ class StudentDashboard extends ConsumerWidget {
 
                 // Recently Knocked Section (Placeholder for now)
                 SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Recently Knocked',
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Card(
-                          elevation: 0,
-                          color: Colors.grey[100],
-                          child: const ListTile(
-                            leading: Icon(Icons.schedule, color: Colors.grey),
-                            title: Text('No recent appointments'),
-                            subtitle: Text('Your recent appointments will appear here'),
-                          ),
-                        ),
-                      ],
+  child: Padding(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Recently Knocked',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Watch the student appointments and show recent ones
+        Consumer(
+          builder: (context, ref, child) {
+            final appointmentsAsync = ref.watch(studentAppointmentsProvider);
+            
+            return appointmentsAsync.when(
+              data: (appointments) {
+                // Get the 3 most recent appointments
+                final recentAppointments = appointments.take(3).toList();
+                
+                if (recentAppointments.isEmpty) {
+                  return Card(
+                    elevation: 0,
+                    color: Colors.grey[100],
+                    child: const ListTile(
+                      leading: Icon(Icons.schedule, color: Colors.grey),
+                      title: Text('No recent appointments'),
+                      subtitle: Text('Your recent appointments will appear here'),
                     ),
-                  ),
-                ),
-
-                // Availability Section
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'Availability',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
+                  );
+                }
+                
+                return Column(
+                  children: recentAppointments.map((appointment) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Card(
+                        elevation: 0,
+                        color: Colors.white,
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            radius: 20,
+                            backgroundColor: Colors.amber,
+                            child: Text(
+                              _getTeacherInitials(appointment.teacherName),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            appointment.teacherName,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(
+                            _formatAppointmentDate(appointment.createdAt),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _getAppointmentStatusColor(appointment.status)
+                                  .withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              _formatAppointmentStatus(appointment.status),
+                              style: TextStyle(
+                                color: _getAppointmentStatusColor(appointment.status),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                    );
+                  }).toList(),
+                );
+              },
+              loading: () => Card(
+                elevation: 0,
+                color: Colors.grey[100],
+                child: const ListTile(
+                  leading: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
+                  title: Text('Loading recent appointments...'),
                 ),
+              ),
+              error: (error, stack) => Card(
+                elevation: 0,
+                color: Colors.red[50],
+                child: ListTile(
+                  leading: Icon(Icons.error_outline, color: Colors.red[400]),
+                  title: const Text('Error loading appointments'),
+                  subtitle: Text(error.toString()),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    ),
+  ),
+),
 
                 // Teachers List with Status (Vertical)
                 teachers.when(
@@ -448,5 +533,89 @@ class StudentDashboard extends ConsumerWidget {
       return parts.last; // Return last name
     }
     return fullName; // Return full name if only one word
+  }
+}
+String _getTeacherInitials(String teacherName) {
+  final cleanedName = teacherName.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
+
+  if (cleanedName.isEmpty) {
+    return '??';
+  }
+
+  // Handle "LastName, FirstName" format
+  if (cleanedName.contains(',')) {
+    final parts = cleanedName.split(',').map((part) => part.trim()).toList();
+    if (parts.length > 1 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+  }
+
+  // Handle "FirstName MiddleName LastName" format
+  final matches = RegExp(r'\b\w').allMatches(cleanedName);
+  final initials = matches.map((m) => m.group(0)!).toList();
+
+  if (initials.isEmpty) {
+    return '??';
+  } else if (initials.length == 1) {
+    return initials.first.toUpperCase();
+  } else {
+    return '${initials.first}${initials.last}'.toUpperCase();
+  }
+}
+
+String _formatAppointmentDate(DateTime date) {
+  final now = DateTime.now();
+  final difference = now.difference(date);
+  
+  if (difference.inDays == 0) {
+    return 'Today ${_formatTime(date)}';
+  } else if (difference.inDays == 1) {
+    return 'Yesterday ${_formatTime(date)}';
+  } else if (difference.inDays < 7) {
+    return '${difference.inDays} days ago';
+  } else {
+    return '${date.month}/${date.day}/${date.year}';
+  }
+}
+
+String _formatTime(DateTime date) {
+  final hour = date.hour;
+  final minute = date.minute.toString().padLeft(2, '0');
+  final period = hour >= 12 ? 'PM' : 'AM';
+  final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+  return '$displayHour:$minute $period';
+}
+
+Color _getAppointmentStatusColor(AppointmentStatus status) {
+  switch (status) {
+    case AppointmentStatus.pending:
+      return Colors.orange;
+    case AppointmentStatus.accepted:
+      return Colors.green;
+    case AppointmentStatus.denied:
+      return Colors.red;
+    case AppointmentStatus.completed:
+      return Colors.blue;
+    case AppointmentStatus.cancelled:
+      return Colors.grey;
+    default:
+      return Colors.grey;
+  }
+}
+
+String _formatAppointmentStatus(AppointmentStatus status) {
+  switch (status) {
+    case AppointmentStatus.pending:
+      return 'Pending';
+    case AppointmentStatus.accepted:
+      return 'Accepted';
+    case AppointmentStatus.denied:
+      return 'Denied';
+    case AppointmentStatus.completed:
+      return 'Completed';
+    case AppointmentStatus.cancelled:
+      return 'Cancelled';
+    default:
+      return 'Unknown';
   }
 }
