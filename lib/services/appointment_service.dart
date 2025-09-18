@@ -1,5 +1,6 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:knocksense/models/appointment_model.dart';
 import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/models/teacher_model.dart';
@@ -31,24 +32,24 @@ class AppointmentService {
         studentUid: student.uid,
         studentNumber: student.studentNumber!,
         studentName: student.displayName,
-        teacherUid: teacher.uid,
+        teacherUid: teacher.teacherID,
         teacherName: teacher.displayName,
         status: AppointmentStatus.pending,
         createdAt: DateTime.now(),
         studentNote: studentNote,
       );
 
-      // Save to database under student's number
+      
       await appointmentRef.set(appointment.toJson());
 
-      // Also create an index for teacher to see their pending appointments
+      
       await _database
-          .ref('teacher_appointments/${teacher.uid}/${appointmentRef.key}')
+          .ref('teacher_appointments/${teacher.teacherID}/${appointmentRef.key}')
           .set({
         'studentNumber': student.studentNumber,
         'appointmentId': appointmentRef.key,
         'status': AppointmentStatus.pending.name,
-        'createdAt': appointment.createdAt.toIso8601String(),
+        'createdAt': ServerValue.timestamp,
       });
 
       // Send notification to teacher (implement push notification here)
@@ -101,7 +102,7 @@ class AppointmentService {
       
       if (scheduledTime != null && action == TeacherAction.meetLater) {
         updates['appointments/$studentNumber/$appointmentId/scheduledTime'] = 
-            scheduledTime.toIso8601String();
+            scheduledTime.millisecondsSinceEpoch;
       }
 
       // Update teacher's appointment index
@@ -128,7 +129,8 @@ class AppointmentService {
   }
 
   // Get all appointments for a student
-  Stream<List<AppointmentModel>> getStudentAppointments(String studentNumber) {
+  Stream<List<AppointmentModel>> getStudentAppointments(String studentNumber, {
+  DateTimeRange? dateRange,}) {
     return _database
         .ref('appointments/$studentNumber')
         .orderByChild('createdAt')

@@ -1,9 +1,15 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/models/appointment_model.dart';
 import 'package:knocksense/services/appointment_service.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/models/teacher_model.dart';
+
+// Date Range provider
+
+final dateRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
+
 
 // Appointment service provider
 final appointmentServiceProvider = Provider<AppointmentService>((ref) {
@@ -188,3 +194,4 @@ final appointmentNotifierProvider = StateNotifierProvider<AppointmentNotifier, A
   final service = ref.watch(appointmentServiceProvider);
   return AppointmentNotifier(service);
 });
+

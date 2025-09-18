@@ -30,6 +30,15 @@ class AppointmentModel {
   });
 
   factory AppointmentModel.fromJson(String id, Map<String, dynamic> json) {
+
+    DateTime? parseIntToDateTime(dynamic value) {
+      if (value is int) {
+        return DateTime.fromMillisecondsSinceEpoch(value);
+      }
+      return null;
+
+    }
+
     return AppointmentModel(
       appointmentId: id,
       studentUid: json['studentUid'] as String,
@@ -41,9 +50,9 @@ class AppointmentModel {
         (e) => e.name == json['status'],
         orElse: () => AppointmentStatus.pending,
       ),
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: DateTime.fromMillisecondsSinceEpoch(json['createdAt'] as int),
       respondedAt: json['respondedAt'] != null 
-          ? DateTime.parse(json['respondedAt'] as String)
+          ? parseIntToDateTime(json['respondedAt'])
           : null,
       studentNote: json['studentNote'] as String?,
       teacherResponse: json['teacherResponse'] as String?,
@@ -54,7 +63,7 @@ class AppointmentModel {
             )
           : null,
       scheduledTime: json['scheduledTime'] != null
-          ? DateTime.parse(json['scheduledTime'] as String)
+          ? parseIntToDateTime(json['scheduledTime'])
           : null,
     );
   }
@@ -66,12 +75,12 @@ class AppointmentModel {
     'teacherUid': teacherUid,
     'teacherName': teacherName,
     'status': status.name,
-    'createdAt': createdAt.toIso8601String(),
-    'respondedAt': respondedAt?.toIso8601String(),
+    'createdAt': createdAt.millisecondsSinceEpoch,
+    'respondedAt': respondedAt?.millisecondsSinceEpoch,
     'studentNote': studentNote,
     'teacherResponse': teacherResponse,
     'teacherAction': teacherAction?.name,
-    'scheduledTime': scheduledTime?.toIso8601String(),
+    'scheduledTime': scheduledTime?.millisecondsSinceEpoch,
   };
 
   AppointmentModel copyWith({

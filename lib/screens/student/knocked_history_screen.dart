@@ -1,5 +1,3 @@
-// screens/knocked_history_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -49,7 +47,7 @@ class KnockedHistoryPage extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Appointment History',
+                    'Knocked History',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,

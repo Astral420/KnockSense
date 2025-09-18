@@ -47,7 +47,7 @@ class MorePage extends ConsumerWidget {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              userData.role.name.toUpperCase(),
+                              'Student',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,

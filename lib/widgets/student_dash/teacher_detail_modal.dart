@@ -24,6 +24,7 @@ class TeacherDetailModal extends ConsumerStatefulWidget {
 class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
   final TextEditingController _noteController = TextEditingController();
   bool _isKnocking = false;
+  Set<String> _notifiedTeachers = {}; // Track which teachers student is notified for
 
   @override
   void dispose() {
@@ -158,7 +159,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                         ),
                       ],
                     ),
-                    const SizedBox(width: 20),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,27 +167,32 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                           Text(
                             teacher.displayName,
                             style: const TextStyle(
-                              fontSize: 24,
+                              fontSize: 22,
                               fontWeight: FontWeight.bold,
                               color: Colors.black87,
                             ),
                           ),
                           const SizedBox(height: 8),
-                          Text(
-                            'Status',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            _formatStatus(teacher.activeStatus),
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: _getStatusColor(teacher.activeStatus),
-                              fontWeight: FontWeight.w600,
-                            ),
+                          Row(
+                            children: [
+                              Text(
+                                'Status',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _formatStatus(teacher.activeStatus),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: _getStatusColor(teacher.activeStatus),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -194,7 +200,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                   ],
                 ),
                 
-                const SizedBox(height: 24),
+                const SizedBox(width: 20),
                 
                 // Show pending appointment notice if exists
                 if (hasPendingAppointment)
@@ -283,7 +289,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                   controller: _noteController,
                   maxLines: 3,
                   decoration: InputDecoration(
-                    hintText: 'Add a note for your appointment request...',
+                    hintText: 'Add a student note...',
                     hintStyle: TextStyle(
                       color: Colors.grey[400],
                       fontSize: 16,
@@ -306,12 +312,12 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                   ),
                 ),
                 
-                const SizedBox(height: 24),
+                const SizedBox(width: 20),
                 
-                // Action buttons
+                // Action buttons - Match reference image layout
                 Row(
                   children: [
-                    // Knock/Request Appointment button
+                    // Knock button
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: (_isKnocking || 
@@ -344,7 +350,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                                 size: 20,
                               ),
                         label: Text(
-                          _isKnocking ? 'Requesting...' : 'Request Appointment',
+                          _isKnocking ? 'Knocking...' : 'Knock',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -355,50 +361,41 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                     
                     const SizedBox(width: 12),
                     
-                    // Notify Me button (for when teacher is offline)
-                    if (teacher.activeStatus.toLowerCase() != 'online')
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _handleNotifyMe(teacher),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.blue,
-                            side: const BorderSide(color: Colors.blue),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                    // Notify Me button - Always visible like in reference image
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _handleNotifyMe(teacher),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _notifiedTeachers.contains(teacher.uid) 
+                              ? Colors.orange 
+                              : Colors.red,
+                          side: BorderSide(
+                            color: _notifiedTeachers.contains(teacher.uid) 
+                                ? Colors.orange 
+                                : Colors.red
                           ),
-                          icon: const Icon(
-                            Icons.notifications_outlined,
-                            size: 20,
-                          ),
-                          label: const Text(
-                            'Notify Me',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          backgroundColor: _notifiedTeachers.contains(teacher.uid)
+                              ? Colors.orange.withOpacity(0.1)
+                              : Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                      ),
-                    
-                    const SizedBox(width: 12),
-                    
-                    // Close button
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey[600],
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
+                        icon: Icon(
+                          _notifiedTeachers.contains(teacher.uid)
+                              ? Icons.notifications_active
+                              : Icons.notifications_outlined,
+                          size: 20,
                         ),
-                      ),
-                      child: const Text(
-                        'Close',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                        label: Text(
+                          _notifiedTeachers.contains(teacher.uid) 
+                              ? 'Notifying' 
+                              : 'Notify Me',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -406,7 +403,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                 ),
                 
                 // Add some bottom padding for better visual balance
-                const SizedBox(height: 8),
+                const SizedBox(width: 12),
               ],
             ),
           ),
@@ -470,26 +467,23 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
   }
 
   void _handleNotifyMe(TeacherModel teacher) {
-    Navigator.pop(context);
+    setState(() {
+      if (_notifiedTeachers.contains(teacher.uid)) {
+        _notifiedTeachers.remove(teacher.uid);
+        print('🔔 Student unsubscribed from notifications for ${teacher.displayName}');
+        _showInfoMessage('Notifications disabled for ${teacher.displayName}');
+      } else {
+        _notifiedTeachers.add(teacher.uid);
+        print('🔔 Student subscribed to notifications for ${teacher.displayName}');
+        _showSuccessMessage('You\'ll be notified when ${teacher.displayName} becomes available');
+      }
+    });
     
-    // Show notification setup message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('You\'ll be notified when ${teacher.displayName} becomes available'),
-        backgroundColor: Colors.blue,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    );
-    
-    // TODO: Implement notification setup
+    // TODO: Implement FCM notification setup
     // This would typically involve:
     // - Setting up a listener for teacher status changes
-    // - Storing user preference for notifications
-    // - Scheduling local notification when status changes to online
-    print('Notification set up for ${teacher.displayName}');
+    // - Storing user preference for notifications in Firebase/local storage
+    // - Scheduling FCM notification when status changes to online
   }
 
   void _showSuccessMessage(String message) {
@@ -513,6 +507,21 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
         SnackBar(
           content: Text(message),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _showInfoMessage(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.blue,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
