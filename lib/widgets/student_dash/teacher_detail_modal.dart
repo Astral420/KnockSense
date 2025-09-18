@@ -87,328 +87,420 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
             ),
           ),
           
-          // Content
+          // Content with better spacing
           Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Teacher profile section
-                Row(
-                  children: [
-                    Stack(
-                      children: [
-                        // Teacher avatar with CachedNetworkImage
-                        teacher.photoUrl != null
-                            ? CachedNetworkImage(
-                                imageUrl: teacher.photoUrl!,
-                                imageBuilder: (context, imageProvider) => CircleAvatar(
-                                  radius: 40,
-                                  backgroundImage: imageProvider,
-                                ),
-                                placeholder: (context, url) => CircleAvatar(
-                                  radius: 40,
-                                  backgroundColor: Colors.amber,
-                                  child: const SizedBox(
-                                    width: 30,
-                                    height: 30,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) => CircleAvatar(
-                                  radius: 40,
-                                  backgroundColor: Colors.amber,
-                                  child: Text(
-                                    teacher.initials,
-                                    style: const TextStyle(
-                                      fontSize: 32,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                              )
-                            : CircleAvatar(
-                                radius: 40,
-                                backgroundColor: Colors.amber,
-                                child: Text(
-                                  teacher.initials,
-                                  style: const TextStyle(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ),
-                        // Status indicator
-                        Positioned(
-                          bottom: 2,
-                          right: 2,
-                          child: Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: _getStatusColor(teacher.activeStatus),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 3,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            teacher.displayName,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Text(
-                                'Status',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _formatStatus(teacher.activeStatus),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: _getStatusColor(teacher.activeStatus),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                _buildTeacherProfileSection(teacher),
                 
-                const SizedBox(width: 20),
+                const SizedBox(height: 24),
                 
-                // Show pending appointment notice if exists
-                if (hasPendingAppointment)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Colors.orange.withOpacity(0.3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.schedule,
-                          color: Colors.orange,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'You already have a pending appointment with this teacher.',
-                            style: TextStyle(
-                              color: Colors.orange[800],
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                // Status notifications
+                ..._buildStatusNotifications(teacher, hasPendingAppointment),
                 
                 // Teacher message if available
-                if (teacher.teacherMsg != null && teacher.teacherMsg!.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Colors.blue.withOpacity(0.3),
-                      ),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.info_outline,
-                          color: Colors.blue,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Teacher\'s Message:',
-                                style: TextStyle(
-                                  color: Colors.blue[800],
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                teacher.teacherMsg!,
-                                style: TextStyle(
-                                  color: Colors.blue[700],
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                if (teacher.teacherMsg != null && teacher.teacherMsg!.isNotEmpty) ...[
+                  _buildTeacherMessage(teacher.teacherMsg!),
+                  const SizedBox(height: 20),
+                ],
                 
                 // Note input field
-                TextField(
-                  controller: _noteController,
-                  maxLines: 3,
-                  decoration: InputDecoration(
-                    hintText: 'Add a student note...',
-                    hintStyle: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 16,
-                    ),
-                    filled: true,
-                    fillColor: Colors.grey[50],
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey[200]!),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey[200]!),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Colors.blue),
-                    ),
-                    contentPadding: const EdgeInsets.all(16),
-                  ),
-                ),
+                _buildNoteInputField(),
                 
-                const SizedBox(width: 20),
+                const SizedBox(height: 24),
                 
-                // Action buttons - Match reference image layout
-                Row(
-                  children: [
-                    // Knock button
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: (_isKnocking || 
-                                   hasPendingAppointment ||
-                                   teacher.activeStatus.toLowerCase() == 'offline' ||
-                                   currentUser == null)
-                            ? null
-                            : () => _handleKnock(teacher, currentUser),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1E293B),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          disabledBackgroundColor: Colors.grey[300],
-                          disabledForegroundColor: Colors.grey[500],
-                        ),
-                        icon: _isKnocking
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                ),
-                              )
-                            : const Icon(
-                                Icons.notifications,
-                                size: 20,
-                              ),
-                        label: Text(
-                          _isKnocking ? 'Knocking...' : 'Knock',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    
-                    const SizedBox(width: 12),
-                    
-                    // Notify Me button - Always visible like in reference image
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _handleNotifyMe(teacher),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: _notifiedTeachers.contains(teacher.uid) 
-                              ? Colors.orange 
-                              : Colors.red,
-                          side: BorderSide(
-                            color: _notifiedTeachers.contains(teacher.uid) 
-                                ? Colors.orange 
-                                : Colors.red
-                          ),
-                          backgroundColor: _notifiedTeachers.contains(teacher.uid)
-                              ? Colors.orange.withOpacity(0.1)
-                              : Colors.transparent,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        icon: Icon(
-                          _notifiedTeachers.contains(teacher.uid)
-                              ? Icons.notifications_active
-                              : Icons.notifications_outlined,
-                          size: 20,
-                        ),
-                        label: Text(
-                          _notifiedTeachers.contains(teacher.uid) 
-                              ? 'Notifying' 
-                              : 'Notify Me',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                // Action buttons
+                _buildActionButtons(teacher, currentUser, hasPendingAppointment),
                 
                 // Add some bottom padding for better visual balance
-                const SizedBox(width: 12),
+                const SizedBox(height: 8),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTeacherProfileSection(TeacherModel teacher) {
+    return Row(
+      children: [
+        Stack(
+          children: [
+            // Teacher avatar with CachedNetworkImage
+            teacher.photoUrl != null
+                ? CachedNetworkImage(
+                    imageUrl: teacher.photoUrl!,
+                    imageBuilder: (context, imageProvider) => CircleAvatar(
+                      radius: 40,
+                      backgroundImage: imageProvider,
+                    ),
+                    placeholder: (context, url) => CircleAvatar(
+                      radius: 40,
+                      backgroundColor: Colors.amber,
+                      child: const SizedBox(
+                        width: 30,
+                        height: 30,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => CircleAvatar(
+                      radius: 40,
+                      backgroundColor: Colors.amber,
+                      child: Text(
+                        teacher.initials,
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                  )
+                : CircleAvatar(
+                    radius: 40,
+                    backgroundColor: Colors.amber,
+                    child: Text(
+                      teacher.initials,
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+            // Status indicator
+            Positioned(
+              bottom: 2,
+              right: 2,
+              child: Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: _getStatusColor(teacher.activeStatus),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 3,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                teacher.displayName,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                teacher.teacherID,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text(
+                    'Status: ',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(teacher.activeStatus).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _formatStatus(teacher.activeStatus),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _getStatusColor(teacher.activeStatus),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildStatusNotifications(TeacherModel teacher, bool hasPendingAppointment) {
+    List<Widget> notifications = [];
+
+    // Show pending appointment notice if exists
+    if (hasPendingAppointment) {
+      notifications.add(
+        Container(
+          padding: const EdgeInsets.all(16),
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: Colors.orange.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.orange.withOpacity(0.3),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.schedule,
+                  color: Colors.orange,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Pending Appointment',
+                      style: TextStyle(
+                        color: Colors.orange[800],
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'You already have a pending appointment with this teacher. Please wait for a response.',
+                      style: TextStyle(
+                        color: Colors.orange[700],
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return notifications;
+  }
+
+  Widget _buildTeacherMessage(String message) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.blue.withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.info_outline,
+              color: Colors.blue,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Teacher\'s Message',
+                  style: TextStyle(
+                    color: Colors.blue[800],
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: TextStyle(
+                    color: Colors.blue[700],
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoteInputField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Add a note (optional)',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey[800],
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _noteController,
+          maxLines: 3,
+          maxLength: 200,
+          decoration: InputDecoration(
+            hintText: 'Briefly describe your reason for the appointment...',
+            hintStyle: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 14,
+            ),
+            filled: true,
+            fillColor: Colors.grey[50],
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey[200]!),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey[200]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.blue, width: 2),
+            ),
+            contentPadding: const EdgeInsets.all(16),
+            counterText: '', // Hide character counter
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButtons(TeacherModel teacher, UserModel? currentUser, bool hasPendingAppointment) {
+    final bool isTeacherAvailable = teacher.activeStatus.toLowerCase() == 'online';
+    final bool canKnock = !_isKnocking && 
+                         !hasPendingAppointment && 
+                         isTeacherAvailable &&
+                         currentUser != null;
+
+    return Row(
+      children: [
+        // Knock button
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: canKnock
+                ? () => _handleKnock(teacher, currentUser!)
+                : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E293B),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              disabledBackgroundColor: Colors.grey[300],
+              disabledForegroundColor: Colors.grey[500],
+              elevation: canKnock ? 2 : 0,
+            ),
+            icon: _isKnocking
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Icon(
+                    Icons.notifications,
+                    size: 20,
+                  ),
+            label: Text(
+              _isKnocking ? 'Sending...' : 'Knock',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        
+        const SizedBox(width: 12),
+        
+        // Notify Me button
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => _handleNotifyMe(teacher),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _notifiedTeachers.contains(teacher.uid) 
+                  ? Colors.orange 
+                  : Colors.blue,
+              side: BorderSide(
+                color: _notifiedTeachers.contains(teacher.uid) 
+                    ? Colors.orange 
+                    : Colors.blue,
+                width: 1.5,
+              ),
+              backgroundColor: _notifiedTeachers.contains(teacher.uid)
+                  ? Colors.orange.withOpacity(0.1)
+                  : Colors.transparent,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            icon: Icon(
+              _notifiedTeachers.contains(teacher.uid)
+                  ? Icons.notifications_active
+                  : Icons.notifications_outlined,
+              size: 20,
+            ),
+            label: Text(
+              _notifiedTeachers.contains(teacher.uid) 
+                  ? 'Notifying' 
+                  : 'Notify Me',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -440,20 +532,20 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
     });
 
     try {
-      final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
+      final appointmentService = ref.read(appointmentServiceProvider);
       final note = _noteController.text.trim();
       
-      final appointmentId = await appointmentNotifier.createAppointment(
+      final result = await appointmentService.createAppointment(
         student: currentUser,
         teacher: teacher,
         studentNote: note.isNotEmpty ? note : null,
       );
       
-      if (appointmentId != null) {
+      if (result['success'] == true) {
         Navigator.pop(context);
         _showSuccessMessage('Appointment request sent to ${teacher.displayName}');
       } else {
-        _showErrorMessage('Failed to send appointment request. Please try again.');
+        _showErrorMessage(result['error'] ?? 'Failed to send appointment request. Please try again.');
       }
     } catch (e) {
       _showErrorMessage('An error occurred: ${e.toString()}');
@@ -496,6 +588,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
+          margin: const EdgeInsets.all(16),
         ),
       );
     }
@@ -511,6 +604,8 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 4),
         ),
       );
     }
@@ -526,6 +621,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
+          margin: const EdgeInsets.all(16),
         ),
       );
     }

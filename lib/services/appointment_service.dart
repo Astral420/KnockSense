@@ -7,19 +7,87 @@ import 'package:knocksense/models/teacher_model.dart';
 
 class AppointmentService {
   final FirebaseDatabase _database;
+  static const int MAX_APPOINTMENTS_PER_TEACHER = 3;
+  // Remove timeout constants since we're not using automatic cancellation
 
   AppointmentService({required FirebaseDatabase database}) 
       : _database = database;
 
+  // Get count of active appointments for a student with a specific teacher
+  Future<int> getActiveAppointmentCount({
+    required String studentNumber,
+    required String teacherUid,
+  }) async {
+    try {
+      final snapshot = await _database
+          .ref('appointments/$studentNumber')
+          .orderByChild('teacherUid')
+          .equalTo(teacherUid)
+          .get();
+          
+      if (!snapshot.exists || snapshot.value == null) {
+        return 0;
+      }
+      
+      final data = Map<String, dynamic>.from(snapshot.value as Map);
+      int activeCount = 0;
+      
+      for (var entry in data.values) {
+        final appointment = Map<String, dynamic>.from(entry as Map);
+        final status = appointment['status'] as String;
+        
+        // Count pending and accepted appointments as active
+        if (status == AppointmentStatus.pending.name || 
+            status == AppointmentStatus.accepted.name) {
+          activeCount++;
+        }
+      }
+      
+      return activeCount;
+    } catch (e) {
+      debugPrint('Error getting active appointment count: $e');
+      return 0;
+    }
+  }
+
   // Create a new appointment when student knocks
-  Future<String?> createAppointment({
+  Future<Map<String, dynamic>> createAppointment({
     required UserModel student,
     required TeacherModel teacher,
     String? studentNote,
   }) async {
     try {
       if (student.studentNumber == null) {
-        throw Exception('Student number is required for appointment');
+        return {
+          'success': false,
+          'error': 'Student number is required for appointment',
+        };
+      }
+
+      // Check active appointment count
+      final activeCount = await getActiveAppointmentCount(
+        studentNumber: student.studentNumber!,
+        teacherUid: teacher.uid,
+      );
+      
+      if (activeCount >= MAX_APPOINTMENTS_PER_TEACHER) {
+        return {
+          'success': false,
+          'error': 'You have reached the maximum of $MAX_APPOINTMENTS_PER_TEACHER active appointments with this teacher. Please wait for existing appointments to be completed or cancelled.',
+        };
+      }
+
+      // Check if student has a pending appointment
+      final hasPending = await hasPendingAppointment(
+        studentNumber: student.studentNumber!,
+        teacherUid: teacher.uid,
+      );
+      
+      if (hasPending) {
+        return {
+          'success': false,
+          'error': 'You already have a pending appointment with this teacher. Please wait for a response.',
+        };
       }
 
       // Generate appointment ID using student number as prefix
@@ -32,19 +100,18 @@ class AppointmentService {
         'studentUid': student.uid,
         'studentNumber': student.studentNumber!,
         'studentName': student.displayName,
-        'teacherUid': teacher.teacherID,
+        'teacherUid': teacher.uid,
         'teacherName': teacher.displayName,
         'status': AppointmentStatus.pending.name,
         'createdAt': ServerValue.timestamp,
         'studentNote': studentNote,
+        'teacherPhotoUrl': teacher.photoUrl 
       };
 
-      
       await appointmentRef.set(appointmentData);
 
-      
       await _database
-          .ref('teacher_appointments/${teacher.teacherID}/${appointmentRef.key}')
+          .ref('teacher_appointments/${teacher.uid}/${appointmentRef.key}')
           .set({
         'studentNumber': student.studentNumber,
         'appointmentId': appointmentRef.key,
@@ -52,13 +119,19 @@ class AppointmentService {
         'createdAt': ServerValue.timestamp,
       });
 
-      // Send notification to teacher (implement push notification here)
+      // Send notification to teacher
       await _sendNotificationToTeacher(teacher.uid, student.displayName);
 
-      return appointmentRef.key;
+      return {
+        'success': true,
+        'appointmentId': appointmentRef.key,
+      };
     } catch (e) {
       debugPrint('Error creating appointment: $e');
-      return null;
+      return {
+        'success': false,
+        'error': 'Failed to create appointment: $e',
+      };
     }
   }
 
@@ -72,6 +145,16 @@ class AppointmentService {
     DateTime? scheduledTime,
   }) async {
     try {
+      // Check if appointment exists
+      final appointmentSnapshot = await _database
+          .ref('appointments/$studentNumber/$appointmentId')
+          .get();
+          
+      if (!appointmentSnapshot.exists) {
+        debugPrint('Appointment not found');
+        return false;
+      }
+      
       final updates = <String, dynamic>{};
       
       // Determine status based on action
@@ -92,7 +175,7 @@ class AppointmentService {
       // Update main appointment record
       updates['appointments/$studentNumber/$appointmentId/status'] = newStatus.name;
       updates['appointments/$studentNumber/$appointmentId/respondedAt'] = 
-          ServerValue.timestamp; // Use server timestamp
+          ServerValue.timestamp;
       updates['appointments/$studentNumber/$appointmentId/teacherAction'] = action.name;
       
       if (teacherResponse != null) {
@@ -108,7 +191,7 @@ class AppointmentService {
       // Update teacher's appointment index
       updates['teacher_appointments/$teacherUid/$appointmentId/status'] = newStatus.name;
       updates['teacher_appointments/$teacherUid/$appointmentId/respondedAt'] = 
-          ServerValue.timestamp; // Use server timestamp
+          ServerValue.timestamp;
 
       // Perform atomic update
       await _database.ref().update(updates);
@@ -130,7 +213,8 @@ class AppointmentService {
 
   // Get all appointments for a student
   Stream<List<AppointmentModel>> getStudentAppointments(String studentNumber, {
-  DateTimeRange? dateRange,}) {
+    DateTimeRange? dateRange,
+  }) {
     return _database
         .ref('appointments/$studentNumber')
         .orderByChild('createdAt')
@@ -144,11 +228,8 @@ class AppointmentService {
         data.forEach((key, value) {
           try {
             final appointmentData = Map<String, dynamic>.from(value as Map);
-            
-            // Debug print to see the data structure
-            print('Processing appointment $key: $appointmentData');
-            
-            appointments.add(AppointmentModel.fromJson(key, appointmentData));
+            final appointment = AppointmentModel.fromJson(key, appointmentData);
+            appointments.add(appointment);
           } catch (e) {
             print('Error parsing appointment $key: $e');
           }
@@ -156,11 +237,6 @@ class AppointmentService {
         
         // Sort by creation date (newest first)
         appointments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        
-        print('Loaded ${appointments.length} appointments');
-        for (var apt in appointments) {
-          print('Appointment ${apt.appointmentId}: ${apt.createdAt}');
-        }
       }
       
       return appointments;
@@ -192,10 +268,11 @@ class AppointmentService {
               .get();
               
           if (appointmentSnapshot.exists) {
-            appointments.add(AppointmentModel.fromJson(
+            final appointment = AppointmentModel.fromJson(
               appointmentId,
               Map<String, dynamic>.from(appointmentSnapshot.value as Map),
-            ));
+            );
+            appointments.add(appointment);
           }
         }
         

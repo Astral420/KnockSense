@@ -92,7 +92,7 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
   
   AppointmentNotifier(this._service) : super(const AsyncValue.data(null));
   
-  Future<String?> createAppointment({
+  Future<Map<String, dynamic>?> createAppointment({
     required UserModel student,
     required TeacherModel teacher,
     String? studentNote,

@@ -55,7 +55,7 @@ class MorePage extends ConsumerWidget {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 16),
                           Stack(
                             children: [
                               const Icon(

@@ -5,13 +5,14 @@ class AppointmentModel {
   final String studentName;
   final String teacherUid;
   final String teacherName;
+  final String? teacherPhotoUrl; // Add this field
   final AppointmentStatus status;
   final DateTime createdAt;
   final DateTime? respondedAt;
   final String? studentNote;
   final String? teacherResponse;
   final TeacherAction? teacherAction;
-  final DateTime? scheduledTime; // For "meet later" option
+  final DateTime? scheduledTime;
 
   AppointmentModel({
     required this.appointmentId,
@@ -20,6 +21,7 @@ class AppointmentModel {
     required this.studentName,
     required this.teacherUid,
     required this.teacherName,
+    this.teacherPhotoUrl, // Add to constructor
     required this.status,
     required this.createdAt,
     this.respondedAt,
@@ -30,29 +32,21 @@ class AppointmentModel {
   });
 
   factory AppointmentModel.fromJson(String id, Map<String, dynamic> json) {
-
     DateTime? parseToDateTime(dynamic value) {
       if (value == null) return null;
       
-      // Handle different timestamp formats from Firebase
       if (value is int) {
-        // Standard milliseconds timestamp
         return DateTime.fromMillisecondsSinceEpoch(value);
       } else if (value is double) {
-        // Sometimes Firebase returns double
         return DateTime.fromMillisecondsSinceEpoch(value.toInt());
       } else if (value is Map) {
-        // Handle ServerValue.timestamp placeholder (shouldn't happen when reading)
-        // This is usually only present during write operations
         print('Warning: Received ServerValue.timestamp placeholder during read: $value');
-        return DateTime.now(); // Fallback
+        return DateTime.now();
       } else if (value is String) {
-        // Handle string timestamps (backup parsing)
         try {
           final intValue = int.parse(value);
           return DateTime.fromMillisecondsSinceEpoch(intValue);
         } catch (e) {
-          // Try parsing as ISO string
           return DateTime.tryParse(value);
         }
       }
@@ -77,6 +71,7 @@ class AppointmentModel {
       studentName: json['studentName'] as String,
       teacherUid: json['teacherUid'] as String,
       teacherName: json['teacherName'] as String,
+      teacherPhotoUrl: json['teacherPhotoUrl'] as String?, // Parse photo URL
       status: AppointmentStatus.values.firstWhere(
         (e) => e.name == json['status'],
         orElse: () => AppointmentStatus.pending,
@@ -101,6 +96,7 @@ class AppointmentModel {
     'studentName': studentName,
     'teacherUid': teacherUid,
     'teacherName': teacherName,
+    'teacherPhotoUrl': teacherPhotoUrl, // Include in JSON
     'status': status.name,
     'createdAt': createdAt.millisecondsSinceEpoch,
     'respondedAt': respondedAt?.millisecondsSinceEpoch,
@@ -117,6 +113,7 @@ class AppointmentModel {
     String? studentName,
     String? teacherUid,
     String? teacherName,
+    String? teacherPhotoUrl, // Add to copyWith
     AppointmentStatus? status,
     DateTime? createdAt,
     DateTime? respondedAt,
@@ -132,6 +129,7 @@ class AppointmentModel {
       studentName: studentName ?? this.studentName,
       teacherUid: teacherUid ?? this.teacherUid,
       teacherName: teacherName ?? this.teacherName,
+      teacherPhotoUrl: teacherPhotoUrl ?? this.teacherPhotoUrl,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       respondedAt: respondedAt ?? this.respondedAt,
@@ -149,17 +147,17 @@ class AppointmentModel {
 }
 
 enum AppointmentStatus {
-  pending,   // Initial state when student knocks
-  accepted,  // Teacher accepted the appointment
-  denied,    // Teacher rejected the appointment
-  completed, // Appointment was completed
-  cancelled, // Student cancelled the appointment
+  pending,
+  accepted,
+  denied,
+  completed,
+  cancelled,
 }
 
 enum TeacherAction {
-  pending,      // No action taken yet
-  meetNow,      // Meet the student immediately
-  wait5Minutes, // Ask student to wait 5 minutes
-  meetLater,    // Schedule for later time
-  reject,       // Reject the appointment
+  pending,
+  meetNow,
+  wait5Minutes,
+  meetLater,
+  reject,
 }

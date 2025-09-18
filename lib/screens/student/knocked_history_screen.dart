@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -103,7 +104,7 @@ class KnockedHistoryPage extends ConsumerWidget {
                       ),
                       const SizedBox(width: 8),
                       IconButton(
-                        icon: const Icon(Icons.notifications_outlined, color: Colors.amber),
+                        icon: const Icon(Icons.notifications_outlined),
                         onPressed: () {},
                       ),
                     ],
@@ -385,18 +386,47 @@ class _AppointmentHistoryCard extends StatelessWidget {
         child: Row(
           children: [
             // Teacher Avatar (placeholder with initials since we don't have photo in appointment model)
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: Colors.amber,
-              child: Text(
-                teacherInitials,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+            appointment.teacherPhotoUrl != null
+              ? CachedNetworkImage(
+                  imageUrl: appointment.teacherPhotoUrl!,
+                  imageBuilder: (context, imageProvider) => CircleAvatar(
+                    radius: 24,
+                    backgroundImage: imageProvider,
+                  ),
+                  placeholder: (context, url) => const CircleAvatar(
+                    radius: 24,
+                    backgroundColor: Colors.amber,
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => CircleAvatar(
+                    radius: 24,
+                    backgroundColor: Colors.amber,
+                    child: Text(
+                      teacherInitials,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                )
+              : CircleAvatar(
+                  radius: 24,
+                  backgroundColor: Colors.amber,
+                  child: Text(
+                    teacherInitials,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
                 ),
-              ),
-            ),
             const SizedBox(width: 12),
             
             // Teacher Info

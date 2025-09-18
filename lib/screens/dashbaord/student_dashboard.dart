@@ -278,18 +278,47 @@ class StudentDashboard extends ConsumerWidget {
                         elevation: 0,
                         color: Colors.white,
                         child: ListTile(
-                          leading: CircleAvatar(
-                            radius: 20,
-                            backgroundColor: Colors.amber,
-                            child: Text(
-                              _getTeacherInitials(appointment.teacherName),
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ),
+                          leading: appointment.teacherPhotoUrl != null
+                              ? CachedNetworkImage(
+                                  imageUrl: appointment.teacherPhotoUrl!,
+                                  imageBuilder: (context, imageProvider) => CircleAvatar(
+                                    radius: 20,
+                                    backgroundImage: imageProvider,
+                                  ),
+                                  placeholder: (context, url) => const CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: Colors.amber,
+                                    child: SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    ),
+                                  ),
+                                  errorWidget: (context, url, error) => CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: Colors.amber,
+                                    child: Text(
+                                      _getTeacherInitials(appointment.teacherName),
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : CircleAvatar(
+                                  radius: 20,
+                                  backgroundColor: Colors.amber,
+                                  child: Text(
+                                    _getTeacherInitials(appointment.teacherName),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ),
                           title: Text(
                             appointment.teacherName,
                             style: const TextStyle(
