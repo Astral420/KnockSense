@@ -18,6 +18,7 @@ import 'package:knocksense/widgets/navigation/teacher_navigation_wrapper.dart';
 
 
 void main() async {
+
   // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
 
