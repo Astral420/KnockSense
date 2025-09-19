@@ -23,7 +23,7 @@ class AuthService {
       final microsoftProvider = MicrosoftAuthProvider();
       microsoftProvider.setCustomParameters({
         'tenant': '3663e35d-c7bc-4b90-90e0-a67a1d53bb77',
-        'prompt': 'select_account'
+        'prompt': 'login'
       });
 
       final userCredential = await _auth.signInWithProvider(microsoftProvider);

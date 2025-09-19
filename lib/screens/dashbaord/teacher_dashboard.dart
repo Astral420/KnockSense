@@ -1,54 +1,480 @@
+// screens/teacher_dashboard.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:knocksense/provider/auth_provider.dart';
+import 'package:knocksense/provider/teacher_service_provider.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
-import 'package:knocksense/widgets/common/useravatar_widget.dart';
+import 'package:knocksense/widgets/teacher_dash/add_note_modal.dart';
 
-class TeacherDashboard extends ConsumerWidget {
+class TeacherDashboard extends ConsumerStatefulWidget {
   const TeacherDashboard({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TeacherDashboard> createState() => _TeacherDashboardState();
+}
+
+class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final authService = ref.read(authServiceProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Teacher Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Sign Out',
-            onPressed: () async {
-              await authService.signOut();
-            },
-          ),
-        ],
-      ),
-      body: user.when(
-        data: (userData) {
-          if (userData == null) {
-            return const Center(child: Text('User data not found.'));
-          }
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const UserAvatar(radius: 96),
-                const SizedBox(height: 20),
-                Text(
-                  'Welcome, ${userData.displayName}!',
-                  style: Theme.of(context).textTheme.headlineMedium,
+      backgroundColor: Colors.grey[50],
+      body: SafeArea(
+        child: user.when(
+          data: (userData) {
+            if (userData == null) {
+              return const Center(child: Text('User data not found.'));
+            }
+            
+            final statusStream = ref.watch(teacherStatusProvider(userData.uid));
+            final noteStream = ref.watch(teacherNoteProvider(userData.uid));
+            
+            return CustomScrollView(
+              slivers: [
+                // App Bar
+                SliverToBoxAdapter(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'KnockSense',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Text(
+                                'Teacher',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.notifications_outlined),
+                              onPressed: () {},
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                Text('Role: ${userData.role.name}'),
-                Text('Email: ${userData.email}'),
+
+                // Cards Grid
+                SliverPadding(
+                  padding: const EdgeInsets.all(16),
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: 1.0, // Make cards square
+                    ),
+                    delegate: SliverChildListDelegate([
+                      // Recent Knocks Card
+                      _buildRecentKnocksCard(),
+                      
+                      // Status Card
+                      statusStream.when(
+                        data: (status) => _buildStatusCard(status, userData.uid),
+                        loading: () => _buildStatusCard('offline', userData.uid),
+                        error: (_, __) => _buildStatusCard('offline', userData.uid),
+                      ),
+                      
+                      // Add Notes Card
+                      noteStream.when(
+                        data: (note) => _buildAddNotesCard(note, userData.uid),
+                        loading: () => _buildAddNotesCard(null, userData.uid),
+                        error: (_, __) => _buildAddNotesCard(null, userData.uid),
+                      ),
+                    ]),
+                  ),
+                ),
               ],
+            );
+          },
+          loading: () => const LoadingWidget(),
+          error: (err, stack) => Center(child: Text('Error: $err')),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecentKnocksCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3CD), // Light yellow/amber background
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Recent Knocks',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF856404), // Brown color
+              ),
             ),
-          );
-        },
-        loading: () => const LoadingWidget(),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+            const SizedBox(height: 4),
+            Text(
+              'See who knocked\non you recently',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.brown[600],
+                height: 1.2,
+              ),
+            ),
+            const Spacer(),
+            // Inner container with icons
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFE69C), // Lighter yellow
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFC107), // Amber
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFFFF9800), // Darker amber
+                        width: 2,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.doorbell,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const CircleAvatar(
+                    radius: 20,
+                    backgroundColor: Color(0xFFFFC107), // Amber
+                    child: Text(
+                      'RD',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Center(
+              child: Text(
+                '2 minutes ago',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF856404), // Brown
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusCard(String currentStatus, String teacherUid) {
+    final isOffline = currentStatus.toLowerCase() == 'offline';
+    final isBusy = currentStatus.toLowerCase() == 'busy';
+    final isOnline = currentStatus.toLowerCase() == 'online';
+    
+    Color backgroundColor;
+    Color textColor;
+    String statusText;
+    
+    if (isOffline) {
+      backgroundColor = const Color(0xFF424242); // Dark grey
+      textColor = Colors.white;
+      statusText = 'Offline';
+    } else if (isBusy) {
+      backgroundColor = const Color(0xFFFFE0B2); // Light orange
+      textColor = const Color(0xFFE65100); // Dark orange
+      statusText = 'Busy';
+    } else {
+      backgroundColor = const Color(0xFFC8E6C9); // Light green
+      textColor = const Color(0xFF1B5E20); // Dark green
+      statusText = 'Online';
+    }
+    
+    return GestureDetector(
+      onTap: isOffline ? null : () => _toggleStatus(teacherUid, currentStatus),
+      child: Container(
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Status',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isOffline ? Colors.white70 : textColor,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                'Share your status\nanytime anywhere',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isOffline ? Colors.white60 : textColor.withOpacity(0.8),
+                  height: 1.2,
+                ),
+              ),
+              const Spacer(),
+              
+              // Inner container with status indicator
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                decoration: BoxDecoration(
+                  color: isBusy 
+                      ? const Color(0xFFFF9800) // Orange for busy
+                      : isOffline 
+                          ? Colors.black.withOpacity(0.3)
+                          : Colors.white.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: isBusy 
+                              ? const Color(0xFFE65100) 
+                              : isOffline
+                                  ? Colors.grey[700]
+                                  : const Color(0xFF2E7D32),
+                          child: Text(
+                            _getInitials('Teacher'),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Icon(
+                          isBusy 
+                              ? Icons.person_off
+                              : isOffline 
+                                  ? Icons.person_off
+                                  : Icons.person,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      statusText,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      '10 minutes',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white.withOpacity(0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddNotesCard(String? currentNote, String teacherUid) {
+    return GestureDetector(
+      onTap: () => _showAddNoteModal(context, teacherUid, currentNote),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFE1BEE7), // Light purple
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Add Notes',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF4A148C), // Dark purple
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Keep track of important\nthings to do',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF6A1B9A), // Medium purple
+                  height: 1.2,
+                ),
+              ),
+              const Spacer(),
+              // Inner container with note preview or add button
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9C27B0), // Purple
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.note_add,
+                          color: Colors.white.withOpacity(0.9),
+                          size: 32,
+                        ),
+                        const SizedBox(width: 12),
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.add,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (currentNote != null && currentNote.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          currentNote.length > 20 
+                              ? '${currentNote.substring(0, 20)}...'
+                              : currentNote,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.white,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Add note',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.8),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _getInitials(String name) {
+    if (name.isEmpty) return 'T';
+    
+    final parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    } else {
+      return parts[0][0].toUpperCase();
+    }
+  }
+
+  Future<void> _toggleStatus(String teacherUid, String currentStatus) async {
+    final teacherService = ref.read(teacherServiceProvider);
+    
+    // Toggle between online and busy only
+    String newStatus = currentStatus.toLowerCase() == 'online' ? 'busy' : 'online';
+    
+    final success = await teacherService.updateTeacherStatus(teacherUid, newStatus);
+    
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot change status while offline'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showAddNoteModal(BuildContext context, String teacherUid, String? currentNote) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => AddNoteModal(
+        teacherUid: teacherUid,
+        currentNote: currentNote,
       ),
     );
   }

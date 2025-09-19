@@ -534,7 +534,7 @@ class StudentDashboard extends ConsumerWidget {
           error: (err, stack) => Center(child: Text('Error: $err')),
         ),
       ),
-      // Remove the bottomNavigationBar from here since it's now handled by MainNavigation
+      
     );
   }
 

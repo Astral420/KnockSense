@@ -1,41 +1,43 @@
+// screens/navigation/teacher_nav_wrapper.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:knocksense/screens/dashbaord/student_dashboard.dart';
-import 'package:knocksense/screens/student/student_more_screen.dart';
-import 'package:knocksense/screens/student/knocked_history_screen.dart';
+import 'package:knocksense/screens/teacher/teacher_more_screen.dart';
+import 'package:knocksense/screens/teacher/teacher_appointment_history.dart';
+import 'package:knocksense/screens/dashbaord/teacher_dashboard.dart';
 
-// Provider to manage the current tab index
-final currentTabProvider = StateProvider<int>((ref) => 0);
+// Provider to manage the current tab index for teacher
+final teacherCurrentTabProvider = StateProvider<int>((ref) => 0);
 
-class MainNavigationStudent extends ConsumerStatefulWidget {
-  const MainNavigationStudent({Key? key}) : super(key: key);
+class MainNavigationTeacher extends ConsumerStatefulWidget {
+  const MainNavigationTeacher({Key? key}) : super(key: key);
 
   @override
-  ConsumerState<MainNavigationStudent> createState() => _MainNavigationStudentState();
+  ConsumerState<MainNavigationTeacher> createState() => _TeacherNavigationWrapperState();
 }
 
-class _MainNavigationStudentState extends ConsumerState<MainNavigationStudent> {
+class _TeacherNavigationWrapperState extends ConsumerState<MainNavigationTeacher> {
   
   @override
   void initState() {
     super.initState();
     // Reset tab to 0 whenever this widget is created (i.e., on login)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(currentTabProvider.notifier).state = 0;
+      ref.read(teacherCurrentTabProvider.notifier).state = 0;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentTab = ref.watch(currentTabProvider);
+    final currentTab = ref.watch(teacherCurrentTabProvider);
 
     return Scaffold(
       body: IndexedStack(
         index: currentTab,
         children: const [
-          StudentDashboard(),
-          KnockedHistoryPage(), // Updated to use the new history page
-          MorePage(),
+          TeacherDashboard(),           // Index 0
+          TeacherAppointmentHistory(),  // Index 1
+          TeacherMoreScreen(),          // Index 2
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -43,7 +45,7 @@ class _MainNavigationStudentState extends ConsumerState<MainNavigationStudent> {
         selectedItemColor: Colors.black,
         unselectedItemColor: Colors.grey,
         currentIndex: currentTab,
-        onTap: (index) => ref.read(currentTabProvider.notifier).state = index,
+        onTap: (index) => ref.read(teacherCurrentTabProvider.notifier).state = index,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard),
