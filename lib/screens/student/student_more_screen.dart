@@ -12,7 +12,7 @@ class MorePage extends ConsumerWidget {
     final authService = ref.read(authServiceProvider);
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: user.when(
           data: (userData) {

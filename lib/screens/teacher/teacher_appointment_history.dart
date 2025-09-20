@@ -23,7 +23,7 @@ class _TeacherAppointmentHistoryState extends ConsumerState<TeacherAppointmentHi
     final appointmentsAsync = ref.watch(teacherAllAppointmentsProvider);
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [

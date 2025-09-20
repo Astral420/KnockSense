@@ -18,7 +18,7 @@ class StudentDashboard extends ConsumerWidget {
     final teachers = ref.watch(teachersStreamProvider);
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: user.when(
           data: (userData) {
@@ -477,7 +477,7 @@ class StudentDashboard extends ConsumerWidget {
                                         ),
                                       ),
                                 title: Text(
-                                  teacher.displayName,
+                                  _cleanTeacherName(teacher.displayName),
                                   style: const TextStyle(fontWeight: FontWeight.w600),
                                 ),
                                 subtitle: Text(
@@ -555,15 +555,41 @@ class StudentDashboard extends ConsumerWidget {
     return status[0].toUpperCase() + status.substring(1).toLowerCase();
   }
 
-  String _getDisplayName(String fullName) {
-    // Extract last name for display in the horizontal list
-    final parts = fullName.split(' ');
-    if (parts.length > 1) {
-      return parts.last; // Return last name
+  // New function to clean teacher names (removes "(Faculty)" and properly formats)
+  String _cleanTeacherName(String fullName) {
+    // Remove "(Faculty)" or any parenthetical content
+    String cleanedName = fullName.replaceAll(RegExp(r'\s*\(.*?\)\s*'), '').trim();
+    
+    // Handle "LastName, FirstName" format
+    if (cleanedName.contains(',')) {
+      final parts = cleanedName.split(',').map((part) => part.trim()).toList();
+      if (parts.length == 2) {
+        // Swap to "FirstName LastName" format
+        return '${parts[1]} ${parts[0]}';
+      }
     }
-    return fullName; // Return full name if only one word
+    
+    return cleanedName;
+  }
+
+  // Updated function for horizontal display (shows first and last name)
+  String _getDisplayName(String fullName) {
+    // Clean the name first
+    String cleanedName = fullName.replaceAll(RegExp(r'\s*\(.*?\)\s*'), '').trim();
+    
+    // Handle "LastName, FirstName" format
+    if (cleanedName.contains(',')) {
+      final parts = cleanedName.split(',').map((part) => part.trim()).toList();
+      if (parts.length == 2) {
+        // Return "FirstName LastName" format
+        return '${parts[1]} ${parts[0]}';
+      }
+    }
+    
+    return cleanedName;
   }
 }
+
 String _getTeacherInitials(String teacherName) {
   final cleanedName = teacherName.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
 

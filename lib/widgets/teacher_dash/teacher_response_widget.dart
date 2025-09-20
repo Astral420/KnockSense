@@ -1,6 +1,7 @@
 // widgets/teacher/teacher_response_widget.dart
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/models/appointment_model.dart';
 import 'package:knocksense/models/user_models.dart';
@@ -29,6 +30,28 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
     _noteController.dispose();
     super.dispose();
   }
+
+   String _getTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inSeconds < 60) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      final minutes = difference.inMinutes;
+      return '$minutes ${minutes == 1 ? 'min' : 'mins'} ago';
+    } else if (difference.inHours < 24) {
+      final hours = difference.inHours;
+      return '$hours ${hours == 1 ? 'hour' : 'hours'} ago';
+    } else if (difference.inDays < 7) {
+      final days = difference.inDays;
+      return '$days ${days == 1 ? 'day' : 'days'} ago';
+    } else {
+      return DateFormat('MMM d').format(dateTime);
+    }
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +94,7 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
                         ),
                       ),
                       Text(
-                        '2 mins ago', // You can calculate this from appointment.createdAt
+                        _getTimeAgo(widget.appointment.createdAt), 
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],
@@ -86,22 +109,44 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
             const SizedBox(height: 12),
             
             // Student's request message
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey[200]!),
-              ),
-              child: Text(
-                widget.appointment.studentNote ?? 'Need consultation for Capstone',
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.black87,
+            if (widget.appointment.studentNote != null &&
+                widget.appointment.studentNote!.isNotEmpty) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: Text(
+                  widget.appointment.studentNote!,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black87,
+                  ),
                 ),
               ),
-            ),
+            ] else ...[
+              // Optional: Show a message when there is no note
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: const Text(
+                  'No note provided by student.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+            ],
             
             const SizedBox(height: 16),
             

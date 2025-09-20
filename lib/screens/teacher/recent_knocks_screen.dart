@@ -1,0 +1,274 @@
+// screens/teacher/recent_knocks_screen.dart
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:knocksense/models/appointment_model.dart';
+import 'package:knocksense/provider/appointment_provider.dart';
+import 'package:knocksense/provider/auth_provider.dart';
+import 'package:knocksense/widgets/common/loading_widget.dart';
+import 'package:intl/intl.dart';
+import 'package:knocksense/widgets/teacher_dash/teacher_response_widget.dart';
+
+class RecentKnocksScreen extends ConsumerWidget {
+  const RecentKnocksScreen({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentUser = ref.watch(currentUserProvider);
+    final appointmentsAsync = ref.watch(teacherPendingAppointmentsProvider);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFDF6E3), // Cream background matching design
+      body: SafeArea(
+        child: currentUser.when(
+          data: (user) {
+            if (user == null) {
+              return const Center(child: Text('User not found'));
+            }
+
+            return Column(
+              children: [
+                // Header
+                Container(
+                  color: const Color(0xFFFDF6E3),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: const Icon(
+                          Icons.chevron_left,
+                          size: 32,
+                          color: Color(0xFF6B4423), // Brown color
+                        ),
+                      ),
+                      const Expanded(
+                        child: Center(
+                          child: Text(
+                            'Recent Knocks',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF6B4423), // Brown color
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.more_horiz,
+                        size: 28,
+                        color: Color(0xFF6B4423),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Appointments List
+                Expanded(
+                  child: appointmentsAsync.when(
+                    data: (appointments) {
+                      if (appointments.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.notifications_off_outlined,
+                                size: 64,
+                                color: Colors.brown[300],
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No recent knocks',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.brown[600],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Students will appear here when they knock',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.brown[400],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        itemCount: appointments.length,
+                        itemBuilder: (context, index) {
+                          final appointment = appointments[index];
+                          return _buildKnockCard(
+                            context: context,
+                            appointment: appointment,
+                            user: user,
+                          );
+                        },
+                      );
+                    },
+                    loading: () => const LoadingWidget(),
+                    error: (err, stack) => Center(
+                      child: Text('Error loading knocks: $err'),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+          loading: () => const LoadingWidget(),
+          error: (err, stack) => Center(
+            child: Text('Error: $err'),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKnockCard({
+    required BuildContext context,
+    required AppointmentModel appointment,
+    required dynamic user,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        // Show the teacher response widget as a modal
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: TeacherResponseWidget(
+              appointment: appointment,
+              currentUser: user,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFE69C), // Light yellow/amber matching design
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            // Avatar with initials
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFC107), // Amber color
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  _getInitials(appointment.studentName),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            
+            // Student info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    appointment.studentName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                 
+                  if (appointment.studentNote != null && appointment.studentNote!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      appointment.studentNote!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.brown[600],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            
+            // Time ago
+            Text(
+              _getTimeAgo(appointment.createdAt),
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.brown[500],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getInitials(String name) {
+    if (name.isEmpty) return '??';
+    
+    // Remove any role indicators in parentheses
+    final cleanName = name.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
+    
+    final parts = cleanName.split(' ');
+    if (parts.length >= 2) {
+      // Take first letter of first name and last name
+      final firstName = parts.first;
+      final lastName = parts.last;
+      
+      if (firstName.isNotEmpty && lastName.isNotEmpty) {
+        return '${firstName[0]}${lastName[0]}'.toUpperCase();
+      }
+    }
+    
+    // If only one name or parsing fails, return first two letters
+    if (cleanName.length >= 2) {
+      return cleanName.substring(0, 2).toUpperCase();
+    }
+    
+    return cleanName.isNotEmpty ? cleanName[0].toUpperCase() : '??';
+  }
+
+  String _getTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inSeconds < 60) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      final minutes = difference.inMinutes;
+      return '$minutes ${minutes == 1 ? 'min' : 'mins'} ago';
+    } else if (difference.inHours < 24) {
+      final hours = difference.inHours;
+      return '$hours ${hours == 1 ? 'hour' : 'hours'} ago';
+    } else if (difference.inDays < 7) {
+      final days = difference.inDays;
+      return '$days ${days == 1 ? 'day' : 'days'} ago';
+    } else {
+      return DateFormat('MMM d').format(dateTime);
+    }
+  }
+}

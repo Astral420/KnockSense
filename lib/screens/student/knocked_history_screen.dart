@@ -65,7 +65,7 @@ class KnockedHistoryPage extends ConsumerWidget {
     final appointmentsAsync = ref.watch(studentAppointmentsProvider);
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [

@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/provider/teacher_service_provider.dart';
+import 'package:knocksense/provider/appointment_provider.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:knocksense/widgets/teacher_dash/add_note_modal.dart';
+import 'package:knocksense/screens/teacher/recent_knocks_screen.dart';
 
 class TeacherDashboard extends ConsumerStatefulWidget {
   const TeacherDashboard({Key? key}) : super(key: key);
@@ -20,6 +22,7 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final authService = ref.read(authServiceProvider);
+    final pendingAppointments = ref.watch(teacherPendingAppointmentsProvider);
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -70,9 +73,43 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.notifications_outlined),
-                              onPressed: () {},
+                            Stack(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.notifications_outlined),
+                                  onPressed: () {
+                                    // Navigate to Recent Knocks when notification icon is pressed
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => const RecentKnocksScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                // Show red dot if there are pending appointments
+                                pendingAppointments.when(
+                                  data: (appointments) {
+                                    if (appointments.isNotEmpty) {
+                                      return Positioned(
+                                        right: 8,
+                                        top: 8,
+                                        child: Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.red,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                    return const SizedBox.shrink();
+                                  },
+                                  loading: () => const SizedBox.shrink(),
+                                  error: (_, __) => const SizedBox.shrink(),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -92,8 +129,12 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
                       childAspectRatio: 1.0, // Make cards square
                     ),
                     delegate: SliverChildListDelegate([
-                      // Recent Knocks Card
-                      _buildRecentKnocksCard(),
+                      // Recent Knocks Card with pending appointments data
+                      pendingAppointments.when(
+                        data: (appointments) => _buildRecentKnocksCard(appointments),
+                        loading: () => _buildRecentKnocksCard([]),
+                        error: (_, __) => _buildRecentKnocksCard([]),
+                      ),
                       
                       // Status Card
                       statusStream.when(
@@ -121,89 +162,130 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
     );
   }
 
-  Widget _buildRecentKnocksCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF3CD), // Light yellow/amber background
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Recent Knocks',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF856404), // Brown color
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'See who knocked\non you recently',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.brown[600],
-                height: 1.2,
-              ),
-            ),
-            const Spacer(),
-            // Inner container with icons
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFE69C), // Lighter yellow
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildRecentKnocksCard(List<dynamic> pendingAppointments) {
+    // Get the most recent appointment if available
+    final hasAppointments = pendingAppointments.isNotEmpty;
+    final recentAppointment = hasAppointments ? pendingAppointments.first : null;
+    
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const RecentKnocksScreen(),
+          ),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF3CD), // Light yellow/amber background
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFC107), // Amber
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFFFF9800), // Darker amber
-                        width: 2,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.doorbell,
-                      color: Colors.white,
-                      size: 20,
+                  const Text(
+                    'Recent Knocks',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF856404), // Brown color
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  const CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Color(0xFFFFC107), // Amber
-                    child: Text(
-                      'RD',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                  if (pendingAppointments.length > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${pendingAppointments.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
-            ),
-            const SizedBox(height: 8),
-            const Center(
-              child: Text(
-                '2 minutes ago',
+              const SizedBox(height: 4),
+              Text(
+                hasAppointments 
+                    ? '${pendingAppointments.length} student${pendingAppointments.length > 1 ? 's' : ''} waiting'
+                    : 'See who knocked\non you recently',
                 style: TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFF856404), // Brown
+                  fontSize: 13,
+                  color: Colors.brown[600],
+                  height: 1.2,
                 ),
               ),
-            ),
-          ],
+              const Spacer(),
+              // Inner container with icons
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFE69C), // Lighter yellow
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFC107), // Amber
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFFFF9800), // Darker amber
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.doorbell,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: const Color(0xFFFFC107), // Amber
+                      child: Text(
+                        hasAppointments && recentAppointment != null
+                            ? _getInitials(recentAppointment.studentName)
+                            : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Center(
+                child: Text(
+                  hasAppointments && recentAppointment != null
+                      ? _getTimeAgo(recentAppointment.createdAt)
+                      : 'No recent knocks',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF856404), // Brown
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -212,7 +294,7 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
   Widget _buildStatusCard(String currentStatus, String teacherUid) {
     final isOffline = currentStatus.toLowerCase() == 'offline';
     final isBusy = currentStatus.toLowerCase() == 'busy';
-    final isOnline = currentStatus.toLowerCase() == 'online';
+    //final isOnline = currentStatus.toLowerCase() == 'online';
     
     Color backgroundColor;
     Color textColor;
@@ -227,8 +309,8 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
       textColor = const Color(0xFFE65100); // Dark orange
       statusText = 'Busy';
     } else {
-      backgroundColor = const Color(0xFFC8E6C9); // Light green
-      textColor = const Color(0xFF1B5E20); // Dark green
+      backgroundColor = const Color.fromARGB(255, 22, 163, 74); // Light green
+      textColor = const Color.fromARGB(255, 23, 83, 23); // Dark green
       statusText = 'Online';
     }
     
@@ -439,13 +521,45 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
   }
 
   String _getInitials(String name) {
-    if (name.isEmpty) return 'T';
+    if (name.isEmpty) return '??';
     
-    final parts = name.trim().split(' ');
+    // Remove any role indicators in parentheses
+    final cleanName = name.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
+    
+    final parts = cleanName.split(' ');
     if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+      // Take first letter of first name and last name
+      final firstName = parts.first;
+      final lastName = parts.last;
+      
+      if (firstName.isNotEmpty && lastName.isNotEmpty) {
+        return '${firstName[0]}${lastName[0]}'.toUpperCase();
+      }
+    }
+    
+    // If only one name or parsing fails, return first two letters
+    if (cleanName.length >= 2) {
+      return cleanName.substring(0, 2).toUpperCase();
+    }
+    
+    return cleanName.isNotEmpty ? cleanName[0].toUpperCase() : '??';
+  }
+
+  String _getTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inSeconds < 60) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      final minutes = difference.inMinutes;
+      return '$minutes ${minutes == 1 ? 'minute' : 'minutes'} ago';
+    } else if (difference.inHours < 24) {
+      final hours = difference.inHours;
+      return '$hours ${hours == 1 ? 'hour' : 'hours'} ago';
     } else {
-      return parts[0][0].toUpperCase();
+      final days = difference.inDays;
+      return '$days ${days == 1 ? 'day' : 'days'} ago';
     }
   }
 
