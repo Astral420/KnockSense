@@ -2,49 +2,271 @@
 #include <SPI.h>
 #include <MFRC522.h>
 #include <Firebase_ESP_Client.h>
+#include <ESPAsyncWebServer.h>
+#include <AsyncTCP.h>
+#include <LittleFS.h>
+#include <HTTPClient.h>
 
+#include "addons/TokenHelper.h"
+#include "addons/RTDBHelper.h"
 
+// Include our enhanced header files
+#include "LittleFSConfig.h"
+#include "WebServerHandler.h" 
+#include "WebSocketHandler.h"
+#include "NetworkManager.h"
+#include "KnockSenseNetworkManager.h"
 
-// ---------- WiFi ----------
-const char* WIFI_SSID = "DYWIFI";
-const char* WIFI_PASS = "tJSRQ4zY";
-
-// ---------- RFID / hardware ----------
+// ---------- RFID / Hardware Configuration ----------
 #define NR_OF_READERS 2
 #define SS_1  5
 #define SS_2  17
-
 #define RST_1 21
 #define RST_2 22
 
+byte ssPins[] = {SS_1, SS_2};
+byte rstPins[] = {RST_1, RST_2};
 
-#define RELAY_PIN 32 // solenoid relay pin
+int RELAY_PIN;
+long DOOR_OPEN_DURATION;
 
-byte ssPins [] = {SS_1, SS_2};
-byte rstPins [] = {RST_1, RST_2};
-
-unsigned long doorUnlockTime = 0;
-bool isDoorUnlocked = false;
-const long doorOpenDuration = 6000;
-
-
+// ---------- Global Instances ----------
 MFRC522 mfrc522[NR_OF_READERS];
 
-
-//FIREBASE INSTANCES
+// Firebase instances  
 FirebaseData fbdo;
 FirebaseAuth auth;
-FirebaseConfig config;
+FirebaseConfig firebaseConfig;
 
-#define API_KEY ""
-#define DATABASE_URL ""
+// System components
+AsyncWebServer server(81);
+LittleFSConfig fsConfig;
+WebServerHandler webHandler(&server, &fsConfig);
+WebSocketHandler wsHandler(&fsConfig);
+KnockSenseNetworkManager networkMgr(&fsConfig, &wsHandler);
+
+// ---------- System State ----------
+unsigned long sendDataPrevMillis = 0;
+unsigned long doorUnlockTime = 0;
+bool isDoorUnlocked = false;
+bool firebaseConnected = false;
+
+// Firebase credentials (loaded from config)
+String API_KEY;
+String DATABASE_URL;
+String ADMIN_EMAIL;
+String ADMIN_PASSWORD;
+
+// ---------- Function Declarations ----------
+void loadConfigurationValues();
+void connectFirebase();
+void checkRFID();
+void manageDoorLock();
+void handleNetworkUpdates();
+String uidToString(byte *buffer, byte bufferSize);
+void addOrUpdateRfidTag(String uid);
+void logAccessAttempt(String uid, String result, uint8_t reader);
+void updateTeacherStatus(String teacherID, uint8_t reader);
+void logAttendance(String teacherID, uint8_t reader);
+void doorLogic(String uid, uint8_t reader);
+void initReader();
+
+// ---------- Setup Function ----------
+void setup() {
+  Serial.begin(115200);
+  while (!Serial && millis() < 3000); // Wait for Serial, but not forever
+  
+  Serial.println();
+  for(int i=0; i<50; i++) { Serial.print("="); }
+  Serial.println();
+  Serial.println("🚪 KnockSense Enhanced Access Control System");
+  Serial.println("   Version: 2.0 Enhanced");
+  Serial.println("   Build Date: " + String(__DATE__) + " " + String(__TIME__));
+  for(int i=0; i<50; i++) { Serial.print("="); }
+  Serial.println();
 
 
-#define ADMIN_EMAIL "" //ESP32 email
-#define ADMIN_PASSWORD ""
 
+  // Initialize LittleFS and load configuration
+  Serial.println("\n📁 Initializing File System...");
+  if (!fsConfig.begin()) {
+    Serial.println("❌ Failed to initialize LittleFS config!");
+    Serial.println("🔄 System will restart in 5 seconds...");
+    delay(5000);
+    ESP.restart();
+    return;
+  }
+  Serial.println("✅ File system initialized successfully");
+
+  // Load configuration values
+  Serial.println("\n⚙️  Loading Configuration...");
+  loadConfigurationValues();
+
+  // Initialize hardware
+  Serial.println("\n🔧 Initializing Hardware...");
+  SPI.begin();
+  initReader();
+  
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, LOW);
+  Serial.println("✅ Hardware initialized - Door locked");
+
+  // Initialize network management
+  Serial.println("\n🌐 Starting Network Manager...");
+  networkMgr.begin();
+
+  // Initialize web services
+  Serial.println("\n🖥️  Starting Web Services...");
+  webHandler.begin();
+  wsHandler.begin(&server);
+  Serial.println("✅ Web services started");
+
+  // Connect to Firebase (only if WiFi connected)
+  if (networkMgr.isSTAConnected()) {
+    Serial.println("\n🔥 Connecting to Firebase...");
+    connectFirebase();
+  } else {
+    Serial.println("\n⚠️  Firebase connection skipped - no internet access");
+    Serial.println("   System will work in offline mode");
+  }
+
+  Serial.println("\n🎉 System Initialization Complete!");
+  networkMgr.printNetworkInfo();
+  
+  // Send initial status to any connected WebSocket clients
+  wsHandler.sendSystemStatus();
+}
+
+// ---------- Main Loop ----------
+void loop() {
+  // Core system functions
+  checkRFID();
+  manageDoorLock();
+  
+  // Network and web service management
+  networkMgr.loop();
+  wsHandler.loop();
+  
+  // Handle network configuration updates from web interface
+  handleNetworkUpdates();
+  
+  // Check Firebase connection periodically
+  static unsigned long lastFirebaseCheck = 0;
+  if (millis() - lastFirebaseCheck > 60000) { // Check every minute
+    if (networkMgr.isSTAConnected() && !firebaseConnected) {
+      Serial.println("🔥 Attempting Firebase reconnection...");
+      connectFirebase();
+    }
+    lastFirebaseCheck = millis();
+  }
+  
+  // System health monitoring
+  static unsigned long lastHealthCheck = 0;
+  if (millis() - lastHealthCheck > 300000) { // Every 5 minutes
+    Serial.println("\n💓 System Health Check:");
+    Serial.printf("   Free Heap: %d bytes\n", ESP.getFreeHeap());
+    Serial.printf("   Min Free Heap: %d bytes\n", ESP.getMinFreeHeap());
+    Serial.printf("   Uptime: %lu ms\n", millis());
+    Serial.printf("   WiFi RSSI: %d dBm\n", WiFi.RSSI());
+    lastHealthCheck = millis();
+  }
+
+  static unsigned long lastStatusBroadcast = 0;
+  if (millis() - lastStatusBroadcast > 100000) { 
+    wsHandler.sendSystemStatus();
+    lastStatusBroadcast = millis();
+}
+}
+
+// ---------- Configuration Management ----------
+void loadConfigurationValues() {
+  // Load network credentials
+  API_KEY = fsConfig.config.firebase_api_key;
+  DATABASE_URL = fsConfig.config.firebase_db_url;
+  ADMIN_EMAIL = fsConfig.config.admin_email;
+  ADMIN_PASSWORD = fsConfig.config.admin_password;
+  
+  // Load hardware settings
+  RELAY_PIN = fsConfig.config.relay_pin;
+  DOOR_OPEN_DURATION = fsConfig.config.door_open_duration;
+  
+  Serial.println("✅ Configuration loaded:");
+  Serial.println("   Relay Pin: " + String(RELAY_PIN));
+  Serial.println("   Door Duration: " + String(DOOR_OPEN_DURATION) + "ms");
+  Serial.println("   Firebase DB: " + DATABASE_URL.substring(0, 30) + "...");
+}
+
+// ---------- Network Update Handler ----------
+void handleNetworkUpdates() {
+  // Handle WiFi configuration updates from WebSocket
+  if (wsHandler.hasNewWifiConfig()) {
+    String newSSID, newPassword;
+    wsHandler.getNewWifiConfig(newSSID, newPassword);
+    
+    Serial.println("🔄 WiFi configuration update requested:");
+    Serial.println("   New SSID: " + newSSID);
+    
+    wsHandler.sendConnectionProgress("updating", "Updating WiFi configuration...");
+    
+    networkMgr.updateWiFiCredentials(newSSID, newPassword);
+    wsHandler.clearWifiConfigUpdate();
+  }
+  
+  // Handle reconnection requests
+  if (wsHandler.hasReconnectRequest()) {
+    Serial.println("🔄 WiFi reconnection requested via WebSocket");
+    networkMgr.forceReconnect();
+    wsHandler.clearReconnectRequest();
+  }
+}
+
+// ---------- Firebase Connection ----------
+void connectFirebase() {
+  if (!networkMgr.isSTAConnected()) {
+    Serial.println("❌ Cannot connect to Firebase - no internet connection");
+    return;
+  }
+
+  Serial.println("🔥 Configuring Firebase...");
+  
+  firebaseConfig.api_key = API_KEY;
+  firebaseConfig.database_url = DATABASE_URL;
+  auth.user.email = ADMIN_EMAIL;
+  auth.user.password = ADMIN_PASSWORD;
+
+  Firebase.begin(&firebaseConfig, &auth);
+  Firebase.reconnectWiFi(true);
+  firebaseConfig.token_status_callback = mytokenStatusCallback;
+
+  // Test connection
+  Serial.println("🔥 Testing Firebase connection...");
+  
+  if (Firebase.ready()) {
+    firebaseConnected = true;
+    Serial.println("✅ Firebase connected and authenticated successfully");
+    
+    
+    wsHandler.sendNetworkEvent("firebase_connected", "Database connection established");
+  } else {
+    firebaseConnected = false;
+    Serial.println("❌ Firebase authentication failed: " + fbdo.errorReason());
+    wsHandler.sendNetworkEvent("firebase_failed", "Database connection failed");
+  }
+}
+
+void mytokenStatusCallback(TokenInfo info) {
+  if (info.status == token_status_ready) {
+    Serial.println("✅ Firebase token is ready and valid.");
+  } else {
+     Serial_Printf("Token info: type = %s, status = %s\n", getTokenType(info), getTokenStatus(info));
+     Serial_Printf("Token error: %s\n", getTokenError(info).c_str());
+     Serial.println("Error");
+  }
+}
+
+// ---------- RFID Management ----------
 String uidToString(byte *buffer, byte bufferSize) {
-  String localUID = "";  // Use local variable instead of global
+  String localUID = "";
   for (byte i = 0; i < bufferSize; i++) {
     if (buffer[i] < 0x10) localUID += "0";
     localUID += String(buffer[i], HEX);
@@ -54,222 +276,274 @@ String uidToString(byte *buffer, byte bufferSize) {
   return localUID;
 }
 
-
-
-void setup(){
-
-Serial.begin(115200);   // Initialize serial communications with the PC
-while (!Serial);        // Do nothing if no serial port is opened (for ATMEGA32U4 boards)
-
-SPI.begin();            // Init SPI bus
-initReader();
-connectWiFi();
-connectFirebase();
-
-
-pinMode(RELAY_PIN, OUTPUT);
-digitalWrite(RELAY_PIN, LOW);
-
-
-
-}
-
-void loop() {
-  checkRFID();
-  manageDoorLock();
-}
-
-void connectFirebase() {
-  Serial.print("Connecting to Firebase... ");
+void initReader() {
+  Serial.println("🔍 Initializing RFID readers...");
   
-  // Assign the project credentials
-  config.api_key = API_KEY;
-  config.database_url = DATABASE_URL;
-
-  // <<< MODIFIED: Assign the user credentials for login
-  auth.user.email = ADMIN_EMAIL;
-  auth.user.password = ADMIN_PASSWORD;
-
-  // Begin Firebase connection
-  Firebase.begin(&config, &auth);
-  Firebase.reconnectWiFi(true);
-
-  // Check for connection status
-  if (Firebase.ready()){
-    Serial.println("Connected and authenticated.");
-  } else {
-    Serial.println("Authentication failed.");
-    Serial.println("REASON: " + fbdo.errorReason()); // fbdo gives more detailed auth errors
+  for (uint8_t reader = 0; reader < NR_OF_READERS; reader++) {
+    mfrc522[reader].PCD_Init(ssPins[reader], rstPins[reader]);
+    
+    Serial.print("   Reader ");
+    Serial.print(reader);
+    Serial.print(" (");
+    Serial.print(reader == 0 ? "Entry" : "Exit");
+    Serial.print("): ");
+    
+    // Check if reader is connected
+    byte version = mfrc522[reader].PCD_ReadRegister(mfrc522[reader].VersionReg);
+    if (version == 0x00 || version == 0xFF) {
+      Serial.println("❌ Not detected");
+    } else {
+      Serial.println("✅ Ready (v" + String(version, HEX) + ")");
+    }
   }
 }
 
+void checkRFID() {
+  for (uint8_t reader = 0; reader < NR_OF_READERS; reader++) {
+    if (mfrc522[reader].PICC_IsNewCardPresent() && mfrc522[reader].PICC_ReadCardSerial()) {
+      byte uidSize = mfrc522[reader].uid.size;
 
+      if (uidSize == 4 || uidSize == 7) {
+        String uid = uidToString(mfrc522[reader].uid.uidByte, uidSize);
+        String readerName = (reader == 0) ? "Entry" : "Exit";
+        
+        Serial.println("\n🏷️  RFID Detected:");
+        Serial.println("   Reader: " + String(reader) + " (" + readerName + ")");
+        Serial.println("   UID: " + uid);
+        Serial.println("   Size: " + String(uidSize) + " bytes");
+        
+        // Send to WebSocket clients
+        wsHandler.sendRfidScan(uid);
+        
+        // Handle scan mode vs access mode
+        if (wsHandler.isScanMode()) {
+          Serial.println("📝 Scan mode active - processing for database...");
+          addOrUpdateRfidTag(uid);
+        } else {
+          Serial.println("🔐 Access mode - checking permissions...");
+        }
+
+        // Always check door logic
+        doorLogic(uid, reader);
+        
+      } else {
+        Serial.println("⚠️  Invalid UID size detected: " + String(uidSize) + " bytes");
+      }
+      
+      mfrc522[reader].PICC_HaltA();
+      mfrc522[reader].PCD_StopCrypto1();
+      delay(500); // Prevent multiple reads
+    }
+  }
+}
+
+// ---------- Firebase RFID Management ----------
 void addOrUpdateRfidTag(String uid) {
-  // Construct the specific path for this UID.
+  if (!firebaseConnected) {
+    Serial.println("⚠️  Firebase not connected - cannot add/update RFID tag");
+    return;
+  }
+
   String path = "/rfid_tags/" + uid; 
   
-  Serial.println("Processing RFID tag: " + uid);
-  Serial.println();
+  Serial.println("🔍 Checking RFID tag in database: " + uid);
   
-  // Try to read just a specific field to check if tag exists
-  // This is more reliable than trying to read the entire object
   String statusPath = path + "/status";
   
   if (Firebase.RTDB.getString(&fbdo, statusPath)) {
-    // Tag exists - just update the lastSeen timestamp
-    Serial.println("Known RFID tag. New timestamp for currently scanned UID.");
+    Serial.println("✅ Known RFID tag - updating timestamp");
+    
+    // Update last seen timestamp
+    Firebase.RTDB.setTimestamp(&fbdo, path + "/lastSeen");
     
   } else {
-    // Check if the error is because the path doesn't exist (which is what we want for new tags)
     if (fbdo.errorCode() == FIREBASE_ERROR_PATH_NOT_EXIST || fbdo.dataType() == "null") {
-      // New tag - create it
-      Serial.println("New RFID tag detected. Adding to database...");
+      Serial.println("🆕 New RFID tag detected - adding to database...");
       
       FirebaseJson json;
-      json.set("status", "active"); //boolean in mob/web app 1 = active | 0 = inactive
+      json.set("status", "inactive");
       json.set("createdAt/.sv", "timestamp");
+      json.set("lastSeen/.sv", "timestamp");
+      json.set("addedBy", "system");
 
       if (Firebase.RTDB.setJSON(&fbdo, path, &json)) {
-        Serial.println("New tag added successfully!");
+        Serial.println("✅ New tag added successfully!");
+        wsHandler.sendNetworkEvent("rfid_added", "New RFID tag added: " + uid);
       } else {
-        Serial.println("ERROR: Failed to add new tag: " + fbdo.errorReason());
+        Serial.println("❌ Failed to add new tag: " + fbdo.errorReason());
       }
     } else {
-      // Some other error occurred
-      Serial.println("ERROR: Could not check for tag. Reason: " + fbdo.errorReason());
-      Serial.println("Error code: " + String(fbdo.errorCode()));
+      Serial.println("❌ Database error: " + fbdo.errorReason());
     }
   }
 }
 
 void logAccessAttempt(String uid, String result, uint8_t reader) {
-  String path = "/access_logs";
-  String readerRole = "";
-  FirebaseJson json;
-
-  if(reader == 0){
-    readerRole = "Entry";
-  }else if (reader == 1){
-    readerRole = "Exit";
-  }else{
-    Serial.println("Reader detection failed");
+  if (!firebaseConnected) {
+    Serial.println("⚠️  Firebase not connected - access attempt not logged");
+    return;
   }
 
+  String path = "/access_logs";
+  String readerRole = (reader == 0) ? "Entry" : "Exit";
+  
+  FirebaseJson json;
   json.set("uid", uid);
   json.set("result", result);
   json.set("readerRole", readerRole);
+  json.set("reader", reader);
   json.set("timestamp/.sv", "timestamp");
-  Firebase.RTDB.pushJSON(&fbdo, path, &json);
-}
-
-void manageDoorLock() {
-  // If the door is unlocked and 6 seconds have passed...
-  if (isDoorUnlocked && (millis() - doorUnlockTime >= doorOpenDuration)) {
-    Serial.println("6 seconds have passed. Locking the door.");
-    digitalWrite(RELAY_PIN, LOW); // Lock the door
-    isDoorUnlocked = false;       // Update the state
+  json.set("deviceIP", WiFi.localIP().toString());
+  
+  if (Firebase.RTDB.pushJSON(&fbdo, path, &json)) {
+    Serial.println("📋 Access attempt logged: " + result);
+  } else {
+    Serial.println("❌ Failed to log access attempt: " + fbdo.errorReason());
   }
 }
 
+// ---------- Door Control ----------
+void manageDoorLock() {
+  if (isDoorUnlocked && (millis() - doorUnlockTime >= DOOR_OPEN_DURATION)) {
+    Serial.println("🔒 Door timeout reached - locking door");
+    digitalWrite(RELAY_PIN, LOW);
+    isDoorUnlocked = false;
+    wsHandler.sendDoorStatus(false);
+  }
+}
+
+void doorLogic(String uid, uint8_t reader) {
+
+  if (!Firebase.ready()) {
+      Serial.println("⚠️ Firebase not ready, token might be refreshing. Access denied.");
+      logAccessAttempt(uid, "Denied (Firebase Not Ready)", reader);
+      wsHandler.sendDoorStatus(false);
+      return;
+  }
 
 
+  if (!firebaseConnected) {
+    Serial.println("⚠️  Firebase not connected - access denied (offline mode)");
+    logAccessAttempt(uid, "Denied (Offline)", reader);
+    wsHandler.sendDoorStatus(false);
+    return;
+  }
 
-void doorLogic(String uid, uint8_t reader) { // We no longer need the 'reader' index here.
   String path = "/rfid_tags/" + uid;
   bool accessGranted = false;
   String reason = "Not Found";
+  String assignedTeacherID = "";
 
-  Serial.println("Checking database for UID: " + uid);
+  Serial.println("🔍 Checking database permissions for: " + uid);
 
-  // Query Firebase for the status of this specific UID
   if (Firebase.RTDB.getString(&fbdo, path + "/status")) {
     if (fbdo.dataType() == "string") {
       String status = fbdo.stringData();
-      Serial.println("Database status: " + status);
+      Serial.println("   Database status: " + status);
+      
       if (status == "active") {
         accessGranted = true;
         reason = "Granted";
+        
+        // Get assigned teacher ID
+        if (Firebase.RTDB.getString(&fbdo, path + "/assignedTo")) {
+          assignedTeacherID = fbdo.stringData();
+          Serial.println("   Assigned to: " + assignedTeacherID);
+        } else {
+          Serial.println("   No teacher assignment found");
+        }
       } else {
         reason = "Denied (" + status + ")";
       }
     }
   } else {
-      Serial.println("Error fetching status: " + fbdo.errorReason());
+    Serial.println("❌ Database lookup failed: " + fbdo.errorReason());
+    reason = "Database Error";
   }
   
-  // --- Perform Action Based on Query Result ---
   if (accessGranted) {
-    Serial.println("ACCESS GRANTED");
+    Serial.println("✅ ACCESS GRANTED");
     digitalWrite(RELAY_PIN, HIGH);
     isDoorUnlocked = true;         
-    doorUnlockTime = millis();  
-    //digitalWrite(RELAY_PIN, LOW);
+    doorUnlockTime = millis();
+    
+    wsHandler.sendDoorStatus(true);
+    wsHandler.sendNetworkEvent("door_unlocked", "Access granted for: " + uid);
+    
+    if (!assignedTeacherID.isEmpty()) {
+      Serial.println("👨‍🏫 Processing teacher attendance: " + assignedTeacherID);
+      updateTeacherStatus(assignedTeacherID, reader);
+      logAttendance(assignedTeacherID, reader);
+    }
   } else {
-    Serial.println("ACCESS DENIED");
+    Serial.println("❌ ACCESS DENIED - " + reason);
+    wsHandler.sendDoorStatus(false);
+    wsHandler.sendNetworkEvent("door_denied", "Access denied: " + reason);
   }
   
-  // Log the final result of the attempt
   logAccessAttempt(uid, reason, reader);
 }
 
-void checkRFID() {
-  for (uint8_t reader = 0; reader < NR_OF_READERS; reader++) {
-    // Look for new cards and read their serial number
-    if (mfrc522[reader].PICC_IsNewCardPresent() && mfrc522[reader].PICC_ReadCardSerial()) {
+// ---------- Teacher Management ----------
+void updateTeacherStatus(String teacherID, uint8_t reader) {
+  if (!firebaseConnected) return;
 
-      byte uidSize = mfrc522[reader].uid.size;
-
-      if (uidSize == 4 || uidSize == 7) {
-        String uid = uidToString(mfrc522[reader].uid.uidByte, uidSize);
-        
-        Serial.print("\nReader " + String(reader) + ": Valid Card Scanned. UID: " + uid);
-        Serial.println();
-        
-        addOrUpdateRfidTag(uid);
-        
-        doorLogic(uid, reader);
-
-      } else {
-        Serial.print("\nReader " + String(reader) + ": Invalid UID size detected (" + String(uidSize) + " bytes). Ignoring scan.");
+  String teacherPath = "/roles/teacher";
+  
+  if (Firebase.RTDB.get(&fbdo, teacherPath)) {
+    FirebaseJson &json = fbdo.jsonObject();
+    size_t len = json.iteratorBegin();
+    String key, value;
+    int type = 0;
+    
+    for (size_t i = 0; i < len; i++) {
+      json.iteratorGet(i, type, key, value);
+      
+      FirebaseJsonData data;
+      if (json.get(data, key + "/teacherID")) {
+        if (data.stringValue == teacherID) {
+          String basePath = teacherPath + "/" + key;
+          
+          String newStatus = (reader == 0) ? "online" : "offline";
+          Firebase.RTDB.setString(&fbdo, basePath + "/active_status", newStatus);
+          
+          if (reader == 0) {
+            Firebase.RTDB.setTimestamp(&fbdo, basePath + "/last_entry_time");
+            
+            String firstEntryPath = basePath + "/today_first_entry";
+            if (!Firebase.RTDB.get(&fbdo, firstEntryPath)) {
+              Firebase.RTDB.setTimestamp(&fbdo, firstEntryPath);
+            }
+          } else {
+            Firebase.RTDB.setTimestamp(&fbdo, basePath + "/last_exit_time");
+            Firebase.RTDB.setTimestamp(&fbdo, basePath + "/today_last_exit");
+          }
+          
+          Serial.println("👨‍🏫 Updated " + teacherID + " status: " + newStatus);
+          break;
+        }
       }
-      
-      mfrc522[reader].PICC_HaltA();
-      mfrc522[reader].PCD_StopCrypto1();
-      
-      delay(500); 
     }
+    json.iteratorEnd();
   }
 }
 
-void dump_byte_array(byte *buffer, byte bufferSize) {
-  for (byte i = 0; i < bufferSize; i++) {
-    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
-    Serial.print(buffer[i], HEX);
-  }
-}
+void logAttendance(String teacherID, uint8_t reader) {
+  if (!firebaseConnected) return;
 
-
-
-
-void connectWiFi() {
-  WiFi.mode(WIFI_AP_STA);
-  WiFi.begin();
-
-  Serial.print("Connecting to WiFi ..");
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print('.');
-    delay(1000);
-  }
-  Serial.println();
-  Serial.println(WiFi.localIP());
-}
-
-  void initReader() {
-  for (uint8_t reader = 0; reader < NR_OF_READERS; reader++) {
-    mfrc522[reader].PCD_Init(ssPins[reader], rstPins[reader]); // Init each MFRC522 card
-    Serial.print(F("Reader "));
-    Serial.print(reader);
-    Serial.print(F(": "));
-    mfrc522[reader].PCD_DumpVersionToSerial();
-  }
+  String basePath = "/attendance_logs/" + teacherID;
+  
+  FirebaseJson logEntry;
+  logEntry.set("timestamp/.sv", "timestamp");
+  logEntry.set("action", (reader == 0) ? "entry" : "exit");
+  logEntry.set("reader_id", reader);
+  logEntry.set("device_ip", WiFi.localIP().toString());
+  
+  Firebase.RTDB.pushJSON(&fbdo, basePath + "/logs", &logEntry);
+  
+  String status = (reader == 0) ? "in" : "out";
+  Firebase.RTDB.setString(&fbdo, basePath + "/current_status", status);
+  Firebase.RTDB.setTimestamp(&fbdo, basePath + "/last_activity");
+  
+  Serial.println("📊 Attendance logged: " + teacherID + " - " + String((reader == 0) ? "Entry" : "Exit"));
 }
