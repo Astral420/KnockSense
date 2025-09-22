@@ -49,6 +49,23 @@ final teacherPendingAppointmentsProvider = StreamProvider<List<AppointmentModel>
   );
 });
 
+// NEW: Stream provider for teacher's active appointments (pending + accepted in waiting/meeting states)
+final teacherActiveAppointmentsProvider = StreamProvider<List<AppointmentModel>>((ref) {
+  final user = ref.watch(currentUserProvider);
+  final appointmentService = ref.watch(appointmentServiceProvider);
+  
+  return user.when(
+    data: (userData) {
+      if (userData == null || userData.role != UserRole.teacher) {
+        return Stream.value([]);
+      }
+      return appointmentService.getTeacherActiveAppointments(userData.uid);
+    },
+    loading: () => Stream.value([]),
+    error: (_, __) => Stream.value([]),
+  );
+});
+
 // Stream provider for teacher's all appointments
 final teacherAllAppointmentsProvider = StreamProvider<List<AppointmentModel>>((ref) {
   final user = ref.watch(currentUserProvider);

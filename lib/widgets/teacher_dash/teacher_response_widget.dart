@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/models/appointment_model.dart';
 import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/provider/appointment_provider.dart';
+import 'package:knocksense/widgets/common/useravatar_widget.dart';
 
 class TeacherResponseWidget extends ConsumerStatefulWidget {
   final AppointmentModel appointment;
@@ -24,6 +25,7 @@ class TeacherResponseWidget extends ConsumerStatefulWidget {
 class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
   final TextEditingController _noteController = TextEditingController();
   bool _isResponding = false;
+  bool _hasNoteError = false;
 
   @override
   void dispose() {
@@ -31,7 +33,7 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
     super.dispose();
   }
 
-   String _getTimeAgo(DateTime dateTime) {
+  String _getTimeAgo(DateTime dateTime) {
     final now = DateTime.now();
     final difference = now.difference(dateTime);
 
@@ -51,36 +53,47 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
     }
   }
 
-
+  void _clearNoteError() {
+    if (_hasNoteError) {
+      setState(() {
+        _hasNoteError = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Check if appointment is already accepted with specific actions
+    final isWaiting = widget.appointment.status == AppointmentStatus.accepted && 
+                      widget.appointment.teacherAction == TeacherAction.wait5Minutes;
+    final isMeetNow = widget.appointment.status == AppointmentStatus.accepted && 
+                      widget.appointment.teacherAction == TeacherAction.meetNow;
+    final isMeetLater = widget.appointment.status == AppointmentStatus.accepted && 
+                        widget.appointment.teacherAction == TeacherAction.meetLater;
+    
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFFDF6E3), // Light cream background matching Figma
+        color: const Color(0xFFFDF6E3),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // Header with student info
             Row(
               children: [
-                CircleAvatar(
-                  radius: 20,
+                // Use UserAvatar.custom instead of hardcoded CircleAvatar
+                UserAvatar.custom(
+                  photoUrl: widget.appointment.studentPhotoUrl,
+                  displayName: widget.appointment.studentName,
+                  radius: 24,
+                  showBorder: false,
                   backgroundColor: Colors.amber,
-                  child: Text(
-                    _getInitials(widget.appointment.studentName),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
+                  textColor: Colors.black87,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -88,59 +101,76 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
                       Text(
                         widget.appointment.studentName,
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.black87,
                         ),
                       ),
+                      const SizedBox(height: 4),
                       Text(
-                        _getTimeAgo(widget.appointment.createdAt), 
+                        _getTimeAgo(widget.appointment.createdAt),
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 14,
                           color: Colors.grey[600],
                         ),
                       ),
                     ],
                   ),
                 ),
+                if (isWaiting || isMeetNow || isMeetLater)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(isWaiting, isMeetNow, isMeetLater),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      _getStatusText(isWaiting, isMeetNow, isMeetLater),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
               ],
             ),
             
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
             
             // Student's request message
             if (widget.appointment.studentNote != null &&
                 widget.appointment.studentNote!.isNotEmpty) ...[
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.grey[200]!),
                 ),
                 child: Text(
                   widget.appointment.studentNote!,
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 15,
                     color: Colors.black87,
+                    height: 1.4,
                   ),
                 ),
               ),
             ] else ...[
-              // Optional: Show a message when there is no note
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.7),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.grey[200]!),
                 ),
                 child: const Text(
                   'No note provided by student.',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 15,
                     fontStyle: FontStyle.italic,
                     color: Colors.grey,
                   ),
@@ -148,197 +178,695 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
               ),
             ],
             
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             
-            // Teacher note input
-            TextField(
-              controller: _noteController,
-              maxLines: 2,
-              decoration: InputDecoration(
-                hintText: 'Add a teacher note...',
-                hintStyle: TextStyle(
-                  color: Colors.grey[400],
+            // Show different UI based on appointment status
+            if (isWaiting) ...[
+              _buildWaitingManagementUI(),
+            ] else if (isMeetNow) ...[
+              _buildMeetNowManagementUI(),
+            ] else if (isMeetLater) ...[
+              _buildMeetLaterManagementUI(),
+            ] else ...[
+              _buildPendingAppointmentUI(),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getStatusColor(bool isWaiting, bool isMeetNow, bool isMeetLater) {
+    if (isWaiting) return Colors.orange;
+    if (isMeetNow) return Colors.green;
+    if (isMeetLater) return Colors.blue;
+    return Colors.grey;
+  }
+
+  String _getStatusText(bool isWaiting, bool isMeetNow, bool isMeetLater) {
+    if (isWaiting) return 'Waiting';
+    if (isMeetNow) return 'In Progress';
+    if (isMeetLater) return 'Scheduled';
+    return 'Unknown';
+  }
+
+  Widget _buildWaitingManagementUI() {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.orange.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.orange.withOpacity(0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Student is waiting (5 minutes requested)',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.orange,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'You can now meet the student or cancel the appointment.',
+                style: TextStyle(
                   fontSize: 14,
+                  color: Colors.grey[600],
                 ),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey[200]!),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey[200]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Colors.blue),
-                ),
-                contentPadding: const EdgeInsets.all(12),
+              ),
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 20),
+        
+        // Teacher note input for cancellation
+        TextField(
+          controller: _noteController,
+          onChanged: (_) => _clearNoteError(),
+          maxLines: 3,
+          decoration: InputDecoration(
+            hintText: 'Add reason for cancellation (if cancelling)...',
+            hintStyle: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 14,
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.grey[200]!,
+                width: _hasNoteError ? 2 : 1,
               ),
             ),
-            
-            const SizedBox(height: 16),
-            
-            // Action question
-            const Text(
-              'How would you like to proceed with this request?',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87,
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.grey[200]!,
+                width: _hasNoteError ? 2 : 1,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.blue,
+                width: 2,
+              ),
+            ),
+            contentPadding: const EdgeInsets.all(16),
+          ),
+        ),
+        
+        if (_hasNoteError) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Please provide a reason for cancellation',
+            style: TextStyle(
+              color: Colors.red,
+              fontSize: 12,
+            ),
+          ),
+        ],
+        
+        const SizedBox(height: 20),
+        
+        // Action buttons for waiting status
+        Column(
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isResponding 
+                    ? null 
+                    : () => _handleMeetNowFromWaiting(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  disabledBackgroundColor: Colors.grey[300],
+                ),
+                child: _isResponding
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text(
+                        'Meet Student Now',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
               ),
             ),
             
             const SizedBox(height: 12),
             
-            // Action buttons
-            Column(
-              children: [
-                // Meet Now button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isResponding 
-                        ? null 
-                        : () => _handleResponse(TeacherAction.meetNow),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981), // Green
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      disabledBackgroundColor: Colors.grey[300],
-                    ),
-                    child: _isResponding
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Text(
-                            'Meet Now',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isResponding 
+                    ? null 
+                    : () => _handleCancelFromWaiting(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEF4444),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  disabledBackgroundColor: Colors.grey[300],
+                ),
+                child: const Text(
+                  'Cancel Meeting',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                
-                const SizedBox(height: 8),
-                
-                // Wait 5 Minutes button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isResponding 
-                        ? null 
-                        : () => _handleResponse(TeacherAction.wait5Minutes),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E293B), // Dark blue/navy
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      disabledBackgroundColor: Colors.grey[300],
-                    ),
-                    child: const Text(
-                      'Wait 5 Minutes',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+            
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: _isResponding ? null : () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.grey[600],
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                
-                const SizedBox(height: 8),
-                
-                // Meet Later button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isResponding 
-                        ? null 
-                        : () => _handleResponse(TeacherAction.meetLater),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF59E0B), // Amber/yellow
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      disabledBackgroundColor: Colors.grey[300],
-                    ),
-                    child: const Text(
-                      'Meet Later',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(height: 8),
-                
-                // Not Now button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isResponding 
-                        ? null 
-                        : () => _handleResponse(TeacherAction.reject),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFEF4444), // Red
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      disabledBackgroundColor: Colors.grey[300],
-                    ),
-                    child: const Text(
-                      'Not Now',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(height: 12),
-                
-                // Close button
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton(
-                    onPressed: _isResponding ? null : () => Navigator.pop(context),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.grey[600],
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: const Text(
-                      'Close',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ],
         ),
-      ),
+      ],
+    );
+  }
+
+  Widget _buildMeetNowManagementUI() {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.green.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.green.withOpacity(0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Meeting in Progress',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.green,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'The student should be with you now.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 20),
+        
+        // Action button to complete meeting
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isResponding 
+                ? null 
+                : () => _handleCompleteMeeting(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3B82F6),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              disabledBackgroundColor: Colors.grey[300],
+            ),
+            child: _isResponding
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text(
+                    'Finish Meeting',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+          ),
+        ),
+        
+        const SizedBox(height: 16),
+        
+        SizedBox(
+          width: double.infinity,
+          child: TextButton(
+            onPressed: _isResponding ? null : () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey[600],
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+            child: const Text(
+              'Close',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMeetLaterManagementUI() {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.blue.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blue.withOpacity(0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Meeting Scheduled for Later',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'You can now meet the student or cancel the appointment.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 20),
+        
+        // Teacher note input
+        TextField(
+          controller: _noteController,
+          onChanged: (_) => _clearNoteError(),
+          maxLines: 3,
+          decoration: InputDecoration(
+            hintText: 'Add a note or reason for cancellation...',
+            hintStyle: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 14,
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.grey[200]!,
+                width: _hasNoteError ? 2 : 1,
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.grey[200]!,
+                width: _hasNoteError ? 2 : 1,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.blue,
+                width: 2,
+              ),
+            ),
+            contentPadding: const EdgeInsets.all(16),
+          ),
+        ),
+        
+        if (_hasNoteError) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Please provide a note for this action',
+            style: TextStyle(
+              color: Colors.red,
+              fontSize: 12,
+            ),
+          ),
+        ],
+        
+        const SizedBox(height: 20),
+        
+        // Action buttons
+        Column(
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isResponding 
+                    ? null 
+                    : () => _handleMeetNowFromLater(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  disabledBackgroundColor: Colors.grey[300],
+                ),
+                child: _isResponding
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text(
+                        'Meet Student Now',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isResponding 
+                    ? null 
+                    : () => _handleCancelFromLater(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEF4444),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  disabledBackgroundColor: Colors.grey[300],
+                ),
+                child: const Text(
+                  'Cancel Meeting',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+            
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: _isResponding ? null : () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.grey[600],
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPendingAppointmentUI() {
+    return Column(
+      children: [
+        // Teacher note input
+        TextField(
+          controller: _noteController,
+          onChanged: (_) => _clearNoteError(),
+          maxLines: 3,
+          decoration: InputDecoration(
+            hintText: 'Add a teacher note...',
+            hintStyle: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 14,
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.grey[200]!,
+                width: _hasNoteError ? 2 : 1,
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.grey[200]!,
+                width: _hasNoteError ? 2 : 1,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.blue,
+                width: 2,
+              ),
+            ),
+            contentPadding: const EdgeInsets.all(16),
+          ),
+        ),
+        
+        if (_hasNoteError) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Please provide a note for this action',
+            style: TextStyle(
+              color: Colors.red,
+              fontSize: 12,
+            ),
+          ),
+        ],
+        
+        const SizedBox(height: 20),
+        
+        // Action question
+        const Text(
+          'How would you like to proceed with this request?',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: Colors.black87,
+          ),
+        ),
+        
+        const SizedBox(height: 16),
+        
+        // Action buttons
+        Column(
+          children: [
+            // Meet Now button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isResponding 
+                    ? null 
+                    : () => _handleResponse(TeacherAction.meetNow),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  disabledBackgroundColor: Colors.grey[300],
+                ),
+                child: _isResponding
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text(
+                        'Meet Now',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Wait 5 Minutes button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isResponding 
+                    ? null 
+                    : () => _handleResponse(TeacherAction.wait5Minutes),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E293B),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  disabledBackgroundColor: Colors.grey[300],
+                ),
+                child: const Text(
+                  'Wait 5 Minutes',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Meet Later button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isResponding 
+                    ? null 
+                    : () => _handleResponse(TeacherAction.meetLater),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF59E0B),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  disabledBackgroundColor: Colors.grey[300],
+                ),
+                child: const Text(
+                  'Meet Later',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Not Now button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isResponding 
+                    ? null 
+                    : () => _handleResponse(TeacherAction.reject),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEF4444),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  disabledBackgroundColor: Colors.grey[300],
+                ),
+                child: const Text(
+                  'Not Now',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Close button
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: _isResponding ? null : () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.grey[600],
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -354,6 +882,22 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
   }
 
   Future<void> _handleResponse(TeacherAction action) async {
+    // Validate that Meet Later requires a note
+    if (action == TeacherAction.meetLater && _noteController.text.trim().isEmpty) {
+      setState(() {
+        _hasNoteError = true;
+      });
+      return;
+    }
+    
+    // Validate that rejection (Not Now) requires a note
+    if (action == TeacherAction.reject && _noteController.text.trim().isEmpty) {
+      setState(() {
+        _hasNoteError = true;
+      });
+      return;
+    }
+    
     setState(() {
       _isResponding = true;
     });
@@ -364,8 +908,6 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
       
       DateTime? scheduledTime;
       if (action == TeacherAction.meetLater) {
-        // For "Meet Later", you might want to show a date/time picker
-        // For now, we'll set it to 1 hour from now as default
         scheduledTime = DateTime.now().add(const Duration(hours: 1));
       }
       
@@ -379,10 +921,200 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
       );
       
       if (success && mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context); // Always close the modal
         _showSuccessMessage(_getSuccessMessage(action));
       } else if (mounted) {
         _showErrorMessage('Failed to respond to appointment. Please try again.');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorMessage('An error occurred: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isResponding = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleMeetNowFromWaiting() async {
+    setState(() {
+      _isResponding = true;
+    });
+
+    try {
+      final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
+      
+      final success = await appointmentNotifier.respondToAppointment(
+        studentNumber: widget.appointment.studentNumber,
+        appointmentId: widget.appointment.appointmentId,
+        teacherUid: widget.currentUser.uid,
+        action: TeacherAction.meetNow,
+        teacherResponse: 'Student is now meeting with teacher',
+        scheduledTime: null,
+      );
+      
+      if (success && mounted) {
+        Navigator.pop(context); // Close modal
+        _showSuccessMessage('Student has been notified to meet you now!');
+      } else if (mounted) {
+        _showErrorMessage('Failed to update appointment. Please try again.');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorMessage('An error occurred: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isResponding = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleMeetNowFromLater() async {
+    setState(() {
+      _isResponding = true;
+    });
+
+    try {
+      final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
+      final note = _noteController.text.trim().isNotEmpty 
+          ? _noteController.text.trim() 
+          : 'Meeting time changed - student can meet now';
+      
+      final success = await appointmentNotifier.respondToAppointment(
+        studentNumber: widget.appointment.studentNumber,
+        appointmentId: widget.appointment.appointmentId,
+        teacherUid: widget.currentUser.uid,
+        action: TeacherAction.meetNow,
+        teacherResponse: note,
+        scheduledTime: null,
+      );
+      
+      if (success && mounted) {
+        Navigator.pop(context); // Close modal
+        _showSuccessMessage('Student has been notified to meet you now!');
+      } else if (mounted) {
+        _showErrorMessage('Failed to update appointment. Please try again.');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorMessage('An error occurred: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isResponding = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleCancelFromWaiting() async {
+    final reason = _noteController.text.trim();
+    if (reason.isEmpty) {
+      setState(() {
+        _hasNoteError = true;
+      });
+      return;
+    }
+
+    setState(() {
+      _isResponding = true;
+    });
+
+    try {
+      final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
+      
+      final success = await appointmentNotifier.cancelAppointment(
+        studentNumber: widget.appointment.studentNumber,
+        appointmentId: widget.appointment.appointmentId,
+        teacherUid: widget.currentUser.uid,
+      );
+      
+      if (success && mounted) {
+        Navigator.pop(context); // Close modal
+        _showSuccessMessage('Meeting has been cancelled.');
+      } else if (mounted) {
+        _showErrorMessage('Failed to cancel meeting. Please try again.');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorMessage('An error occurred: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isResponding = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleCancelFromLater() async {
+    final reason = _noteController.text.trim();
+    if (reason.isEmpty) {
+      setState(() {
+        _hasNoteError = true;
+      });
+      return;
+    }
+
+    setState(() {
+      _isResponding = true;
+    });
+
+    try {
+      final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
+      
+      final success = await appointmentNotifier.cancelAppointment(
+        studentNumber: widget.appointment.studentNumber,
+        appointmentId: widget.appointment.appointmentId,
+        teacherUid: widget.currentUser.uid,
+      );
+      
+      if (success && mounted) {
+        Navigator.pop(context); // Close modal
+        _showSuccessMessage('Meeting has been cancelled.');
+      } else if (mounted) {
+        _showErrorMessage('Failed to cancel meeting. Please try again.');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorMessage('An error occurred: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isResponding = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleCompleteMeeting() async {
+    setState(() {
+      _isResponding = true;
+    });
+
+    try {
+      final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
+      
+      final success = await appointmentNotifier.completeAppointment(
+        studentNumber: widget.appointment.studentNumber,
+        appointmentId: widget.appointment.appointmentId,
+        teacherUid: widget.currentUser.uid,
+      );
+      
+      if (success && mounted) {
+        Navigator.pop(context); // Close modal
+        _showSuccessMessage('Meeting has been completed successfully!');
+      } else if (mounted) {
+        _showErrorMessage('Failed to complete meeting. Please try again.');
       }
     } catch (e) {
       if (mounted) {
@@ -433,26 +1165,6 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    );
-  }
-}
-
-// Extension to show the widget as a modal
-extension TeacherResponseWidgetExtension on BuildContext {
-  Future<void> showTeacherResponse(AppointmentModel appointment, UserModel currentUser) {
-    return showModalBottomSheet<void>(
-      context: this,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: TeacherResponseWidget(
-          appointment: appointment,
-          currentUser: currentUser,
         ),
       ),
     );

@@ -7,6 +7,7 @@ import 'package:knocksense/provider/appointment_provider.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:intl/intl.dart';
+import 'package:knocksense/widgets/common/useravatar_widget.dart';
 import 'package:knocksense/widgets/teacher_dash/teacher_response_widget.dart';
 
 class RecentKnocksScreen extends ConsumerWidget {
@@ -15,7 +16,8 @@ class RecentKnocksScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(currentUserProvider);
-    final appointmentsAsync = ref.watch(teacherPendingAppointmentsProvider);
+    // Use teacherActiveAppointmentsProvider instead of teacherPendingAppointmentsProvider
+    final appointmentsAsync = ref.watch(teacherActiveAppointmentsProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDF6E3), // Cream background matching design
@@ -131,100 +133,159 @@ class RecentKnocksScreen extends ConsumerWidget {
   }
 
   Widget _buildKnockCard({
-    required BuildContext context,
-    required AppointmentModel appointment,
-    required dynamic user,
-  }) {
-    return GestureDetector(
-      onTap: () {
-        // Show the teacher response widget as a modal
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (context) => Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-            ),
-            child: TeacherResponseWidget(
-              appointment: appointment,
-              currentUser: user,
-            ),
+  required BuildContext context,
+  required AppointmentModel appointment,
+  required dynamic user,
+}) {
+  return GestureDetector(
+    onTap: () {
+      // Show the teacher response widget as a modal
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
           ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFE69C), // Light yellow/amber matching design
-          borderRadius: BorderRadius.circular(16),
+          child: TeacherResponseWidget(
+            appointment: appointment,
+            currentUser: user,
+          ),
         ),
-        child: Row(
-          children: [
-            // Avatar with initials
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFC107), // Amber color
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  _getInitials(appointment.studentName),
+      );
+    },
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _getCardColor(appointment),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          // Student Avatar with photo support
+          UserAvatar.custom(
+            photoUrl: appointment.studentPhotoUrl,
+            displayName: appointment.studentName,
+            radius: 28, // Slightly larger for better visibility
+            showBorder: false,
+            backgroundColor: const Color(0xFFFFC107), // Amber color fallback
+            textColor: Colors.black87,
+          ),
+          const SizedBox(width: 16),
+          
+          // Student info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  appointment.studentName,
                   style: const TextStyle(
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            
-            // Student info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+               
+                if (appointment.studentNote != null && appointment.studentNote!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
                   Text(
-                    appointment.studentName,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                    appointment.studentNote!,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.brown[600],
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                 
-                  if (appointment.studentNote != null && appointment.studentNote!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      appointment.studentNote!,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.brown[600],
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
                 ],
-              ),
+              ],
             ),
-            
-            // Time ago
-            Text(
-              _getTimeAgo(appointment.createdAt),
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.brown[500],
+          ),
+          
+          // Time ago
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _getTimeAgo(appointment.createdAt),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.brown[500],
+                ),
               ),
-            ),
-          ],
-        ),
+              // Optional: Add status badge if needed
+              if (_getStatusBadge(appointment) != null) ...[
+                const SizedBox(height: 4),
+                _getStatusBadge(appointment)!,
+              ],
+            ],
+          ),
+        ],
       ),
-    );
+    ),
+  );
+}
+}
+
+  Color _getCardColor(AppointmentModel appointment) {
+    // Check if appointment is in waiting or meeting state
+    final isWaiting = appointment.status == AppointmentStatus.accepted && 
+                     appointment.teacherAction == TeacherAction.wait5Minutes;
+    final isMeetNow = appointment.status == AppointmentStatus.accepted && 
+                      appointment.teacherAction == TeacherAction.meetNow;
+    
+    if (isWaiting) {
+      return const Color(0xFFFFE0B2); // Light orange for waiting
+    } else if (isMeetNow) {
+      return const Color(0xFFE8F5E8); // Light green for meeting
+    } else {
+      return const Color(0xFFFFE69C); // Default light yellow/amber
+    }
+  }
+
+  Widget? _getStatusBadge(AppointmentModel appointment) {
+    final isWaiting = appointment.status == AppointmentStatus.accepted && 
+                     appointment.teacherAction == TeacherAction.wait5Minutes;
+    final isMeetNow = appointment.status == AppointmentStatus.accepted && 
+                      appointment.teacherAction == TeacherAction.meetNow;
+    
+    if (isWaiting) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.orange,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text(
+          'Waiting',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+    } else if (isMeetNow) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.green,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text(
+          'In Progress',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+    }
+    return null;
   }
 
   String _getInitials(String name) {
@@ -271,4 +332,3 @@ class RecentKnocksScreen extends ConsumerWidget {
       return DateFormat('MMM d').format(dateTime);
     }
   }
-}

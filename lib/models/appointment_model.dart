@@ -3,9 +3,10 @@ class AppointmentModel {
   final String studentUid;
   final String studentNumber;
   final String studentName;
+  final String? studentPhotoUrl; // Add this field
   final String teacherUid;
   final String teacherName;
-  final String? teacherPhotoUrl; // Add this field
+  final String? teacherPhotoUrl;
   final AppointmentStatus status;
   final DateTime createdAt;
   final DateTime? respondedAt;
@@ -19,9 +20,10 @@ class AppointmentModel {
     required this.studentUid,
     required this.studentNumber,
     required this.studentName,
+    this.studentPhotoUrl, // Add to constructor
     required this.teacherUid,
     required this.teacherName,
-    this.teacherPhotoUrl, // Add to constructor
+    this.teacherPhotoUrl,
     required this.status,
     required this.createdAt,
     this.respondedAt,
@@ -69,9 +71,10 @@ class AppointmentModel {
       studentUid: json['studentUid'] as String,
       studentNumber: json['studentNumber'] as String,
       studentName: json['studentName'] as String,
+      studentPhotoUrl: json['studentPhotoUrl'] as String?, // Parse student photo URL
       teacherUid: json['teacherUid'] as String,
       teacherName: json['teacherName'] as String,
-      teacherPhotoUrl: json['teacherPhotoUrl'] as String?, // Parse photo URL
+      teacherPhotoUrl: json['teacherPhotoUrl'] as String?,
       status: AppointmentStatus.values.firstWhere(
         (e) => e.name == json['status'],
         orElse: () => AppointmentStatus.pending,
@@ -94,9 +97,10 @@ class AppointmentModel {
     'studentUid': studentUid,
     'studentNumber': studentNumber,
     'studentName': studentName,
+    'studentPhotoUrl': studentPhotoUrl, // Include in JSON
     'teacherUid': teacherUid,
     'teacherName': teacherName,
-    'teacherPhotoUrl': teacherPhotoUrl, // Include in JSON
+    'teacherPhotoUrl': teacherPhotoUrl,
     'status': status.name,
     'createdAt': createdAt.millisecondsSinceEpoch,
     'respondedAt': respondedAt?.millisecondsSinceEpoch,
@@ -111,9 +115,10 @@ class AppointmentModel {
     String? studentUid,
     String? studentNumber,
     String? studentName,
+    String? studentPhotoUrl, // Add to copyWith
     String? teacherUid,
     String? teacherName,
-    String? teacherPhotoUrl, // Add to copyWith
+    String? teacherPhotoUrl,
     AppointmentStatus? status,
     DateTime? createdAt,
     DateTime? respondedAt,
@@ -127,6 +132,7 @@ class AppointmentModel {
       studentUid: studentUid ?? this.studentUid,
       studentNumber: studentNumber ?? this.studentNumber,
       studentName: studentName ?? this.studentName,
+      studentPhotoUrl: studentPhotoUrl ?? this.studentPhotoUrl,
       teacherUid: teacherUid ?? this.teacherUid,
       teacherName: teacherName ?? this.teacherName,
       teacherPhotoUrl: teacherPhotoUrl ?? this.teacherPhotoUrl,

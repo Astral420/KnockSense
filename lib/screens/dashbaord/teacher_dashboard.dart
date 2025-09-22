@@ -9,6 +9,7 @@ import 'package:knocksense/provider/appointment_provider.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:knocksense/widgets/teacher_dash/add_note_modal.dart';
 import 'package:knocksense/screens/teacher/recent_knocks_screen.dart';
+import 'package:knocksense/widgets/common/useravatar_widget.dart';
 
 class TeacherDashboard extends ConsumerStatefulWidget {
   const TeacherDashboard({Key? key}) : super(key: key);
@@ -22,7 +23,8 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final authService = ref.read(authServiceProvider);
-    final pendingAppointments = ref.watch(teacherPendingAppointmentsProvider);
+    // Use the active appointments provider for notification badge
+    final activeAppointments = ref.watch(teacherActiveAppointmentsProvider);
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -87,8 +89,8 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
                                     );
                                   },
                                 ),
-                                // Show red dot if there are pending appointments
-                                pendingAppointments.when(
+                                // Show red dot if there are active appointments
+                                activeAppointments.when(
                                   data: (appointments) {
                                     if (appointments.isNotEmpty) {
                                       return Positioned(
@@ -129,8 +131,8 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
                       childAspectRatio: 1.0, // Make cards square
                     ),
                     delegate: SliverChildListDelegate([
-                      // Recent Knocks Card with pending appointments data
-                      pendingAppointments.when(
+                      // Recent Knocks Card with active appointments data
+                      activeAppointments.when(
                         data: (appointments) => _buildRecentKnocksCard(appointments),
                         loading: () => _buildRecentKnocksCard([]),
                         error: (_, __) => _buildRecentKnocksCard([]),
@@ -162,259 +164,310 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
     );
   }
 
-  Widget _buildRecentKnocksCard(List<dynamic> pendingAppointments) {
-    // Get the most recent appointment if available
-    final hasAppointments = pendingAppointments.isNotEmpty;
-    final recentAppointment = hasAppointments ? pendingAppointments.first : null;
-    
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const RecentKnocksScreen(),
-          ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF3CD), // Light yellow/amber background
-          borderRadius: BorderRadius.circular(20),
+  Widget _buildRecentKnocksCard(List<dynamic> activeAppointments) {
+  // Get the most recent appointment if available
+  final hasAppointments = activeAppointments.isNotEmpty;
+  final recentAppointment = hasAppointments ? activeAppointments.first : null;
+  
+  return GestureDetector(
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const RecentKnocksScreen(),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Recent Knocks',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF856404), // Brown color
-                    ),
-                  ),
-                  if (pendingAppointments.length > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${pendingAppointments.length}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                hasAppointments 
-                    ? '${pendingAppointments.length} student${pendingAppointments.length > 1 ? 's' : ''} waiting'
-                    : 'See who knocked\non you recently',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.brown[600],
-                  height: 1.2,
-                ),
-              ),
-              const Spacer(),
-              // Inner container with icons
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFE69C), // Lighter yellow
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFC107), // Amber
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFFFF9800), // Darker amber
-                          width: 2,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.doorbell,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: const Color(0xFFFFC107), // Amber
-                      child: Text(
-                        hasAppointments && recentAppointment != null
-                            ? _getInitials(recentAppointment.studentName)
-                            : '?',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: Text(
-                  hasAppointments && recentAppointment != null
-                      ? _getTimeAgo(recentAppointment.createdAt)
-                      : 'No recent knocks',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF856404), // Brown
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+      );
+    },
+    child: Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3CD), // Light yellow/amber background
+        borderRadius: BorderRadius.circular(20),
       ),
-    );
-  }
-
-  Widget _buildStatusCard(String currentStatus, String teacherUid) {
-    final isOffline = currentStatus.toLowerCase() == 'offline';
-    final isBusy = currentStatus.toLowerCase() == 'busy';
-    //final isOnline = currentStatus.toLowerCase() == 'online';
-    
-    Color backgroundColor;
-    Color textColor;
-    String statusText;
-    
-    if (isOffline) {
-      backgroundColor = const Color(0xFF424242); // Dark grey
-      textColor = Colors.white;
-      statusText = 'Offline';
-    } else if (isBusy) {
-      backgroundColor = const Color(0xFFFFE0B2); // Light orange
-      textColor = const Color(0xFFE65100); // Dark orange
-      statusText = 'Busy';
-    } else {
-      backgroundColor = const Color.fromARGB(255, 22, 163, 74); // Light green
-      textColor = const Color.fromARGB(255, 23, 83, 23); // Dark green
-      statusText = 'Online';
-    }
-    
-    return GestureDetector(
-      onTap: isOffline ? null : () => _toggleStatus(teacherUid, currentStatus),
-      child: Container(
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Status',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isOffline ? Colors.white70 : textColor,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Recent Knocks',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF856404), // Brown color
+                  ),
                 ),
+                if (activeAppointments.length > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${activeAppointments.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              hasAppointments 
+                  ? '${activeAppointments.length} student${activeAppointments.length > 1 ? 's' : ''} waiting'
+                  : 'See who knocked\non you recently',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.brown[600],
+                height: 1.2,
               ),
-              const SizedBox(height: 1),
-              Text(
-                'Share your status\nanytime anywhere',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isOffline ? Colors.white60 : textColor.withOpacity(0.8),
-                  height: 1.2,
-                ),
+            ),
+            const Spacer(),
+            // Inner container with icons
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFE69C), // Lighter yellow
+                borderRadius: BorderRadius.circular(15),
               ),
-              const Spacer(),
-              
-              // Inner container with status indicator
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-                decoration: BoxDecoration(
-                  color: isBusy 
-                      ? const Color(0xFFFF9800) // Orange for busy
-                      : isOffline 
-                          ? Colors.black.withOpacity(0.3)
-                          : Colors.white.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircleAvatar(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFC107), // Amber
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFFFF9800), // Darker amber
+                        width: 2,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.doorbell,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Use UserAvatar.custom for student photo or fallback
+                  hasAppointments && recentAppointment != null
+                      ? UserAvatar.custom(
+                          photoUrl: recentAppointment.studentPhotoUrl,
+                          displayName: recentAppointment.studentName,
                           radius: 20,
-                          backgroundColor: isBusy 
-                              ? const Color(0xFFE65100) 
-                              : isOffline
-                                  ? Colors.grey[700]
-                                  : const Color(0xFF2E7D32),
+                          showBorder: false,
+                          backgroundColor: const Color(0xFFFFC107),
+                          textColor: Colors.white,
+                        )
+                      : const CircleAvatar(
+                          radius: 20,
+                          backgroundColor: Color(0xFFFFC107),
                           child: Text(
-                            _getInitials('Teacher'),
-                            style: const TextStyle(
+                            '?',
+                            style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Icon(
-                          isBusy 
-                              ? Icons.person_off
-                              : isOffline 
-                                  ? Icons.person_off
-                                  : Icons.person,
-                          color: Colors.white,
-                          size: 32,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      statusText,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      '10 minutes',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white.withOpacity(0.7),
-                      ),
-                    ),
-                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Center(
+              child: Text(
+                hasAppointments && recentAppointment != null
+                    ? _getTimeAgo(recentAppointment.createdAt)
+                    : 'No recent knocks',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF856404), // Brown
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    );
+    ),
+  );
+}
+
+  Widget _buildStatusCard(String currentStatus, String teacherUid) {
+  final user = ref.watch(currentUserProvider);
+  final isOffline = currentStatus.toLowerCase() == 'offline';
+  final isBusy = currentStatus.toLowerCase() == 'busy';
+  
+  Color backgroundColor;
+  Color textColor;
+  String statusText;
+  
+  if (isOffline) {
+    backgroundColor = const Color(0xFF424242); // Dark grey
+    textColor = Colors.white;
+    statusText = 'Offline';
+  } else if (isBusy) {
+    backgroundColor = const Color(0xFFFFE0B2); // Light orange
+    textColor = const Color(0xFFE65100); // Dark orange
+    statusText = 'Busy';
+  } else {
+    backgroundColor = const Color.fromARGB(255, 22, 163, 74); // Light green
+    textColor = const Color.fromARGB(255, 23, 83, 23); // Dark green
+    statusText = 'Online';
   }
+  
+  return GestureDetector(
+    onTap: isOffline ? null : () => _toggleStatus(teacherUid, currentStatus),
+    child: Container(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Status',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: isOffline ? Colors.white70 : textColor,
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              'Share your status\nanytime anywhere',
+              style: TextStyle(
+                fontSize: 13,
+                color: isOffline ? Colors.white60 : textColor.withOpacity(0.8),
+                height: 1.2,
+              ),
+            ),
+            const Spacer(),
+            
+            // Inner container with status indicator
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+              decoration: BoxDecoration(
+                color: isBusy 
+                    ? const Color(0xFFFF9800) // Orange for busy
+                    : isOffline 
+                        ? Colors.black.withOpacity(0.3)
+                        : Colors.white.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Use current user's photo
+                      user.when(
+                        data: (userData) {
+                          if (userData != null) {
+                            return UserAvatar.custom(
+                              photoUrl: userData.photoUrl,
+                              displayName: userData.displayName,
+                              radius: 20,
+                              showBorder: false,
+                              backgroundColor: isBusy 
+                                  ? const Color(0xFFE65100) 
+                                  : isOffline
+                                      ? Colors.grey[700]
+                                      : const Color(0xFF2E7D32),
+                              textColor: Colors.white,
+                            );
+                          }
+                          return CircleAvatar(
+                            radius: 20,
+                            backgroundColor: isBusy 
+                                ? const Color(0xFFE65100) 
+                                : isOffline
+                                    ? Colors.grey[700]
+                                    : const Color(0xFF2E7D32),
+                            child: const Text(
+                              'T',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          );
+                        },
+                        loading: () => CircleAvatar(
+                          radius: 20,
+                          backgroundColor: Colors.grey[700],
+                          child: const Text(
+                            'T',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        error: (_, __) => CircleAvatar(
+                          radius: 20,
+                          backgroundColor: Colors.grey[700],
+                          child: const Text(
+                            'T',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Icon(
+                        isBusy 
+                            ? Icons.person_off
+                            : isOffline 
+                                ? Icons.person_off
+                                : Icons.person,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    statusText,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    '10 minutes',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.white.withOpacity(0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
   Widget _buildAddNotesCard(String? currentNote, String teacherUid) {
     return GestureDetector(

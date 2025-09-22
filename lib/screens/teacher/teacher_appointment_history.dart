@@ -6,6 +6,7 @@ import 'package:knocksense/models/appointment_model.dart';
 import 'package:knocksense/provider/appointment_provider.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:intl/intl.dart';
+import 'package:knocksense/widgets/common/useravatar_widget.dart';
 
 class TeacherAppointmentHistory extends ConsumerStatefulWidget {
   const TeacherAppointmentHistory({Key? key}) : super(key: key);
@@ -206,95 +207,85 @@ class _TeacherAppointmentHistoryState extends ConsumerState<TeacherAppointmentHi
   }
 
   Widget _buildAppointmentCard(AppointmentModel appointment) {
-    final isWaiting = appointment.status == AppointmentStatus.accepted && 
-                      appointment.teacherAction == TeacherAction.wait5Minutes;
-    
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF3B82F6),
-          width: 2,
+  final isWaiting = appointment.status == AppointmentStatus.accepted && 
+                    appointment.teacherAction == TeacherAction.wait5Minutes;
+  
+  return Container(
+    margin: const EdgeInsets.only(bottom: 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
+        color: const Color(0xFF3B82F6),
+        width: 2,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 4,
+          offset: const Offset(0, 2),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+      ],
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          // Student Avatar with photo support
+          UserAvatar.custom(
+            photoUrl: appointment.studentPhotoUrl,
+            displayName: appointment.studentName,
+            radius: 24,
+            showBorder: false,
+            backgroundColor: const Color(0xFFFFD700),
+            textColor: Colors.black,
+          ),
+          const SizedBox(width: 12),
+          
+          // Student Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  appointment.studentName,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  DateFormat('M/d/yyyy, h:mm a').format(appointment.createdAt),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Status Badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: _getStatusColor(appointment.status, isWaiting),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              _getStatusText(appointment.status, isWaiting),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            // Student Avatar
-            Container(
-              width: 48,
-              height: 48,
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFD700),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  'S',
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            
-            // Student Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    appointment.studentName,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    DateFormat('M/d/yyyy, h:mm a').format(appointment.createdAt),
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            // Status Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: _getStatusColor(appointment.status, isWaiting),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                _getStatusText(appointment.status, isWaiting),
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+    ),
+  );
+}
 
   Color _getStatusColor(AppointmentStatus status, bool isWaiting) {
     if (isWaiting) {

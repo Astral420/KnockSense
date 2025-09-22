@@ -8,10 +8,23 @@ import 'package:knocksense/models/teacher_model.dart';
 class AppointmentService {
   final FirebaseDatabase _database;
   static const int MAX_APPOINTMENTS_PER_TEACHER = 3;
-  // Remove timeout constants since we're not using automatic cancellation
 
   AppointmentService({required FirebaseDatabase database}) 
       : _database = database;
+
+  // Helper method to get user photo URL
+  Future<String?> _getUserPhotoUrl(String uid) async {
+    try {
+      final userSnapshot = await _database.ref('users/$uid').get();
+      if (userSnapshot.exists) {
+        final userData = Map<String, dynamic>.from(userSnapshot.value as Map);
+        return userData['photoUrl'] as String?;
+      }
+    } catch (e) {
+      debugPrint('Error fetching user photo: $e');
+    }
+    return null;
+  }
 
   // Get count of active appointments for a student with a specific teacher
   Future<int> getActiveAppointmentCount({
@@ -95,17 +108,21 @@ class AppointmentService {
           .ref('appointments/${student.studentNumber}')
           .push();
 
+      // Get student photo URL
+      final studentPhotoUrl = await _getUserPhotoUrl(student.uid);
+
       // Create appointment data with server timestamp
       final appointmentData = {
         'studentUid': student.uid,
         'studentNumber': student.studentNumber!,
         'studentName': student.displayName,
+        'studentPhotoUrl': studentPhotoUrl, // Add student photo
         'teacherUid': teacher.uid,
         'teacherName': teacher.displayName,
+        'teacherPhotoUrl': teacher.photoUrl, // Use teacher photo from model
         'status': AppointmentStatus.pending.name,
         'createdAt': ServerValue.timestamp,
         'studentNote': studentNote,
-        'teacherPhotoUrl': teacher.photoUrl 
       };
 
       await appointmentRef.set(appointmentData);
@@ -135,7 +152,143 @@ class AppointmentService {
     }
   }
 
-  // Teacher responds to appointment
+  // Enhanced method to get appointments with photo URLs
+  Stream<List<AppointmentModel>> getTeacherActiveAppointments(String teacherUid) {
+    return _database
+        .ref('teacher_appointments/$teacherUid')
+        .onValue
+        .asyncMap((event) async {
+      final List<AppointmentModel> appointments = [];
+      
+      if (event.snapshot.exists && event.snapshot.value != null) {
+        final indexData = Map<String, dynamic>.from(event.snapshot.value as Map);
+        
+        for (var entry in indexData.entries) {
+          final appointmentIndex = Map<String, dynamic>.from(entry.value as Map);
+          final studentNumber = appointmentIndex['studentNumber'] as String;
+          final appointmentId = appointmentIndex['appointmentId'] as String;
+          
+          final appointmentSnapshot = await _database
+              .ref('appointments/$studentNumber/$appointmentId')
+              .get();
+              
+          if (appointmentSnapshot.exists) {
+            final appointmentData = Map<String, dynamic>.from(appointmentSnapshot.value as Map);
+            
+            // Ensure photo URLs are populated if missing
+            if (appointmentData['studentPhotoUrl'] == null && appointmentData['studentUid'] != null) {
+              appointmentData['studentPhotoUrl'] = await _getUserPhotoUrl(appointmentData['studentUid']);
+            }
+            if (appointmentData['teacherPhotoUrl'] == null && appointmentData['teacherUid'] != null) {
+              appointmentData['teacherPhotoUrl'] = await _getUserPhotoUrl(appointmentData['teacherUid']);
+            }
+            
+            final appointment = AppointmentModel.fromJson(appointmentId, appointmentData);
+            
+            // Include pending appointments and accepted appointments with active teacher actions
+            final isActive = appointment.status == AppointmentStatus.pending ||
+                           (appointment.status == AppointmentStatus.accepted && 
+                            (appointment.teacherAction == TeacherAction.wait5Minutes ||
+                             appointment.teacherAction == TeacherAction.meetNow ||
+                             appointment.teacherAction == TeacherAction.meetLater));
+                             
+            if (isActive) {
+              appointments.add(appointment);
+            }
+          }
+        }
+        
+        appointments.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      }
+      
+      return appointments;
+    });
+  }
+
+  // Enhanced method for all appointments with photos
+  Stream<List<AppointmentModel>> getTeacherAllAppointments(String teacherUid) {
+    return _database
+        .ref('teacher_appointments/$teacherUid')
+        .onValue
+        .asyncMap((event) async {
+      final List<AppointmentModel> appointments = [];
+      
+      if (event.snapshot.exists && event.snapshot.value != null) {
+        final indexData = Map<String, dynamic>.from(event.snapshot.value as Map);
+        
+        for (var entry in indexData.entries) {
+          final appointmentIndex = Map<String, dynamic>.from(entry.value as Map);
+          final studentNumber = appointmentIndex['studentNumber'] as String;
+          final appointmentId = appointmentIndex['appointmentId'] as String;
+          
+          final appointmentSnapshot = await _database
+              .ref('appointments/$studentNumber/$appointmentId')
+              .get();
+              
+          if (appointmentSnapshot.exists) {
+            final appointmentData = Map<String, dynamic>.from(appointmentSnapshot.value as Map);
+            
+            // Ensure photo URLs are populated if missing
+            if (appointmentData['studentPhotoUrl'] == null && appointmentData['studentUid'] != null) {
+              appointmentData['studentPhotoUrl'] = await _getUserPhotoUrl(appointmentData['studentUid']);
+            }
+            if (appointmentData['teacherPhotoUrl'] == null && appointmentData['teacherUid'] != null) {
+              appointmentData['teacherPhotoUrl'] = await _getUserPhotoUrl(appointmentData['teacherUid']);
+            }
+            
+            appointments.add(AppointmentModel.fromJson(appointmentId, appointmentData));
+          }
+        }
+        
+        appointments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      }
+      
+      return appointments;
+    });
+  }
+
+  // Enhanced student appointments with photos
+  Stream<List<AppointmentModel>> getStudentAppointments(String studentNumber, {
+    DateTimeRange? dateRange,
+  }) {
+    return _database
+        .ref('appointments/$studentNumber')
+        .orderByChild('createdAt')
+        .onValue
+        .asyncMap((event) async {
+      final List<AppointmentModel> appointments = [];
+      
+      if (event.snapshot.exists && event.snapshot.value != null) {
+        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+        
+        for (var entry in data.entries) {
+          try {
+            final appointmentData = Map<String, dynamic>.from(entry.value as Map);
+            
+            // Ensure photo URLs are populated if missing
+            if (appointmentData['studentPhotoUrl'] == null && appointmentData['studentUid'] != null) {
+              appointmentData['studentPhotoUrl'] = await _getUserPhotoUrl(appointmentData['studentUid']);
+            }
+            if (appointmentData['teacherPhotoUrl'] == null && appointmentData['teacherUid'] != null) {
+              appointmentData['teacherPhotoUrl'] = await _getUserPhotoUrl(appointmentData['teacherUid']);
+            }
+            
+            final appointment = AppointmentModel.fromJson(entry.key, appointmentData);
+            appointments.add(appointment);
+          } catch (e) {
+            print('Error parsing appointment ${entry.key}: $e');
+          }
+        }
+        
+        // Sort by creation date (newest first)
+        appointments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      }
+      
+      return appointments;
+    });
+  }
+
+  // Other methods remain the same...
   Future<bool> respondToAppointment({
     required String studentNumber,
     required String appointmentId,
@@ -211,38 +364,6 @@ class AppointmentService {
     }
   }
 
-  // Get all appointments for a student
-  Stream<List<AppointmentModel>> getStudentAppointments(String studentNumber, {
-    DateTimeRange? dateRange,
-  }) {
-    return _database
-        .ref('appointments/$studentNumber')
-        .orderByChild('createdAt')
-        .onValue
-        .map((event) {
-      final List<AppointmentModel> appointments = [];
-      
-      if (event.snapshot.exists && event.snapshot.value != null) {
-        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-        
-        data.forEach((key, value) {
-          try {
-            final appointmentData = Map<String, dynamic>.from(value as Map);
-            final appointment = AppointmentModel.fromJson(key, appointmentData);
-            appointments.add(appointment);
-          } catch (e) {
-            print('Error parsing appointment $key: $e');
-          }
-        });
-        
-        // Sort by creation date (newest first)
-        appointments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      }
-      
-      return appointments;
-    });
-  }
-
   // Get pending appointments for a teacher
   Stream<List<AppointmentModel>> getTeacherPendingAppointments(String teacherUid) {
     return _database
@@ -268,10 +389,17 @@ class AppointmentService {
               .get();
               
           if (appointmentSnapshot.exists) {
-            final appointment = AppointmentModel.fromJson(
-              appointmentId,
-              Map<String, dynamic>.from(appointmentSnapshot.value as Map),
-            );
+            final appointmentData = Map<String, dynamic>.from(appointmentSnapshot.value as Map);
+            
+            // Ensure photo URLs are populated if missing
+            if (appointmentData['studentPhotoUrl'] == null && appointmentData['studentUid'] != null) {
+              appointmentData['studentPhotoUrl'] = await _getUserPhotoUrl(appointmentData['studentUid']);
+            }
+            if (appointmentData['teacherPhotoUrl'] == null && appointmentData['teacherUid'] != null) {
+              appointmentData['teacherPhotoUrl'] = await _getUserPhotoUrl(appointmentData['teacherUid']);
+            }
+            
+            final appointment = AppointmentModel.fromJson(appointmentId, appointmentData);
             appointments.add(appointment);
           }
         }
@@ -284,42 +412,7 @@ class AppointmentService {
     });
   }
 
-  // Get all appointments for a teacher (including history)
-  Stream<List<AppointmentModel>> getTeacherAllAppointments(String teacherUid) {
-    return _database
-        .ref('teacher_appointments/$teacherUid')
-        .onValue
-        .asyncMap((event) async {
-      final List<AppointmentModel> appointments = [];
-      
-      if (event.snapshot.exists && event.snapshot.value != null) {
-        final indexData = Map<String, dynamic>.from(event.snapshot.value as Map);
-        
-        for (var entry in indexData.entries) {
-          final appointmentIndex = Map<String, dynamic>.from(entry.value as Map);
-          final studentNumber = appointmentIndex['studentNumber'] as String;
-          final appointmentId = appointmentIndex['appointmentId'] as String;
-          
-          final appointmentSnapshot = await _database
-              .ref('appointments/$studentNumber/$appointmentId')
-              .get();
-              
-          if (appointmentSnapshot.exists) {
-            appointments.add(AppointmentModel.fromJson(
-              appointmentId,
-              Map<String, dynamic>.from(appointmentSnapshot.value as Map),
-            ));
-          }
-        }
-        
-        appointments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      }
-      
-      return appointments;
-    });
-  }
-
-  // Cancel appointment by student
+  // Cancel appointment by student or teacher
   Future<bool> cancelAppointment({
     required String studentNumber,
     required String appointmentId,

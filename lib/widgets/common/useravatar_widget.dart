@@ -8,6 +8,13 @@ class UserAvatar extends ConsumerWidget {
   final bool showBorder;
   final Color? borderColor;
   final VoidCallback? onTap;
+  
+  // New parameters for custom usage
+  final String? photoUrl;
+  final String? displayName;
+  final Color? backgroundColor;
+  final Color? textColor;
+  final bool useCurrentUser; // When false, use provided photoUrl and displayName
 
   const UserAvatar({
     Key? key,
@@ -15,10 +22,37 @@ class UserAvatar extends ConsumerWidget {
     this.showBorder = true,
     this.borderColor,
     this.onTap,
+    this.photoUrl,
+    this.displayName,
+    this.backgroundColor,
+    this.textColor,
+    this.useCurrentUser = true,
   }) : super(key: key);
+
+  // Named constructor for custom user (not current user)
+  const UserAvatar.custom({
+    Key? key,
+    required this.photoUrl,
+    required this.displayName,
+    this.radius = 20,
+    this.showBorder = true,
+    this.borderColor,
+    this.backgroundColor,
+    this.textColor,
+    this.onTap,
+  }) : useCurrentUser = false, super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!useCurrentUser) {
+      // Use provided photoUrl and displayName
+      return _buildAvatarWidget(
+        context, 
+        photoUrl: photoUrl,
+        name: displayName ?? 'Unknown',
+      );
+    }
+
     final userStream = ref.watch(currentUserProvider);
 
     return userStream.when(
@@ -27,64 +61,65 @@ class UserAvatar extends ConsumerWidget {
           return _buildDefaultAvatar(context);
         }
 
-        return GestureDetector(
-          onTap: onTap,
-          child: Container(
-            decoration: showBorder
-                ? BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: borderColor ?? Theme.of(context).primaryColor,
-                      width: 2,
-                    ),
-                  )
-                : null,
-            child: user.photoUrl != null
-                ? CachedNetworkImage(
-                    imageUrl: user.photoUrl!,
-                    imageBuilder: (context, imageProvider) => CircleAvatar(
-                      radius: radius,
-                      backgroundImage: imageProvider,
-                    ),
-                    placeholder: (context, url) => CircleAvatar(
-                      radius: radius,
-                      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
-                      child: SizedBox(
-                        width: radius * 0.8,
-                        height: radius * 0.8,
-                        child: const CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => CircleAvatar(
-                      radius: radius,
-                      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
-                      child: Text(
-                        getInitials(user.displayName),
-                        style: TextStyle(
-                          fontSize: radius * 0.8,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).primaryColor,
-                        ),
-                      ),
-                    ),
-                  )
-                : CircleAvatar(
-                    radius: radius,
-                    backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
-                    child: Text(
-                      getInitials(user.displayName),
-                      style: TextStyle(
-                        fontSize: radius * 0.8,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).primaryColor,
-                      ),
-                    ),
-                  ),
-          ),
+        return _buildAvatarWidget(
+          context,
+          photoUrl: user.photoUrl,
+          name: user.displayName,
         );
       },
       loading: () => _buildLoadingAvatar(context),
       error: (_, __) => _buildDefaultAvatar(context),
+    );
+  }
+
+  Widget _buildAvatarWidget(BuildContext context, {String? photoUrl, required String name}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: showBorder
+            ? BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: borderColor ?? Theme.of(context).primaryColor,
+                  width: 2,
+                ),
+              )
+            : null,
+        child: photoUrl != null && photoUrl.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: photoUrl,
+                imageBuilder: (context, imageProvider) => CircleAvatar(
+                  radius: radius,
+                  backgroundImage: imageProvider,
+                ),
+                placeholder: (context, url) => CircleAvatar(
+                  radius: radius,
+                  backgroundColor: backgroundColor ?? Theme.of(context).primaryColor.withOpacity(0.1),
+                  child: SizedBox(
+                    width: radius * 0.8,
+                    height: radius * 0.8,
+                    child: const CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+                errorWidget: (context, url, error) => _buildInitialsAvatar(context, name),
+              )
+            : _buildInitialsAvatar(context, name),
+      ),
+    );
+  }
+
+  Widget _buildInitialsAvatar(BuildContext context, String name) {
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: backgroundColor ?? Theme.of(context).primaryColor.withOpacity(0.1),
+      child: Text(
+        getInitials(name),
+        style: TextStyle(
+          fontSize: radius * 0.8,
+          fontWeight: FontWeight.bold,
+          color: textColor ?? Theme.of(context).primaryColor,
+        ),
+      ),
     );
   }
 
@@ -94,7 +129,7 @@ class UserAvatar extends ConsumerWidget {
       height: radius * 2,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Theme.of(context).primaryColor.withOpacity(0.1),
+        color: backgroundColor ?? Theme.of(context).primaryColor.withOpacity(0.1),
       ),
       child: const CircularProgressIndicator(strokeWidth: 2),
     );
@@ -103,11 +138,11 @@ class UserAvatar extends ConsumerWidget {
   Widget _buildDefaultAvatar(BuildContext context) {
     return CircleAvatar(
       radius: radius,
-      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+      backgroundColor: backgroundColor ?? Theme.of(context).primaryColor.withOpacity(0.1),
       child: Icon(
         Icons.person,
         size: radius * 1.2,
-        color: Theme.of(context).primaryColor,
+        color: textColor ?? Theme.of(context).primaryColor,
       ),
     );
   }
