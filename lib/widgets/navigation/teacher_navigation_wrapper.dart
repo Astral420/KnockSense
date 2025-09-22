@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/screens/teacher/teacher_more_screen.dart';
 import 'package:knocksense/screens/teacher/teacher_appointment_history.dart';
-import 'package:knocksense/screens/dashbaord/teacher_dashboard.dart';
+import 'package:knocksense/screens/dashboard/teacher_dashboard.dart';
 
 // Provider to manage the current tab index for teacher
 final teacherCurrentTabProvider = StateProvider<int>((ref) => 0);

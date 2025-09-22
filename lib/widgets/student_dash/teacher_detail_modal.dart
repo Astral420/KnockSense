@@ -8,6 +8,7 @@ import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/provider/teacher_provider.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/provider/appointment_provider.dart';
+import 'package:knocksense/provider/teacher_service_provider.dart';
 
 class TeacherDetailModal extends ConsumerStatefulWidget {
   final TeacherModel teacher;
@@ -41,6 +42,11 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
       hasPendingAppointmentProvider(widget.teacher.uid)
     );
     
+    // Watch the teacher's status with duration
+    final statusWithDuration = ref.watch(
+      teacherStatusWithDurationProvider(widget.teacher.uid)
+    );
+    
     return teacherAsync.when(
       data: (currentTeacher) {
         // Use the current teacher data if available, fallback to initial teacher
@@ -50,14 +56,15 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
           data: (user) => _buildModalContent(
             teacher, 
             user, 
-            hasPendingAppointment.value ?? false
+            hasPendingAppointment.value ?? false,
+            statusWithDuration,
           ),
-          loading: () => _buildModalContent(teacher, null, false),
-          error: (_, __) => _buildModalContent(teacher, null, false),
+          loading: () => _buildModalContent(teacher, null, false, statusWithDuration),
+          error: (_, __) => _buildModalContent(teacher, null, false, statusWithDuration),
         );
       },
-      loading: () => _buildModalContent(widget.teacher, null, false),
-      error: (_, __) => _buildModalContent(widget.teacher, null, false),
+      loading: () => _buildModalContent(widget.teacher, null, false, statusWithDuration),
+      error: (_, __) => _buildModalContent(widget.teacher, null, false, statusWithDuration),
     );
   }
 
@@ -65,6 +72,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
     TeacherModel teacher, 
     UserModel? currentUser,
     bool hasPendingAppointment,
+    AsyncValue statusWithDuration,
   ) {
     return Container(
       decoration: const BoxDecoration(
@@ -93,8 +101,8 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Teacher profile section
-                _buildTeacherProfileSection(teacher),
+                // Teacher profile section with duration
+                _buildTeacherProfileSection(teacher, statusWithDuration),
                 
                 const SizedBox(height: 24),
                 
@@ -125,7 +133,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
     );
   }
 
-  Widget _buildTeacherProfileSection(TeacherModel teacher) {
+  Widget _buildTeacherProfileSection(TeacherModel teacher, AsyncValue statusWithDuration) {
     return Row(
       children: [
         Stack(
@@ -214,32 +222,93 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                 ),
               ),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text(
-                    'Status: ',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: _getStatusColor(teacher.activeStatus).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      _formatStatus(teacher.activeStatus),
+              // Enhanced status display with duration
+              statusWithDuration.when(
+                data: (statusData) {
+                  return Row(
+                    children: [
+                      Text(
+                        'Status: ',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _getStatusColor(teacher.activeStatus).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          statusData != null 
+                              ? '${_formatStatus(teacher.activeStatus)} for ${statusData.duration}'
+                              : _formatStatus(teacher.activeStatus),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: _getStatusColor(teacher.activeStatus),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+                loading: () => Row(
+                  children: [
+                    Text(
+                      'Status: ',
                       style: TextStyle(
-                        fontSize: 12,
-                        color: _getStatusColor(teacher.activeStatus),
-                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                  ),
-                ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _getStatusColor(teacher.activeStatus).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _formatStatus(teacher.activeStatus),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _getStatusColor(teacher.activeStatus),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                error: (_, __) => Row(
+                  children: [
+                    Text(
+                      'Status: ',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _getStatusColor(teacher.activeStatus).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _formatStatus(teacher.activeStatus),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _getStatusColor(teacher.activeStatus),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -562,7 +631,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
     setState(() {
       if (_notifiedTeachers.contains(teacher.uid)) {
         _notifiedTeachers.remove(teacher.uid);
-        print('🔔 Student unsubscribed from notifications for ${teacher.displayName}');
+        print('🔕 Student unsubscribed from notifications for ${teacher.displayName}');
         _showInfoMessage('Notifications disabled for ${teacher.displayName}');
       } else {
         _notifiedTeachers.add(teacher.uid);

@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/provider/teacher_service_provider.dart';
 import 'package:knocksense/provider/appointment_provider.dart';
+import 'package:knocksense/services/teacher_service.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:knocksense/widgets/teacher_dash/add_note_modal.dart';
 import 'package:knocksense/screens/teacher/recent_knocks_screen.dart';
@@ -34,7 +35,8 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
             if (userData == null) {
               return const Center(child: Text('User data not found.'));
             }
-            
+
+
             final statusStream = ref.watch(teacherStatusProvider(userData.uid));
             final noteStream = ref.watch(teacherNoteProvider(userData.uid));
             
@@ -306,6 +308,9 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
   final isOffline = currentStatus.toLowerCase() == 'offline';
   final isBusy = currentStatus.toLowerCase() == 'busy';
   
+  // Watch the enhanced status stream with duration - this will now update more frequently
+  final statusWithDuration = ref.watch(teacherStatusWithDurationProvider(teacherUid));
+  
   Color backgroundColor;
   Color textColor;
   String statusText;
@@ -325,7 +330,7 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
   }
   
   return GestureDetector(
-    onTap: isOffline ? null : () => _toggleStatus(teacherUid, currentStatus),
+    onTap: () => _toggleStatus(teacherUid, currentStatus),
     child: Container(
       decoration: BoxDecoration(
         color: backgroundColor,
@@ -346,7 +351,7 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
             ),
             const SizedBox(height: 1),
             Text(
-              'Share your status\nanytime anywhere',
+              'Tap to toggle\nbetween online/busy',
               style: TextStyle(
                 fontSize: 13,
                 color: isOffline ? Colors.white60 : textColor.withOpacity(0.8),
@@ -389,47 +394,10 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
                               textColor: Colors.white,
                             );
                           }
-                          return CircleAvatar(
-                            radius: 20,
-                            backgroundColor: isBusy 
-                                ? const Color(0xFFE65100) 
-                                : isOffline
-                                    ? Colors.grey[700]
-                                    : const Color(0xFF2E7D32),
-                            child: const Text(
-                              'T',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                            ),
-                          );
+                          return _buildDefaultAvatar(isBusy, isOffline);
                         },
-                        loading: () => CircleAvatar(
-                          radius: 20,
-                          backgroundColor: Colors.grey[700],
-                          child: const Text(
-                            'T',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                        error: (_, __) => CircleAvatar(
-                          radius: 20,
-                          backgroundColor: Colors.grey[700],
-                          child: const Text(
-                            'T',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
+                        loading: () => _buildDefaultAvatar(isBusy, isOffline),
+                        error: (_, __) => _buildDefaultAvatar(isBusy, isOffline),
                       ),
                       const SizedBox(width: 12),
                       Icon(
@@ -452,11 +420,33 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Text(
-                    '10 minutes',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.white.withOpacity(0.7),
+                  // Display real-time duration - this will now update properly on status change
+                  statusWithDuration.when(
+                    data: (statusData) {
+                      // Force recalculation of duration each time
+                      final duration = statusData?.duration ?? 'Unknown';
+                      return Text(
+                        duration,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withOpacity(0.7),
+                        ),
+                        key: ValueKey('${statusData?.status}_${statusData?.changedAt?.millisecondsSinceEpoch}'), // Force rebuild on status/time change
+                      );
+                    },
+                    loading: () => Text(
+                      'Loading...',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white.withOpacity(0.7),
+                      ),
+                    ),
+                    error: (_, __) => Text(
+                      'Unknown',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.white.withOpacity(0.7),
+                      ),
                     ),
                   ),
                 ],
@@ -464,6 +454,25 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
             ),
           ],
         ),
+      ),
+    ),
+  );
+}
+
+Widget _buildDefaultAvatar(bool isBusy, bool isOffline) {
+  return CircleAvatar(
+    radius: 20,
+    backgroundColor: isBusy 
+        ? const Color(0xFFE65100) 
+        : isOffline
+            ? Colors.grey[700]
+            : const Color(0xFF2E7D32),
+    child: const Text(
+      'T',
+      style: TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+        fontSize: 14,
       ),
     ),
   );
@@ -492,7 +501,7 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
               ),
               const SizedBox(height: 4),
               const Text(
-                'Keep track of important\nthings to do',
+                'Update the students\nabout your status.',
                 style: TextStyle(
                   fontSize: 13,
                   color: Color(0xFF6A1B9A), // Medium purple
@@ -617,22 +626,18 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
   }
 
   Future<void> _toggleStatus(String teacherUid, String currentStatus) async {
-    final teacherService = ref.read(teacherServiceProvider);
-    
-    // Toggle between online and busy only
-    String newStatus = currentStatus.toLowerCase() == 'online' ? 'busy' : 'online';
-    
-    final success = await teacherService.updateTeacherStatus(teacherUid, newStatus);
-    
-    if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cannot change status while offline'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
+  final teacherService = ref.read(teacherServiceProvider);
+  
+  // Toggle between online and busy only
+  String newStatus = currentStatus.toLowerCase() == 'online' ? 'busy' : 'online';
+  
+  print('🔄 Toggling status from $currentStatus to $newStatus for teacher $teacherUid');
+
+  await teacherService.updateTeacherStatus(teacherUid, newStatus);
+  
+
+  
+}
 
   void _showAddNoteModal(BuildContext context, String teacherUid, String? currentNote) {
     showModalBottomSheet(

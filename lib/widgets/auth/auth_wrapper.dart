@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/screens/auth/login_screen.dart';
-import 'package:knocksense/screens/dashbaord/admin_dashboard.dart';
+import 'package:knocksense/screens/dashboard/admin_dashboard.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:knocksense/widgets/navigation/student_nav_wrapper.dart';
 import 'package:knocksense/widgets/navigation/teacher_navigation_wrapper.dart';
