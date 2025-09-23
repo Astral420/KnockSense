@@ -308,7 +308,7 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
   final isOffline = currentStatus.toLowerCase() == 'offline';
   final isBusy = currentStatus.toLowerCase() == 'busy';
   
-  // Watch the enhanced status stream with duration - this will now update more frequently
+  // Watch the enhanced status stream with duration
   final statusWithDuration = ref.watch(teacherStatusWithDurationProvider(teacherUid));
   
   Color backgroundColor;
@@ -330,7 +330,8 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
   }
   
   return GestureDetector(
-    onTap: () => _toggleStatus(teacherUid, currentStatus),
+    // Only allow toggling if not offline
+    onTap: isOffline ? null : () => _toggleStatus(teacherUid, currentStatus),
     child: Container(
       decoration: BoxDecoration(
         color: backgroundColor,
@@ -351,7 +352,9 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
             ),
             const SizedBox(height: 1),
             Text(
-              'Tap to toggle\nbetween online/busy',
+              isOffline 
+                  ? 'Controlled by RFID\nreader system'
+                  : 'Tap to toggle\nbetween online/busy',
               style: TextStyle(
                 fontSize: 13,
                 color: isOffline ? Colors.white60 : textColor.withOpacity(0.8),
@@ -420,10 +423,9 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  // Display real-time duration - this will now update properly on status change
+                  // Display real-time duration
                   statusWithDuration.when(
                     data: (statusData) {
-                      // Force recalculation of duration each time
                       final duration = statusData?.duration ?? 'Unknown';
                       return Text(
                         duration,
@@ -431,7 +433,7 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
                           fontSize: 11,
                           color: Colors.white.withOpacity(0.7),
                         ),
-                        key: ValueKey('${statusData?.status}_${statusData?.changedAt?.millisecondsSinceEpoch}'), // Force rebuild on status/time change
+                        key: ValueKey('${statusData?.status}_${statusData?.changedAt?.millisecondsSinceEpoch}'),
                       );
                     },
                     loading: () => Text(
