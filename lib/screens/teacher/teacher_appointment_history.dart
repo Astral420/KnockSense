@@ -249,7 +249,7 @@ class TeacherAppointmentHistory extends ConsumerWidget {
           children: [
             UserAvatar.custom(
               photoUrl: appointment.studentPhotoUrl,
-              displayName: appointment.studentName,
+              displayName: appointment.cleanedStudentName,
               radius: 24,
               showBorder: false,
               backgroundColor: const Color(0xFFFFD700),

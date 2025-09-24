@@ -263,7 +263,7 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
                   hasAppointments && recentAppointment != null
                       ? UserAvatar.custom(
                           photoUrl: recentAppointment.studentPhotoUrl,
-                          displayName: recentAppointment.studentName,
+                          displayName: recentAppointment.cleanedStudentName,
                           radius: 20,
                           showBorder: false,
                           backgroundColor: const Color(0xFFFFC107),

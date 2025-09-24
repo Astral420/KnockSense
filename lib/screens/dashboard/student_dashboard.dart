@@ -304,7 +304,7 @@ class StudentDashboard extends ConsumerWidget {
                                     radius: 20,
                                     backgroundColor: Colors.amber,
                                     child: Text(
-                                      _getTeacherInitials(appointment.teacherName),
+                                      _getTeacherInitials(appointment.cleanedTeacherName),
                                       style: const TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,
@@ -317,7 +317,7 @@ class StudentDashboard extends ConsumerWidget {
                                   radius: 20,
                                   backgroundColor: Colors.amber,
                                   child: Text(
-                                    _getTeacherInitials(appointment.teacherName),
+                                    _getTeacherInitials(appointment.cleanedTeacherName),
                                     style: const TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
@@ -326,7 +326,7 @@ class StudentDashboard extends ConsumerWidget {
                                   ),
                                 ),
                           title: Text(
-                            appointment.teacherName,
+                            appointment.cleanedTeacherName,
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,

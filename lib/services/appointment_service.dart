@@ -12,6 +12,10 @@ class AppointmentService {
   AppointmentService({required FirebaseDatabase database}) 
       : _database = database;
 
+  String _cleanName(String name) {
+    return name.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
+  }
+
   // Helper method to get user photo URL
   Future<String?> _getUserPhotoUrl(String uid) async {
     try {
@@ -115,10 +119,10 @@ class AppointmentService {
       final appointmentData = {
         'studentUid': student.uid,
         'studentNumber': student.studentNumber!,
-        'studentName': student.displayName,
+        'studentName': _cleanName(student.displayName),
         'studentPhotoUrl': studentPhotoUrl, // Add student photo
         'teacherUid': teacher.uid,
-        'teacherName': teacher.displayName,
+        'teacherName': _cleanName(teacher.displayName),
         'teacherPhotoUrl': teacher.photoUrl, // Use teacher photo from model
         'status': AppointmentStatus.pending.name,
         'createdAt': ServerValue.timestamp,

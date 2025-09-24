@@ -167,7 +167,7 @@ class RecentKnocksScreen extends ConsumerWidget {
           // Student Avatar with photo support
           UserAvatar.custom(
             photoUrl: appointment.studentPhotoUrl,
-            displayName: appointment.studentName,
+            displayName: appointment.cleanedStudentName,
             radius: 28, // Slightly larger for better visibility
             showBorder: false,
             backgroundColor: const Color(0xFFFFC107), // Amber color fallback
