@@ -321,11 +321,8 @@ void checkRFID() {
           addOrUpdateRfidTag(uid);
         } else {
           Serial.println("🔐 Access mode - checking permissions...");
+          doorLogic(uid, reader);
         }
-
-        // Always check door logic
-        doorLogic(uid, reader);
-        
       } else {
         Serial.println("⚠️  Invalid UID size detected: " + String(uidSize) + " bytes");
       }
@@ -340,41 +337,43 @@ void checkRFID() {
 // ---------- Firebase RFID Management ----------
 void addOrUpdateRfidTag(String uid) {
   if (!firebaseConnected) {
-    Serial.println("⚠️  Firebase not connected - cannot add/update RFID tag");
+    Serial.println("⚠️ Firebase not connected - cannot add/update RFID tag");
     return;
   }
 
-  String path = "/rfid_tags/" + uid; 
-  
-  Serial.println("🔍 Checking RFID tag in database: " + uid);
-  
-  String statusPath = path + "/status";
-  
-  if (Firebase.RTDB.getString(&fbdo, statusPath)) {
-    Serial.println("✅ Known RFID tag - updating timestamp");
-    
-    // Update last seen timestamp
-    Firebase.RTDB.setTimestamp(&fbdo, path + "/lastSeen");
-    
-  } else {
-    if (fbdo.errorCode() == FIREBASE_ERROR_PATH_NOT_EXIST || fbdo.dataType() == "null") {
-      Serial.println("🆕 New RFID tag detected - adding to database...");
-      
-      FirebaseJson json;
-      json.set("status", "inactive");
-      json.set("createdAt/.sv", "timestamp");
-      json.set("lastSeen/.sv", "timestamp");
-      json.set("addedBy", "system");
+  String path = "/rfid_tags/" + uid;
+  Serial.println("🔍 Checking if RFID tag exists in database: " + path);
 
-      if (Firebase.RTDB.setJSON(&fbdo, path, &json)) {
-        Serial.println("✅ New tag added successfully!");
-        wsHandler.sendNetworkEvent("rfid_added", "New RFID tag added: " + uid);
-      } else {
-        Serial.println("❌ Failed to add new tag: " + fbdo.errorReason());
-      }
-    } else {
-      Serial.println("❌ Database error: " + fbdo.errorReason());
+  // Use get() to check for the node's existence.
+  if (Firebase.RTDB.get(&fbdo, path)) {
+    // The get() call was successful. If the data type is not 'null', the tag already exists.
+    if (fbdo.dataTypeEnum() != fb_esp_rtdb_data_type_null) {
+      Serial.println("❌ Duplicate RFID tag detected.");
+      wsHandler.sendRfidAddedStatus(uid, false, "duplicate"); // Send duplicate error
+      return; // Stop here.
     }
+  }
+
+  // If get() failed with "path not exist" or succeeded but the data was "null", we can add the new tag.
+  if (fbdo.errorCode() == FIREBASE_ERROR_PATH_NOT_EXIST || fbdo.dataTypeEnum() == fb_esp_rtdb_data_type_null) {
+    Serial.println("🆕 New RFID tag detected - adding to database...");
+    FirebaseJson json;
+    json.set("status", "inactive");
+    json.set("createdAt/.sv", "timestamp");
+    json.set("lastSeen/.sv", "timestamp");
+    json.set("addedBy", "system");
+
+    if (Firebase.RTDB.setJSON(&fbdo, path, &json)) {
+      Serial.println("✅ New tag added successfully!");
+      wsHandler.sendRfidAddedStatus(uid, true); // Send success message
+    } else {
+      Serial.println("❌ Failed to add new tag: " + fbdo.errorReason());
+      // Optionally, you could send a generic database error here
+      // wsHandler.sendRfidAddedStatus(uid, false, "database_error");
+    }
+  } else {
+    // Another type of error occurred during the initial get().
+    Serial.println("❌ Database error during initial check: " + fbdo.errorReason());
   }
 }
 
@@ -505,27 +504,58 @@ void updateTeacherStatus(String teacherID, uint8_t reader) {
           String basePath = teacherPath + "/" + key;
           
           String newStatus = (reader == 0) ? "online" : "offline";
-          Firebase.RTDB.setString(&fbdo, basePath + "/active_status", newStatus);
           
+          // Update status and unified timestamp
+          Firebase.RTDB.setString(&fbdo, basePath + "/active_status", newStatus);
+          Firebase.RTDB.setTimestamp(&fbdo, basePath + "/status_changed_at");
+          
+          // Also update specific entry/exit timestamps
           if (reader == 0) {
             Firebase.RTDB.setTimestamp(&fbdo, basePath + "/last_entry_time");
             
-            String firstEntryPath = basePath + "/today_first_entry";
+            // Check if first entry today
+            String todayKey = getCurrentDateKey(); // YYYYMMDD format
+            String firstEntryPath = basePath + "/daily_first_entry/" + todayKey;
             if (!Firebase.RTDB.get(&fbdo, firstEntryPath)) {
               Firebase.RTDB.setTimestamp(&fbdo, firstEntryPath);
             }
           } else {
             Firebase.RTDB.setTimestamp(&fbdo, basePath + "/last_exit_time");
-            Firebase.RTDB.setTimestamp(&fbdo, basePath + "/today_last_exit");
+            
+            // Update today's last exit
+            String todayKey = getCurrentDateKey();
+            Firebase.RTDB.setTimestamp(&fbdo, basePath + "/daily_last_exit/" + todayKey);
           }
           
           Serial.println("👨‍🏫 Updated " + teacherID + " status: " + newStatus);
+          Serial.println("   Status changed at: " + String(millis()));
+          
+          // Send WebSocket notification with status change
+          wsHandler.sendTeacherStatusUpdate(teacherID, newStatus);
+          
           break;
         }
       }
     }
     json.iteratorEnd();
   }
+}
+
+// Helper function to get current date as YYYYMMDD
+String getCurrentDateKey() {
+  time_t now;
+  struct tm timeinfo;
+  
+  time(&now);
+  localtime_r(&now, &timeinfo);
+  
+  char dateStr[9];
+  sprintf(dateStr, "%04d%02d%02d", 
+          timeinfo.tm_year + 1900,
+          timeinfo.tm_mon + 1,
+          timeinfo.tm_mday);
+  
+  return String(dateStr);
 }
 
 void logAttendance(String teacherID, uint8_t reader) {

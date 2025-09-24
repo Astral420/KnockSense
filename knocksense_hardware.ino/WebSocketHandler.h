@@ -36,6 +36,8 @@ public:
     void sendDoorStatus(bool unlocked);
     void sendNetworkEvent(String event, String details);
     void sendConnectionProgress(String stage, String details);
+    void sendRfidAddedStatus(String uid, bool success, String error = "");
+    void sendTeacherStatusUpdate(String teacherID, String newStatus);
 
     bool isScanMode() { return scanModeActive; }
     bool hasNewWifiConfig() { return wifiConfigUpdated; }

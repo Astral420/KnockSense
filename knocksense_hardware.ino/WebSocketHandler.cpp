@@ -93,6 +93,43 @@ void WebSocketHandler::sendSystemStatus() {
     Serial.println("Sent system status - WiFi: " + String(WiFi.status() == WL_CONNECTED ? "connected" : "disconnected"));
 }
 
+void WebSocketHandler::sendTeacherStatusUpdate(String teacherID, String newStatus) {
+    DynamicJsonDocument doc(256);
+    doc["type"] = "teacher_status_update";
+    doc["teacherID"] = teacherID;
+    doc["status"] = newStatus;
+    doc["timestamp"] = millis();
+    
+    String message;
+    serializeJson(doc, message);
+    ws.textAll(message);
+    
+    Serial.println("📡 Sent teacher status update via WebSocket");
+  }
+
+void WebSocketHandler::sendRfidAddedStatus(String uid, bool success, String error) {
+    DynamicJsonDocument doc(256);
+    doc["uid"] = uid;
+
+    if (success) {
+        doc["type"] = "new_rfid_scanned";
+    } else {
+        doc["type"] = "rfid_error";
+        doc["error"] = error; // e.g., "duplicate"
+        if (error == "duplicate") {
+            doc["message"] = "RFID tag already exists in the database.";
+        } else {
+            doc["message"] = "An unknown error occurred while adding the RFID tag.";
+        }
+    }
+    
+    String message;
+    serializeJson(doc, message);
+    ws.textAll(message);
+    
+    Serial.println("📡 Sent RFID add status via WebSocket");
+}
+
 void WebSocketHandler::getNewWifiConfig(String &ssid, String &password) { ssid = newSSID; password = newPassword; }
 void WebSocketHandler::clearWifiConfigUpdate() { wifiConfigUpdated = false; }
 void WebSocketHandler::clearReconnectRequest() { wifiReconnectRequested = false; }
