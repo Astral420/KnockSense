@@ -288,30 +288,30 @@ class RecentKnocksScreen extends ConsumerWidget {
     return null;
   }
 
-  String _getInitials(String name) {
-    if (name.isEmpty) return '??';
+  // String _getInitials(String name) {
+  //   if (name.isEmpty) return '??';
     
-    // Remove any role indicators in parentheses
-    final cleanName = name.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
+  //   // Remove any role indicators in parentheses
+  //   final cleanName = name.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
     
-    final parts = cleanName.split(' ');
-    if (parts.length >= 2) {
-      // Take first letter of first name and last name
-      final firstName = parts.first;
-      final lastName = parts.last;
+  //   final parts = cleanName.split(' ');
+  //   if (parts.length >= 2) {
+  //     // Take first letter of first name and last name
+  //     final firstName = parts.first;
+  //     final lastName = parts.last;
       
-      if (firstName.isNotEmpty && lastName.isNotEmpty) {
-        return '${firstName[0]}${lastName[0]}'.toUpperCase();
-      }
-    }
+  //     if (firstName.isNotEmpty && lastName.isNotEmpty) {
+  //       return '${firstName[0]}${lastName[0]}'.toUpperCase();
+  //     }
+  //   }
     
-    // If only one name or parsing fails, return first two letters
-    if (cleanName.length >= 2) {
-      return cleanName.substring(0, 2).toUpperCase();
-    }
+  //   // If only one name or parsing fails, return first two letters
+  //   if (cleanName.length >= 2) {
+  //     return cleanName.substring(0, 2).toUpperCase();
+  //   }
     
-    return cleanName.isNotEmpty ? cleanName[0].toUpperCase() : '??';
-  }
+  //   return cleanName.isNotEmpty ? cleanName[0].toUpperCase() : '??';
+  // }
 
   String _getTimeAgo(DateTime dateTime) {
     final now = DateTime.now();

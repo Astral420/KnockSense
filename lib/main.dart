@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/firebase_options.dart';
-import 'package:knocksense/screens/dashboard/admin_dashboard.dart';
 import 'package:knocksense/widgets/auth/auth_wrapper.dart';
 import 'package:flutter_custom_tabs/flutter_custom_tabs.dart';
 import 'package:knocksense/widgets/navigation/admin_nav_wrapper.dart';

@@ -1,5 +1,5 @@
 import 'package:firebase_database/firebase_database.dart';
-import 'package:knocksense/models/user_models.dart';
+
 
 class TeacherService {
   final FirebaseDatabase _database;
