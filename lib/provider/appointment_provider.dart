@@ -163,6 +163,7 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
     required String studentNumber,
     required String appointmentId,
     required String teacherUid,
+    String ? reason,
   }) async {
     state = const AsyncValue.loading();
     
@@ -171,6 +172,7 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
         studentNumber: studentNumber,
         appointmentId: appointmentId,
         teacherUid: teacherUid,
+        reason: reason,
       );
       
       state = const AsyncValue.data(null);

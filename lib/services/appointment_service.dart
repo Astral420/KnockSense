@@ -421,6 +421,7 @@ class AppointmentService {
     required String studentNumber,
     required String appointmentId,
     required String teacherUid,
+    String ? reason,
   }) async {
     try {
       final updates = <String, dynamic>{};
@@ -429,6 +430,10 @@ class AppointmentService {
           AppointmentStatus.cancelled.name;
       updates['teacher_appointments/$teacherUid/$appointmentId/status'] = 
           AppointmentStatus.cancelled.name;
+
+      if (reason != null && reason.isNotEmpty) {
+      updates['appointments/$studentNumber/$appointmentId/teacherResponse'] = reason;
+    }
       
       await _database.ref().update(updates);
       

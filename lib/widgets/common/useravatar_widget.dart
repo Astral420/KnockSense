@@ -7,6 +7,7 @@ class UserAvatar extends ConsumerWidget {
   final double radius;
   final bool showBorder;
   final Color? borderColor;
+  final double borderWidth;
   final VoidCallback? onTap;
   
   // New parameters for custom usage
@@ -21,6 +22,7 @@ class UserAvatar extends ConsumerWidget {
     this.radius = 20,
     this.showBorder = true,
     this.borderColor,
+    this.borderWidth = 2,
     this.onTap,
     this.photoUrl,
     this.displayName,
@@ -37,6 +39,7 @@ class UserAvatar extends ConsumerWidget {
     this.radius = 20,
     this.showBorder = true,
     this.borderColor,
+    this.borderWidth = 2,
     this.backgroundColor,
     this.textColor,
     this.onTap,
@@ -81,7 +84,7 @@ class UserAvatar extends ConsumerWidget {
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: borderColor ?? Theme.of(context).primaryColor,
-                  width: 2,
+                  width: borderWidth,
                 ),
               )
             : null,

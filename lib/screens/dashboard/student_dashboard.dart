@@ -350,7 +350,7 @@ class StudentDashboard extends ConsumerWidget {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              _formatAppointmentStatus(appointment.status),
+                              _formatAppointmentStatus(appointment),
                               style: TextStyle(
                                 color: _getAppointmentStatusColor(appointment.status),
                                 fontWeight: FontWeight.w600,
@@ -723,12 +723,23 @@ Color _getAppointmentStatusColor(AppointmentStatus status) {
   }
 }
 
-String _formatAppointmentStatus(AppointmentStatus status) {
-  switch (status) {
+String _formatAppointmentStatus(AppointmentModel appointment) {
+  if (appointment.status == AppointmentStatus.accepted) {
+    switch (appointment.teacherAction) {
+      case TeacherAction.meetNow:
+        return 'Meet Now';
+      case TeacherAction.wait5Minutes:
+        return 'Wait 5 Min';
+      case TeacherAction.meetLater:
+        return 'Scheduled';
+      default:
+        return 'Accepted';
+    }
+  }
+
+  switch (appointment.status) {
     case AppointmentStatus.pending:
       return 'Pending';
-    case AppointmentStatus.accepted:
-      return 'Accepted';
     case AppointmentStatus.denied:
       return 'Denied';
     case AppointmentStatus.completed:
