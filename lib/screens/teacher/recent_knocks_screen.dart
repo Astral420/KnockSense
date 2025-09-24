@@ -3,15 +3,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/models/appointment_model.dart';
+import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/provider/appointment_provider.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:knocksense/widgets/common/useravatar_widget.dart';
+import 'package:knocksense/widgets/teacher_dash/reject_all_modal.dart';
 import 'package:knocksense/widgets/teacher_dash/teacher_response_widget.dart';
 
 class RecentKnocksScreen extends ConsumerWidget {
   const RecentKnocksScreen({Key? key}) : super(key: key);
+
+   void _showRejectAllModal(BuildContext context, UserModel user, List<AppointmentModel> appointments) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => RejectAllModal(
+        teacherUid: user.uid,
+        appointmentsToReject: appointments,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -27,6 +41,8 @@ class RecentKnocksScreen extends ConsumerWidget {
             if (user == null) {
               return const Center(child: Text('User not found'));
             }
+
+            
 
             return Column(
               children: [
@@ -56,14 +72,37 @@ class RecentKnocksScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      const Icon(
-                        Icons.more_horiz,
-                        size: 28,
-                        color: Color(0xFF6B4423),
+                        appointmentsAsync.when(
+                          data: (appointments) {
+                            if (appointments.isNotEmpty) {
+                              return PopupMenuButton<String>(
+                                onSelected: (value) {
+                                  if (value == 'reject_all') {
+                                    _showRejectAllModal(context, user, appointments);
+                                  }
+                                },
+                                icon: const Icon(
+                                  Icons.more_horiz,
+                                  size: 28,
+                                  color: Color(0xFF6B4423),
+                                ),
+                                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                                  const PopupMenuItem<String>(
+                                    value: 'reject_all',
+                                    child: Text('Reject All Appointments'),
+                                  ),
+                                ],
+                              );
+                            } else {
+                              return const SizedBox(width: 48);
+                            }
+                          },
+                          loading: () => const SizedBox(width: 48),
+                          error: (_, __) => const SizedBox(width: 48),
+                        ),
+                      ],
                       ),
-                    ],
-                  ),
-                ),
+                      ),
 
                 // Appointments List
                 Expanded(

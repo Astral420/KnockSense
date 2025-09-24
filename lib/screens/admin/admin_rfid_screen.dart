@@ -5,7 +5,6 @@ import 'package:knocksense/models/rfid_model.dart';
 import 'package:knocksense/provider/nfc_provider.dart';
 import 'package:knocksense/screens/admin/admin_notifications_screen.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
-import 'package:knocksense/screens/admin/admin_management_page.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AdminRfidScreen extends ConsumerWidget {
