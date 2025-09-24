@@ -493,26 +493,27 @@ class StudentDashboard extends ConsumerWidget {
                                   style: const TextStyle(fontWeight: FontWeight.w600),
                                 ),
                                 subtitle: statusWithDuration.when(
-                                    data: (statusData) {
-                                      if (statusData != null) {
-                                        // Use real-time duration calculation
-                                        final duration = TeacherService.calculateDurationRealTime(statusData.changedAt);
-                                        return Text(
-                                          '${teacher.teacherID} • $duration',
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 12,
-                                          ),
-                                        );
-                                      }
+                                  data: (statusData) {
+                                    // ✅ TASK: Only show duration if status is NOT 'online'
+                                    if (statusData != null && teacher.activeStatus.toLowerCase() != 'online') {
+                                      final duration = TeacherService.calculateDurationRealTime(statusData.changedAt);
                                       return Text(
-                                        teacher.teacherID,
+                                        '${teacher.teacherID} • $duration', // e.g., "Teacher_001 • 5 mins ago"
                                         style: TextStyle(
                                           color: Colors.grey[600],
                                           fontSize: 12,
                                         ),
                                       );
-                                    },
+                                    }
+                                    // Fallback for 'online' status or if data is null
+                                    return Text(
+                                      teacher.teacherID, // e.g., "Teacher_001"
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 12,
+                                      ),
+                                    );
+                                  },
                                     loading: () => Text(
                                       teacher.teacherID,
                                       style: TextStyle(
