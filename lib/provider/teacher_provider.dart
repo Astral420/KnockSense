@@ -1,6 +1,7 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/models/teacher_model.dart';
+import 'dart:async';
 
 // Teacher model for the dashboard
 class TeacherData {
@@ -76,6 +77,38 @@ final firebaseDatabaseProvider = Provider<FirebaseDatabase>(
   (ref) => FirebaseDatabase.instance,
 );
 
+// Search query provider
+final teacherSearchQueryProvider = StateProvider<String>((ref) => '');
+
+// Debounced search query provider
+final debouncedSearchQueryProvider = StateNotifierProvider<DebouncedSearchNotifier, String>((ref) {
+  return DebouncedSearchNotifier(ref);
+});
+
+// Debounced search notifier with 500ms delay
+class DebouncedSearchNotifier extends StateNotifier<String> {
+  final Ref _ref;
+  Timer? _debounceTimer;
+  
+  DebouncedSearchNotifier(this._ref) : super('');
+
+  void updateQuery(String query) {
+    // Cancel existing timer
+    _debounceTimer?.cancel();
+    
+    // Set new timer for debounce
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      state = query;
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+}
+
 // Stream provider for teachers data WITH photoUrl
 final teachersStreamProvider = StreamProvider<List<TeacherModel>>((ref) {
   final database = ref.watch(firebaseDatabaseProvider);
@@ -117,6 +150,52 @@ final teachersStreamProvider = StreamProvider<List<TeacherModel>>((ref) {
     return teachers;
   });
 });
+
+// Filtered teachers provider based on search query
+final filteredTeachersProvider = Provider<AsyncValue<List<TeacherModel>>>((ref) {
+  final teachersAsync = ref.watch(teachersStreamProvider);
+  final searchQuery = ref.watch(debouncedSearchQueryProvider);
+  
+  return teachersAsync.when(
+    data: (teachers) {
+      if (searchQuery.isEmpty) {
+        return AsyncValue.data(teachers);
+      }
+      
+      final filteredTeachers = teachers.where((teacher) {
+        final query = searchQuery.toLowerCase();
+        final displayName = _cleanTeacherName(teacher.displayName).toLowerCase();
+        final teacherID = teacher.teacherID.toLowerCase();
+        final email = teacher.email.toLowerCase();
+        
+        return displayName.contains(query) ||
+               teacherID.contains(query) ||
+               email.contains(query);
+      }).toList();
+      
+      return AsyncValue.data(filteredTeachers);
+    },
+    loading: () => const AsyncValue.loading(),
+    error: (error, stack) => AsyncValue.error(error, stack),
+  );
+});
+
+// Helper function to clean teacher names
+String _cleanTeacherName(String fullName) {
+  // Remove "(Faculty)" or any parenthetical content
+  String cleanedName = fullName.replaceAll(RegExp(r'\s*\(.*?\)\s*'), '').trim();
+  
+  // Handle "LastName, FirstName" format
+  if (cleanedName.contains(',')) {
+    final parts = cleanedName.split(',').map((part) => part.trim()).toList();
+    if (parts.length == 2) {
+      // Swap to "FirstName LastName" format
+      return '${parts[1]} ${parts[0]}';
+    }
+  }
+  
+  return cleanedName;
+}
 
 // Provider for a specific teacher by UID with photo URL
 final teacherByUidProvider = StreamProvider.family<TeacherModel?, String>((ref, uid) {

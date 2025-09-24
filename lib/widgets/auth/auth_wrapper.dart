@@ -3,18 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/screens/auth/login_screen.dart';
-import 'package:knocksense/screens/dashbaord/admin_dashboard.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:knocksense/widgets/navigation/student_nav_wrapper.dart';
 import 'package:knocksense/widgets/navigation/teacher_navigation_wrapper.dart';
+import 'package:knocksense/widgets/navigation/admin_nav_wrapper.dart';
 
 class AuthWrapper extends ConsumerWidget {
   const AuthWrapper({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-   
-   
     final authState = ref.watch(authStateProvider);
 
     return authState.when(
@@ -38,9 +36,8 @@ class AuthWrapper extends ConsumerWidget {
             // Once we have the data, navigate to the correct dashboard
             switch (userModel.role) {
               case UserRole.admin:
-                return const AdminDashboard();
+                return const AdminNavWrapper(); // Updated to use AdminNavWrapper
               case UserRole.teacher:
-                // Use the MainNavigationTeacher wrapper here too
                 return const MainNavigationTeacher();
               case UserRole.student:
                 return const MainNavigationStudent();

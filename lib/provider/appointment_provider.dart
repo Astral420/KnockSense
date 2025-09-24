@@ -163,6 +163,7 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
     required String studentNumber,
     required String appointmentId,
     required String teacherUid,
+    String ? reason,
   }) async {
     state = const AsyncValue.loading();
     
@@ -171,6 +172,7 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
         studentNumber: studentNumber,
         appointmentId: appointmentId,
         teacherUid: teacherUid,
+        reason: reason,
       );
       
       state = const AsyncValue.data(null);
@@ -208,4 +210,44 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
 final appointmentNotifierProvider = StateNotifierProvider<AppointmentNotifier, AsyncValue<void>>((ref) {
   final service = ref.watch(appointmentServiceProvider);
   return AppointmentNotifier(service);
+});
+
+
+// ======== NEWLY ADDED PROVIDER ========
+// Filtered appointment history for teachers, mirroring the student's logic.
+final filteredTeacherHistoryProvider = Provider<List<AppointmentModel>>((ref) {
+  final appointments = ref.watch(teacherAllAppointmentsProvider);
+  final dateRange = ref.watch(dateRangeProvider);
+
+  return appointments.when(
+    data: (appointmentList) {
+      if (dateRange == null) return appointmentList;
+
+      final startOfDay = DateTime(
+        dateRange.start.year,
+        dateRange.start.month,
+        dateRange.start.day,
+        0, 0, 0, 0, 0
+      );
+
+      final endOfDay = DateTime(
+        dateRange.end.year,
+        dateRange.end.month,
+        dateRange.end.day,
+        23, 59, 59, 999, 999
+      );
+
+      final filtered = appointmentList.where((appointment) {
+        final appointmentDate = appointment.createdAt;
+        final isInRange = appointmentDate.isAtSameMomentAs(startOfDay) ||
+                         appointmentDate.isAtSameMomentAs(endOfDay) ||
+                         (appointmentDate.isAfter(startOfDay) && appointmentDate.isBefore(endOfDay));
+        return isInRange;
+      }).toList();
+
+      return filtered;
+    },
+    loading: () => [],
+    error: (_, __) => [],
+  );
 });

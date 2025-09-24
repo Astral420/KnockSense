@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:knocksense/screens/dashbaord/student_dashboard.dart';
+import 'package:knocksense/screens/dashboard/student_dashboard.dart';
 import 'package:knocksense/screens/student/student_more_screen.dart';
 import 'package:knocksense/screens/student/knocked_history_screen.dart';
 

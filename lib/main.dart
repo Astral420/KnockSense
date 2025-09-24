@@ -6,14 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/firebase_options.dart';
-import 'package:knocksense/screens/dashbaord/admin_dashboard.dart';
+import 'package:knocksense/screens/dashboard/admin_dashboard.dart';
 import 'package:knocksense/widgets/auth/auth_wrapper.dart';
 import 'package:flutter_custom_tabs/flutter_custom_tabs.dart';
+import 'package:knocksense/widgets/navigation/admin_nav_wrapper.dart';
 import 'package:knocksense/widgets/navigation/student_nav_wrapper.dart';
 import 'package:knocksense/widgets/navigation/teacher_navigation_wrapper.dart';
-
-
-
 
 
 
@@ -69,7 +67,7 @@ class MyApp extends StatelessWidget {
       home: const AuthWrapper(),
       // Define the named routes used for navigation after login
       routes: {
-        '/admin-dashboard': (context) => const AdminDashboard(),
+        '/admin-dashboard': (context) => const AdminNavWrapper(),
         '/teacher-dashboard': (context) => const MainNavigationTeacher(),
         '/student-dashboard': (context) => const MainNavigationStudent(),
       },

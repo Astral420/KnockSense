@@ -252,7 +252,7 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
           onChanged: (_) => _clearNoteError(),
           maxLines: 3,
           decoration: InputDecoration(
-            hintText: 'Add reason for cancellation (if cancelling)...',
+            hintText: 'Add an optional note...',
             hintStyle: TextStyle(
               color: Colors.grey[400],
               fontSize: 14,
@@ -946,13 +946,14 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
 
     try {
       final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
+      final note = _noteController.text.trim(); 
       
       final success = await appointmentNotifier.respondToAppointment(
         studentNumber: widget.appointment.studentNumber,
         appointmentId: widget.appointment.appointmentId,
         teacherUid: widget.currentUser.uid,
         action: TeacherAction.meetNow,
-        teacherResponse: 'Student is now meeting with teacher',
+        teacherResponse: note.isNotEmpty ? note : null,
         scheduledTime: null,
       );
       
@@ -1034,6 +1035,7 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
         studentNumber: widget.appointment.studentNumber,
         appointmentId: widget.appointment.appointmentId,
         teacherUid: widget.currentUser.uid,
+        reason: reason,
       );
       
       if (success && mounted) {
@@ -1075,6 +1077,7 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
         studentNumber: widget.appointment.studentNumber,
         appointmentId: widget.appointment.appointmentId,
         teacherUid: widget.currentUser.uid,
+        reason: reason,
       );
       
       if (success && mounted) {

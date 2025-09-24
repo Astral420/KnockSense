@@ -8,20 +8,15 @@ import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:knocksense/widgets/common/useravatar_widget.dart';
 
-class TeacherAppointmentHistory extends ConsumerStatefulWidget {
+// ======== REFACTORED WIDGET ========
+class TeacherAppointmentHistory extends ConsumerWidget {
   const TeacherAppointmentHistory({Key? key}) : super(key: key);
 
   @override
-  ConsumerState<TeacherAppointmentHistory> createState() => _TeacherAppointmentHistoryState();
-}
-
-class _TeacherAppointmentHistoryState extends ConsumerState<TeacherAppointmentHistory> {
-  DateTime? startDate;
-  DateTime? endDate;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final appointmentsAsync = ref.watch(teacherAllAppointmentsProvider);
+    final filteredAppointments = ref.watch(filteredTeacherHistoryProvider);
+    final dateRange = ref.watch(dateRangeProvider);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -91,37 +86,60 @@ class _TeacherAppointmentHistoryState extends ConsumerState<TeacherAppointmentHi
                     ],
                   ),
                   const SizedBox(height: 20),
-                  // Date Range Filter
+                  // ======== REPLACED DATE RANGE FILTER UI ========
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
                         'Filter by Date Range:',
                         style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           Expanded(
-                            child: _buildDateField(
+                            child: _DatePickerField(
                               label: 'Start Date',
-                              date: startDate,
-                              onTap: () => _selectStartDate(context),
+                              date: dateRange?.start,
+                              onTap: () => _selectDateRange(context, ref),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: _buildDateField(
+                            child: _DatePickerField(
                               label: 'End Date',
-                              date: endDate,
-                              onTap: () => _selectEndDate(context),
+                              date: dateRange?.end,
+                              onTap: () => _selectDateRange(context, ref),
                             ),
                           ),
                         ],
                       ),
+                      if (dateRange != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Row(
+                            children: [
+                              TextButton(
+                                onPressed: () => _clearFilter(ref),
+                                child: const Text(
+                                  'Clear Filter',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${filteredAppointments.length} appointments found',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ],
@@ -132,17 +150,17 @@ class _TeacherAppointmentHistoryState extends ConsumerState<TeacherAppointmentHi
             Expanded(
               child: appointmentsAsync.when(
                 data: (appointments) {
-                  // Filter appointments by date range if selected
-                  final filteredAppointments = _filterAppointmentsByDate(appointments);
-                  
                   if (filteredAppointments.isEmpty) {
-                    return const Center(
+                    return Center(
                       child: Text(
-                        'No appointments found',
-                        style: TextStyle(
+                        dateRange != null
+                            ? 'No appointments found in selected date range'
+                            : 'No appointment history found',
+                        style: const TextStyle(
                           fontSize: 16,
                           color: Colors.grey,
                         ),
+                        textAlign: TextAlign.center,
                       ),
                     );
                   }
@@ -168,35 +186,111 @@ class _TeacherAppointmentHistoryState extends ConsumerState<TeacherAppointmentHi
     );
   }
 
-  Widget _buildDateField({
-    required String label,
-    required DateTime? date,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE8E8ED),
-          borderRadius: BorderRadius.circular(8),
+  void _clearFilter(WidgetRef ref) {
+    ref.read(dateRangeProvider.notifier).state = null;
+  }
+
+  Future<void> _selectDateRange(BuildContext context, WidgetRef ref) async {
+    final currentDateRange = ref.read(dateRangeProvider);
+    
+    final initialDateRange = currentDateRange ?? DateTimeRange(
+      start: DateTime.now().subtract(const Duration(days: 30)),
+      end: DateTime.now(),
+    );
+
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2024),
+      lastDate: DateTime.now(),
+      initialDateRange: initialDateRange,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Colors.black,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      ref.read(dateRangeProvider.notifier).state = picked;
+    }
+  }
+
+  Widget _buildAppointmentCard(AppointmentModel appointment) {
+    final isWaiting = appointment.status == AppointmentStatus.accepted && 
+                      appointment.teacherAction == TeacherAction.wait5Minutes;
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF3B82F6),
+          width: 2,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            const Icon(
-              Icons.calendar_today,
-              size: 18,
-              color: Color(0xFF9E9E9E),
+            UserAvatar.custom(
+              photoUrl: appointment.studentPhotoUrl,
+              displayName: appointment.cleanedStudentName,
+              radius: 24,
+              showBorder: false,
+              backgroundColor: const Color(0xFFFFD700),
+              textColor: Colors.black,
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 12),
+            
             Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    appointment.studentName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    DateFormat('M/d/yyyy, h:mm a').format(appointment.createdAt),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _getStatusColor(appointment.status, isWaiting),
+                borderRadius: BorderRadius.circular(6),
+              ),
               child: Text(
-                date != null 
-                    ? DateFormat('MM/dd/yyyy').format(date)
-                    : label,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: date != null ? Colors.black87 : Colors.grey[600],
+                _getStatusText(appointment.status, isWaiting),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
@@ -205,87 +299,6 @@ class _TeacherAppointmentHistoryState extends ConsumerState<TeacherAppointmentHi
       ),
     );
   }
-
-  Widget _buildAppointmentCard(AppointmentModel appointment) {
-  final isWaiting = appointment.status == AppointmentStatus.accepted && 
-                    appointment.teacherAction == TeacherAction.wait5Minutes;
-  
-  return Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(
-        color: const Color(0xFF3B82F6),
-        width: 2,
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.05),
-          blurRadius: 4,
-          offset: const Offset(0, 2),
-        ),
-      ],
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          // Student Avatar with photo support
-          UserAvatar.custom(
-            photoUrl: appointment.studentPhotoUrl,
-            displayName: appointment.studentName,
-            radius: 24,
-            showBorder: false,
-            backgroundColor: const Color(0xFFFFD700),
-            textColor: Colors.black,
-          ),
-          const SizedBox(width: 12),
-          
-          // Student Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  appointment.studentName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  DateFormat('M/d/yyyy, h:mm a').format(appointment.createdAt),
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // Status Badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: _getStatusColor(appointment.status, isWaiting),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              _getStatusText(appointment.status, isWaiting),
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
 
   Color _getStatusColor(AppointmentStatus status, bool isWaiting) {
     if (isWaiting) {
@@ -327,58 +340,49 @@ class _TeacherAppointmentHistoryState extends ConsumerState<TeacherAppointmentHi
         return 'Unknown';
     }
   }
+}
 
-  List<AppointmentModel> _filterAppointmentsByDate(List<AppointmentModel> appointments) {
-    if (startDate == null && endDate == null) {
-      return appointments;
-    }
-    
-    return appointments.where((appointment) {
-      if (startDate != null && appointment.createdAt.isBefore(startDate!)) {
-        return false;
-      }
-      if (endDate != null) {
-        // Include the entire end date by comparing to the end of that day
-        final endOfDay = DateTime(endDate!.year, endDate!.month, endDate!.day, 23, 59, 59);
-        if (appointment.createdAt.isAfter(endOfDay)) {
-          return false;
-        }
-      }
-      return true;
-    }).toList();
-  }
+// ======== COPIED WIDGET FOR CONSISTENT UI ========
+class _DatePickerField extends StatelessWidget {
+  final String label;
+  final DateTime? date;
+  final VoidCallback onTap;
 
-  Future<void> _selectStartDate(BuildContext context) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: startDate ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
+  const _DatePickerField({
+    required this.label,
+    required this.date,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.grey[200],
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                date != null
+                    ? DateFormat('MMM dd, yyyy').format(date!)
+                    : label,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: date != null ? Colors.black : Colors.grey[600],
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
-    
-    if (picked != null) {
-      setState(() {
-        startDate = picked;
-        // Ensure end date is not before start date
-        if (endDate != null && endDate!.isBefore(startDate!)) {
-          endDate = null;
-        }
-      });
-    }
-  }
-
-  Future<void> _selectEndDate(BuildContext context) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: endDate ?? DateTime.now(),
-      firstDate: startDate ?? DateTime(2020),
-      lastDate: DateTime.now(),
-    );
-    
-    if (picked != null) {
-      setState(() {
-        endDate = picked;
-      });
-    }
   }
 }

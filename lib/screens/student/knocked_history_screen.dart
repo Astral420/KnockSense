@@ -373,7 +373,7 @@ class _AppointmentHistoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Generate initials from teacher name
-    final teacherInitials = _getInitials(appointment.teacherName);
+    final teacherInitials = _getInitials(appointment.cleanedTeacherName);
 
     return Card(
       elevation: 0,
@@ -435,7 +435,7 @@ class _AppointmentHistoryCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    appointment.teacherName,
+                    appointment.cleanedTeacherName,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

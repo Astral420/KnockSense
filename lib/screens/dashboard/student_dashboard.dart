@@ -5,6 +5,8 @@ import 'package:knocksense/models/appointment_model.dart';
 import 'package:knocksense/provider/appointment_provider.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/provider/teacher_provider.dart';
+import 'package:knocksense/provider/teacher_service_provider.dart';
+import 'package:knocksense/services/teacher_service.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:knocksense/widgets/student_dash/teacher_detail_modal.dart';
 
@@ -14,8 +16,8 @@ class StudentDashboard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    //final authService = ref.read(authServiceProvider);
-    final teachers = ref.watch(teachersStreamProvider);
+    // Watch the filtered provider instead of the raw stream provider
+    final teachers = ref.watch(filteredTeachersProvider);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -79,6 +81,10 @@ class StudentDashboard extends ConsumerWidget {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: TextField(
+                      // Update the debounced provider on change
+                      onChanged: (query) => ref
+                          .read(debouncedSearchQueryProvider.notifier)
+                          .updateQuery(query),
                       decoration: InputDecoration(
                         hintText: 'Search Faculty Members',
                         prefixIcon: const Icon(Icons.search),
@@ -106,7 +112,7 @@ class StudentDashboard extends ConsumerWidget {
                   ),
                 ),
 
-                // Teachers Grid (Horizontal)
+                // Teachers Grid (Horizontal) - now automatically filtered
                 teachers.when(
                   data: (teachersList) {
                     if (teachersList.isEmpty) {
@@ -298,7 +304,7 @@ class StudentDashboard extends ConsumerWidget {
                                     radius: 20,
                                     backgroundColor: Colors.amber,
                                     child: Text(
-                                      _getTeacherInitials(appointment.teacherName),
+                                      _getTeacherInitials(appointment.cleanedTeacherName),
                                       style: const TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,
@@ -311,7 +317,7 @@ class StudentDashboard extends ConsumerWidget {
                                   radius: 20,
                                   backgroundColor: Colors.amber,
                                   child: Text(
-                                    _getTeacherInitials(appointment.teacherName),
+                                    _getTeacherInitials(appointment.cleanedTeacherName),
                                     style: const TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
@@ -320,7 +326,7 @@ class StudentDashboard extends ConsumerWidget {
                                   ),
                                 ),
                           title: Text(
-                            appointment.teacherName,
+                            appointment.cleanedTeacherName,
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -344,7 +350,7 @@ class StudentDashboard extends ConsumerWidget {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              _formatAppointmentStatus(appointment.status),
+                              _formatAppointmentStatus(appointment),
                               style: TextStyle(
                                 color: _getAppointmentStatusColor(appointment.status),
                                 fontWeight: FontWeight.w600,
@@ -387,7 +393,7 @@ class StudentDashboard extends ConsumerWidget {
   ),
 ),
 
-                // Teachers List with Status (Vertical)
+                // Teachers List with Status (Vertical) - now automatically filtered
                 teachers.when(
                   data: (teachersList) {
                     if (teachersList.isEmpty) {
@@ -426,6 +432,12 @@ class StudentDashboard extends ConsumerWidget {
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
                           final teacher = teachersList[index];
+                          
+                          // Watch the teacher's status with duration
+                          final statusWithDuration = ref.watch(
+                            teacherStatusWithDurationProvider(teacher.uid)
+                          );
+                          
                           return Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -480,32 +492,85 @@ class StudentDashboard extends ConsumerWidget {
                                   _cleanTeacherName(teacher.displayName),
                                   style: const TextStyle(fontWeight: FontWeight.w600),
                                 ),
-                                subtitle: Text(
-                                  teacher.teacherID,
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                trailing: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _getStatusColor(teacher.activeStatus)
-                                        .withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    _formatStatus(teacher.activeStatus),
-                                    style: TextStyle(
-                                      color: _getStatusColor(teacher.activeStatus),
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
+                                subtitle: statusWithDuration.when(
+                                    data: (statusData) {
+                                      if (statusData != null) {
+                                        // Use real-time duration calculation
+                                        final duration = TeacherService.calculateDurationRealTime(statusData.changedAt);
+                                        return Text(
+                                          '${teacher.teacherID} • $duration',
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 12,
+                                          ),
+                                        );
+                                      }
+                                      return Text(
+                                        teacher.teacherID,
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 12,
+                                        ),
+                                      );
+                                    },
+                                    loading: () => Text(
+                                      teacher.teacherID,
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    error: (_, __) => Text(
+                                      teacher.teacherID,
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 12,
+                                      ),
                                     ),
                                   ),
-                                ),
+                                  trailing: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _getStatusColor(teacher.activeStatus)
+                                          .withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          _formatStatus(teacher.activeStatus),
+                                          style: TextStyle(
+                                            color: _getStatusColor(teacher.activeStatus),
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        statusWithDuration.when(
+                                          data: (statusData) {
+                                            if (statusData != null && statusData.changedAt != null) {
+                                              // Use real-time duration
+                                              final duration = TeacherService.calculateDurationRealTime(statusData.changedAt);
+                                              return Text(
+                                                duration,
+                                                style: TextStyle(
+                                                  color: _getStatusColor(teacher.activeStatus)
+                                                      .withOpacity(0.7),
+                                                  fontSize: 9,
+                                                ),
+                                              );
+                                            }
+                                            return const SizedBox.shrink();
+                                          },
+                                          loading: () => const SizedBox.shrink(),
+                                          error: (_, __) => const SizedBox.shrink(),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 onTap: () => context.showTeacherDetail(teacher),
                               ),
                             ),
@@ -658,12 +723,23 @@ Color _getAppointmentStatusColor(AppointmentStatus status) {
   }
 }
 
-String _formatAppointmentStatus(AppointmentStatus status) {
-  switch (status) {
+String _formatAppointmentStatus(AppointmentModel appointment) {
+  if (appointment.status == AppointmentStatus.accepted) {
+    switch (appointment.teacherAction) {
+      case TeacherAction.meetNow:
+        return 'Meet Now';
+      case TeacherAction.wait5Minutes:
+        return 'Wait 5 Min';
+      case TeacherAction.meetLater:
+        return 'Scheduled';
+      default:
+        return 'Accepted';
+    }
+  }
+
+  switch (appointment.status) {
     case AppointmentStatus.pending:
       return 'Pending';
-    case AppointmentStatus.accepted:
-      return 'Accepted';
     case AppointmentStatus.denied:
       return 'Denied';
     case AppointmentStatus.completed:

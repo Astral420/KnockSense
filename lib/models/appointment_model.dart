@@ -15,6 +15,14 @@ class AppointmentModel {
   final TeacherAction? teacherAction;
   final DateTime? scheduledTime;
 
+  String get cleanedStudentName {
+    return studentName.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
+  }
+
+  String get cleanedTeacherName {
+    return teacherName.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
+  }
+
   AppointmentModel({
     required this.appointmentId,
     required this.studentUid,
