@@ -23,15 +23,56 @@ final teacherNoteProvider = StreamProvider.family<String?, String>((ref, teacher
   return teacherService.getTeacherNote(teacherUid);
 });
 
+// NEW: Stream provider for manual unlock status
+final manualUnlockStatusProvider = StreamProvider.family<String?, String>((ref, teacherUid) {
+  final teacherService = ref.watch(teacherServiceProvider);
+  return teacherService.getManualUnlockStatus(teacherUid);
+});
+
+// NEW: Provider for handling manual door unlock
+final manualDoorUnlockProvider = StateNotifierProvider<ManualUnlockNotifier, AsyncValue<bool>>((ref) {
+  final teacherService = ref.watch(teacherServiceProvider);
+  return ManualUnlockNotifier(teacherService);
+});
+
+// NEW: State notifier for manual door unlock operations
+class ManualUnlockNotifier extends StateNotifier<AsyncValue<bool>> {
+  final TeacherService _teacherService;
+
+  ManualUnlockNotifier(this._teacherService) : super(const AsyncValue.data(false));
+
+  Future<void> requestUnlock(String teacherUid, String teacherName, String teacherID) async {
+    state = const AsyncValue.loading();
+    
+    try {
+      final success = await _teacherService.requestManualDoorUnlock(teacherUid, teacherName, teacherID);
+      state = AsyncValue.data(success);
+      
+      // Reset state after 5 seconds
+      Timer(const Duration(seconds: 5), () {
+        if (mounted) {
+          state = const AsyncValue.data(false);
+        }
+      });
+    } catch (error, stackTrace) {
+      state = AsyncValue.error(error, stackTrace);
+      
+      // Reset state after error
+      Timer(const Duration(seconds: 3), () {
+        if (mounted) {
+          state = const AsyncValue.data(false);
+        }
+      });
+    }
+  }
+}
+
 final teacherStatusWithDurationProvider = StateNotifierProvider.family
     .autoDispose<TeacherStatusNotifier, AsyncValue<TeacherStatusData?>, String>(
         (ref, teacherUid) {
   final teacherService = ref.watch(teacherServiceProvider);
   return TeacherStatusNotifier(teacherService, teacherUid);
 });
-
-
-
 
 class RealTimeTeacherStatusData extends TeacherStatusData {
   RealTimeTeacherStatusData({

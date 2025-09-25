@@ -189,6 +189,9 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
                         loading: () => _buildAddNotesCard(null, userData.uid),
                         error: (_, __) => _buildAddNotesCard(null, userData.uid),
                       ),
+
+                      // NEW: Manual Door Unlock Card
+                      _buildManualDoorUnlockCard(userData),
                     ]),
                   ),
                 ),
@@ -564,48 +567,233 @@ Widget _buildDefaultAvatar(bool isBusy, bool isOffline) {
     );
   }
 
-  // String _getInitials(String name) {
-  //   if (name.isEmpty) return '??';
-    
-  //   // Remove any role indicators in parentheses
-  //   final cleanName = name.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
-    
-  //   final parts = cleanName.split(' ');
-  //   if (parts.length >= 2) {
-  //     // Take first letter of first name and last name
-  //     final firstName = parts.first;
-  //     final lastName = parts.last;
-      
-  //     if (firstName.isNotEmpty && lastName.isNotEmpty) {
-  //       return '${firstName[0]}${lastName[0]}'.toUpperCase();
-  //     }
-  //   }
-    
-  //   // If only one name or parsing fails, return first two letters
-  //   if (cleanName.length >= 2) {
-  //     return cleanName.substring(0, 2).toUpperCase();
-  //   }
-    
-  //   return cleanName.isNotEmpty ? cleanName[0].toUpperCase() : '??';
-  // }
+  // NEW: Manual Door Unlock Card
+  Widget _buildManualDoorUnlockCard(dynamic userData) {
+    final manualUnlockState = ref.watch(manualDoorUnlockProvider);
+    final manualUnlockStatus = ref.watch(manualUnlockStatusProvider(userData.uid));
 
-  // String _getTimeAgo(DateTime dateTime) {
-  //   final now = DateTime.now();
-  //   final difference = now.difference(dateTime);
-
-  //   if (difference.inSeconds < 60) {
-  //     return 'Just now';
-  //   } else if (difference.inMinutes < 60) {
-  //     final minutes = difference.inMinutes;
-  //     return '$minutes ${minutes == 1 ? 'minute' : 'minutes'} ago';
-  //   } else if (difference.inHours < 24) {
-  //     final hours = difference.inHours;
-  //     return '$hours ${hours == 1 ? 'hour' : 'hours'} ago';
-  //   } else {
-  //     final days = difference.inDays;
-  //     return '$days ${days == 1 ? 'day' : 'days'} ago';
-  //   }
-  // }
+    return GestureDetector(
+      onTap: () => _requestManualUnlock(userData),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8F5E8), // Light green
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Door Unlock',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2E7D32), // Dark green
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Open door for 4 seconds\nwithout RFID scan.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF388E3C), // Medium green
+                  height: 1.2,
+                ),
+              ),
+              const Spacer(),
+              
+              // Inner container with unlock button
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4CAF50), // Green
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Column(
+                  children: [
+                    // Show different states based on unlock status
+                    manualUnlockState.when(
+                      data: (success) {
+                        if (success) {
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                              ),
+                            ],
+                          );
+                        } else {
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.lock_open,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+                      },
+                      loading: () => Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      error: (_, __) => Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.error,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 8),
+                    
+                    // Status text
+                    manualUnlockState.when(
+                      data: (success) {
+                        if (success) {
+                          return manualUnlockStatus.when(
+                            data: (status) {
+                              switch (status) {
+                                case 'pending':
+                                  return const Text(
+                                    'Requested...',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  );
+                                case 'unlocked':
+                                  return const Text(
+                                    'Door Unlocked!',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  );
+                                case 'completed':
+                                  return const Text(
+                                    'Completed',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  );
+                                default:
+                                  return const Text(
+                                    'Tap to unlock',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  );
+                              }
+                            },
+                            loading: () => const Text(
+                              'Checking...',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white,
+                              ),
+                            ),
+                            error: (_, __) => const Text(
+                              'Tap to unlock',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          );
+                        } else {
+                          return const Text(
+                            'Tap to unlock',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          );
+                        }
+                      },
+                      loading: () => const Text(
+                        'Processing...',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                        ),
+                      ),
+                      error: (_, __) => const Text(
+                        'Error - Try again',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _toggleStatus(String teacherUid, String currentStatus) async {
   final teacherService = ref.read(teacherServiceProvider);
@@ -616,10 +804,54 @@ Widget _buildDefaultAvatar(bool isBusy, bool isOffline) {
   print('🔄 Toggling status from $currentStatus to $newStatus for teacher $teacherUid');
 
   await teacherService.updateTeacherStatus(teacherUid, newStatus);
-  
-
-  
 }
+
+  // NEW: Request manual door unlock
+  Future<void> _requestManualUnlock(dynamic userData) async {
+    final manualUnlockNotifier = ref.read(manualDoorUnlockProvider.notifier);
+    
+    // Show confirmation dialog
+    final shouldProceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Manual Door Unlock'),
+        content: const Text('This will unlock the door for 4 seconds. Continue?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4CAF50),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Unlock Door'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldProceed == true) {
+      await manualUnlockNotifier.requestUnlock(
+        userData.uid,
+        userData.displayName,
+        userData.teacherID ?? '',
+      );
+      
+      // Show success message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Door unlock requested successfully'),
+            backgroundColor: Color(0xFF4CAF50),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
 
   void _showAddNoteModal(BuildContext context, String teacherUid, String? currentNote) {
     showModalBottomSheet(
