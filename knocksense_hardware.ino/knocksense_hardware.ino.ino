@@ -38,9 +38,12 @@ FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig firebaseConfig;
 
-String currentManualUnlockTeacher = "";
-unsigned long manualUnlockStartTime = 0;
+unsigned long lastManualUnlockCheck = 0;
+const unsigned long MANUAL_UNLOCK_CHECK_INTERVAL = 1000; // Check every second
 bool isManualUnlock = false;
+String currentManualUnlockTeacherID = "";
+
+
 
 // System components
 AsyncWebServer server(81);
@@ -74,13 +77,10 @@ void updateTeacherStatus(String teacherID, uint8_t reader);
 void logAttendance(String teacherID, uint8_t reader);
 void doorLogic(String uid, uint8_t reader);
 void initReader();
+void checkManualDoorUnlock();
+void executeManualUnlock(String teacherID, String teacherName, String teacherUid, int duration);
+void logManualUnlockEvent(String teacherID, String teacherName, String teacherUid, int duration);
 
-void checkManualUnlockRequests();
-void processManualUnlock(String teacherUid, String teacherName, String teacherID);
-void manageManualUnlock();
-void logManualUnlock(String teacherUid, String teacherName, String teacherID, String action);
-void scheduleCleanupManualUnlock(String teacherUid);
-void cleanupOldManualUnlocks();
 
 
 // ---------- Setup Function ----------
@@ -154,10 +154,10 @@ void loop() {
   // Core system functions
   checkRFID();
   manageDoorLock();
+  checkManualDoorUnlock(); 
+  manageDoorLock();
+  
 
-  checkManualUnlockRequests();    // Check for manual unlock requests
-  manageManualUnlock();           // Handle manual unlock timing  
-  cleanupOldManualUnlocks(); 
   
   // Network and web service management
   networkMgr.loop();
@@ -419,194 +419,126 @@ void logAccessAttempt(String uid, String result, uint8_t reader) {
 
 // ---------- Door Control ----------
 
-void checkManualUnlockRequests() {
-  if (!firebaseConnected) {
+void checkManualDoorUnlock() {
+  // Only check if Firebase is connected and enough time has passed
+  if (!firebaseConnected || (millis() - lastManualUnlockCheck < MANUAL_UNLOCK_CHECK_INTERVAL)) {
     return;
   }
-
-  // Check if there are any manual unlock requests
-  if (Firebase.RTDB.get(&fbdo, "/manual_door_unlock")) {
+  
+  lastManualUnlockCheck = millis();
+  
+  String path = "/door_unlock";
+  
+  // Get all door unlock requests
+  if (Firebase.RTDB.get(&fbdo, path)) {
     if (fbdo.dataType() == "json") {
       FirebaseJson &json = fbdo.jsonObject();
       size_t len = json.iteratorBegin();
       String key, value;
       int type = 0;
       
+      // Iterate through all teacher unlock requests
       for (size_t i = 0; i < len; i++) {
         json.iteratorGet(i, type, key, value);
         
-        // Check each teacher's unlock request
-        String requestPath = "/manual_door_unlock/" + key;
+        // Check if this request has pending status
         FirebaseJsonData statusData;
-        
-        if (Firebase.RTDB.get(&fbdo, requestPath + "/status")) {
-          String status = fbdo.stringData();
+        if (json.get(statusData, key + "/status") && statusData.stringValue == "pending") {
           
-          if (status == "pending") {
-            // Get teacher information
-            String teacherName = "";
-            String teacherID = "";
-            
-            if (Firebase.RTDB.getString(&fbdo, requestPath + "/teacherName")) {
-              teacherName = fbdo.stringData();
-            }
-            if (Firebase.RTDB.getString(&fbdo, requestPath + "/teacherID")) {
-              teacherID = fbdo.stringData();
-            }
-            
-            Serial.println("🚪 Manual unlock request received:");
-            Serial.println("   Teacher: " + teacherName + " (" + teacherID + ")");
-            Serial.println("   Teacher UID: " + key);
-            
-            // Process the manual unlock
-            processManualUnlock(key, teacherName, teacherID);
-            break; // Process one request at a time
+          // Get teacher details
+          FirebaseJsonData teacherNameData, teacherUidData, durationData;
+          String teacherName = "";
+          String teacherUid = "";
+          int unlockDuration = 4000; // Default 4 seconds
+          
+          if (json.get(teacherNameData, key + "/teacherName")) {
+            teacherName = teacherNameData.stringValue;
           }
+          if (json.get(teacherUidData, key + "/teacherUid")) {
+            teacherUid = teacherUidData.stringValue;
+          }
+          if (json.get(durationData, key + "/unlockDuration")) {
+            unlockDuration = durationData.intValue;
+          }
+          
+          Serial.println("\n🚪 MANUAL UNLOCK REQUEST DETECTED");
+          Serial.println("   Teacher ID: " + key);
+          Serial.println("   Teacher Name: " + teacherName);
+          Serial.println("   Duration: " + String(unlockDuration) + "ms");
+          
+          // Execute manual unlock
+          executeManualUnlock(key, teacherName, teacherUid, unlockDuration);
+          break; // Process one request at a time
         }
       }
       json.iteratorEnd();
     }
-  }
-}
-
-// Function to process manual unlock request
-void processManualUnlock(String teacherUid, String teacherName, String teacherID) {
-  Serial.println("🔓 Processing manual door unlock...");
-  
-  // Update status to 'unlocked' in Firebase
-  String requestPath = "/manual_door_unlock/" + teacherUid;
-  Firebase.RTDB.setString(&fbdo, requestPath + "/status", "unlocked");
-  Firebase.RTDB.setTimestamp(&fbdo, requestPath + "/unlockedAt");
-  
-  // Unlock the door
-  digitalWrite(RELAY_PIN, HIGH);
-  isDoorUnlocked = true;
-  isManualUnlock = true;
-  doorUnlockTime = millis();
-  manualUnlockStartTime = millis();
-  currentManualUnlockTeacher = teacherUid;
-  
-  // Log the manual unlock
-  logManualUnlock(teacherUid, teacherName, teacherID, "unlocked");
-  
-  Serial.println("✅ Door manually unlocked for 4 seconds");
-}
-
-// Function to manage manual unlock completion
-void manageManualUnlock() {
-  if (isManualUnlock && isDoorUnlocked) {
-    // Check if manual unlock duration is complete
-    if (millis() - manualUnlockStartTime >= DOOR_OPEN_DURATION) {
-      Serial.println("🔒 Manual unlock completed - locking door");
-      
-      // Lock the door
-      digitalWrite(RELAY_PIN, LOW);
-      isDoorUnlocked = false;
-      isManualUnlock = false;
-      
-      // Update Firebase status to 'completed'
-      String requestPath = "/manual_door_unlock/" + currentManualUnlockTeacher;
-      Firebase.RTDB.setString(&fbdo, requestPath + "/status", "completed");
-      Firebase.RTDB.setTimestamp(&fbdo, requestPath + "/completedAt");
-      
-      // Log completion
-      if (Firebase.RTDB.getString(&fbdo, requestPath + "/teacherName")) {
-        String teacherName = fbdo.stringData();
-        logManualUnlock(currentManualUnlockTeacher, teacherName, "", "completed");
-      }
-      // Clean up after 30 seconds to prevent database bloat
-      scheduleCleanupManualUnlock(currentManualUnlockTeacher);
-      
-      currentManualUnlockTeacher = "";
-    }
-  }
-}
-
-// Function to log manual unlock events
-void logManualUnlock(String teacherUid, String teacherName, String teacherID, String action) {
-  if (!firebaseConnected) {
-    return;
-  }
-
-  String logPath = "/manual_unlock_logs";
-  
-  FirebaseJson logEntry;
-  logEntry.set("teacherUid", teacherUid);
-  logEntry.set("teacherName", teacherName);
-  logEntry.set("teacherID", teacherID);
-  logEntry.set("action", action);
-  logEntry.set("timestamp/.sv", "timestamp");
-  logEntry.set("deviceIP", WiFi.localIP().toString());
-  logEntry.set("duration", DOOR_OPEN_DURATION);
-  
-  if (Firebase.RTDB.pushJSON(&fbdo, logPath, &logEntry)) {
-    Serial.println("📋 Manual unlock logged: " + action + " for " + teacherName);
   } else {
-    Serial.println("❌ Failed to log manual unlock: " + fbdo.errorReason());
-  }
-}
-
-
-void scheduleCleanupManualUnlock(String teacherUid) {
-  // Set a flag in Firebase to clean up this request after delay
-  String cleanupPath = "/manual_unlock_cleanup/" + teacherUid;
-  
-  FirebaseJson cleanupData;
-  cleanupData.set("scheduledAt/.sv", "timestamp");
-  cleanupData.set("cleanupAfter", 30000); // 30 seconds
-  
-  Firebase.RTDB.setJSON(&fbdo, cleanupPath, &cleanupData);
-}
-
-void cleanupOldManualUnlocks() {
-  static unsigned long lastCleanup = 0;
-  
-  // Run cleanup every 60 seconds
-  if (millis() - lastCleanup < 60000) {
-    return;
-  }
-  lastCleanup = millis();
-  
-  if (!firebaseConnected) {
-    return;
-  }
-  
-  // Check for cleanup tasks
-  if (Firebase.RTDB.get(&fbdo, "/manual_unlock_cleanup")) {
-    if (fbdo.dataType() == "json") {
-      FirebaseJson &json = fbdo.jsonObject();
-      size_t len = json.iteratorBegin();
-      String key, value;
-      int type = 0;
-      
-      for (size_t i = 0; i < len; i++) {
-        json.iteratorGet(i, type, key, value);
-        
-        String cleanupPath = "/manual_unlock_cleanup/" + key;
-        
-        if (Firebase.RTDB.get(&fbdo, cleanupPath + "/scheduledAt")) {
-          if (fbdo.dataType() == "timestamp") {
-            unsigned long scheduledTime = fbdo.to<unsigned long>();
-            unsigned long currentTime = millis();
-            
-            // If 30+ seconds have passed since scheduling
-            if (currentTime - scheduledTime >= 30000) {
-              // Remove the manual unlock request and cleanup entry
-              Firebase.RTDB.deleteNode(&fbdo, "/manual_door_unlock/" + key);
-              Firebase.RTDB.deleteNode(&fbdo, cleanupPath);
-              
-              Serial.println("🧹 Cleaned up manual unlock request for: " + key);
-            }
-          }
-        }
-      }
-      json.iteratorEnd();
+    // No unlock requests found or error occurred
+    if (fbdo.errorCode() != FIREBASE_ERROR_PATH_NOT_EXIST) {
+      Serial.println("❌ Error checking manual unlock requests: " + fbdo.errorReason());
     }
   }
 }
 
+void executeManualUnlock(String teacherID, String teacherName, String teacherUid, int duration) {
+  // Update status to 'unlocked' in Firebase
+  String statusPath = "/door_unlock/" + teacherID + "/status";
+  String unlockedAtPath = "/door_unlock/" + teacherID + "/unlockedAt";
+  
+  if (Firebase.RTDB.setString(&fbdo, statusPath, "unlocked") && 
+      Firebase.RTDB.setTimestamp(&fbdo, unlockedAtPath)) {
+    
+    Serial.println("✅ Manual unlock status updated in database");
+    
+    // Unlock the door physically
+    digitalWrite(RELAY_PIN, HIGH);
+    isDoorUnlocked = true;
+    isManualUnlock = true;
+    doorUnlockTime = millis();
+    currentManualUnlockTeacherID = teacherID;
+    
+    // Send WebSocket notifications
+    wsHandler.sendDoorStatus(true);
+    wsHandler.sendNetworkEvent("manual_unlock", "Manual unlock by: " + teacherName);
+    
+    Serial.println("🔓 Door manually unlocked for " + String(duration) + "ms");
+    Serial.println("   Requested by: " + teacherName + " (" + teacherID + ")");
+    
+    // Log the manual unlock event
+    logManualUnlockEvent(teacherID, teacherName, teacherUid, duration);
+    
+    // Schedule the completion update (will be handled in manageDoorLock)
+    // The door will auto-lock after the specified duration
+    
+  } else {
+    Serial.println("❌ Failed to update unlock status: " + fbdo.errorReason());
+  }
+}
 
-
+void logManualUnlockEvent(String teacherID, String teacherName, String teacherUid, int duration) {
+  if (!firebaseConnected) return;
+  
+  String path = "/access_logs";
+  
+  FirebaseJson json;
+  json.set("uid", "MANUAL_UNLOCK");
+  json.set("result", "Manual Unlock Granted");
+  json.set("teacherID", teacherID);
+  json.set("teacherName", teacherName);
+  json.set("teacherUid", teacherUid);
+  json.set("unlockDuration", duration);
+  json.set("readerRole", "Manual");
+  json.set("reader", -1); // Use -1 to indicate manual unlock
+  json.set("timestamp/.sv", "timestamp");
+  json.set("deviceIP", WiFi.localIP().toString());
+  
+  if (Firebase.RTDB.pushJSON(&fbdo, path, &json)) {
+    Serial.println("📋 Manual unlock event logged");
+  } else {
+    Serial.println("❌ Failed to log manual unlock event: " + fbdo.errorReason());
+  }
+}
 
 
 void manageDoorLock() {

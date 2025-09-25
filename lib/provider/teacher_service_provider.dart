@@ -23,19 +23,24 @@ final teacherNoteProvider = StreamProvider.family<String?, String>((ref, teacher
   return teacherService.getTeacherNote(teacherUid);
 });
 
-// NEW: Stream provider for manual unlock status
 final manualUnlockStatusProvider = StreamProvider.family<String?, String>((ref, teacherUid) {
   final teacherService = ref.watch(teacherServiceProvider);
   return teacherService.getManualUnlockStatus(teacherUid);
 });
 
-// NEW: Provider for handling manual door unlock
+// NEW: Stream provider for complete unlock data using teacherID
+final manualUnlockDataProvider = StreamProvider.family<Map<String, dynamic>?, String>((ref, teacherID) {
+  final teacherService = ref.watch(teacherServiceProvider);
+  return teacherService.getManualUnlockData(teacherID);
+});
+
 final manualDoorUnlockProvider = StateNotifierProvider<ManualUnlockNotifier, AsyncValue<bool>>((ref) {
   final teacherService = ref.watch(teacherServiceProvider);
   return ManualUnlockNotifier(teacherService);
 });
 
-// NEW: State notifier for manual door unlock operations
+
+// Updated: State notifier for manual door unlock operations
 class ManualUnlockNotifier extends StateNotifier<AsyncValue<bool>> {
   final TeacherService _teacherService;
 
@@ -48,8 +53,8 @@ class ManualUnlockNotifier extends StateNotifier<AsyncValue<bool>> {
       final success = await _teacherService.requestManualDoorUnlock(teacherUid, teacherName, teacherID);
       state = AsyncValue.data(success);
       
-      // Reset state after 5 seconds
-      Timer(const Duration(seconds: 5), () {
+      // Reset state after 10 seconds (longer since we have better status tracking now)
+      Timer(const Duration(seconds: 10), () {
         if (mounted) {
           state = const AsyncValue.data(false);
         }
@@ -63,6 +68,15 @@ class ManualUnlockNotifier extends StateNotifier<AsyncValue<bool>> {
           state = const AsyncValue.data(false);
         }
       });
+    }
+  }
+
+  // NEW: Method to clear completed unlock requests
+  Future<void> clearUnlockRequest(String teacherID) async {
+    try {
+      await _teacherService.clearUnlockRequest(teacherID);
+    } catch (error) {
+      print('Error clearing unlock request: $error');
     }
   }
 }

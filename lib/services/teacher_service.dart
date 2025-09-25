@@ -33,42 +33,77 @@ class TeacherService {
 
   // NEW: Manual door unlock functionality
   Future<bool> requestManualDoorUnlock(String teacherUid, String teacherName, String teacherID) async {
-    try {
-      // Create unlock request with timestamp and teacher info
-      final unlockRequest = {
-        'teacherUid': teacherUid,
-        'teacherName': teacherName,
-        'teacherID': teacherID,
-        'requestTime': ServerValue.timestamp,
-        'status': 'pending',
-        'unlockDuration': 4000, // 4 seconds in milliseconds
-      };
-      
-      // Set the unlock request - Arduino will listen for this
-      await _database
-          .ref('manual_door_unlock/$teacherUid')
-          .set(unlockRequest);
-      
-      print('🚪 Manual door unlock requested by: $teacherName ($teacherID)');
-      return true;
-    } catch (e) {
-      print('❌ Error requesting manual door unlock: $e');
-      return false;
-    }
+  try {
+    // Create unlock request with simplified structure
+    final unlockRequest = {
+      'status': 'pending',
+      'teacherUid': teacherUid,
+      'teacherName': teacherName,
+      'requestedAt': ServerValue.timestamp,
+      'unlockDuration': 4000, // 4 seconds in milliseconds
+    };
+    
+    // Set the unlock request using teacherID as the key
+    await _database
+        .ref('door_unlock/$teacherID')
+        .set(unlockRequest);
+    
+    print('🚪 Manual door unlock requested by: $teacherName ($teacherID)');
+    return true;
+  } catch (e) {
+    print('❌ Error requesting manual door unlock: $e');
+    return false;
   }
+}
 
-  // NEW: Get manual unlock status
-  Stream<String?> getManualUnlockStatus(String teacherUid) {
-    return _database
-        .ref('manual_door_unlock/$teacherUid/status')
-        .onValue
-        .map((event) {
-      if (event.snapshot.exists) {
-        return event.snapshot.value as String?;
-      }
-      return null;
-    });
+// NEW: Get manual unlock status using teacherID
+Stream<String?> getManualUnlockStatus(String teacherUid) {
+  // First we need to get the teacherID from the teacher's profile
+  return _database
+      .ref('roles/teacher/$teacherUid/teacherID')
+      .onValue
+      .asyncExpand((teacherIDEvent) {
+    if (teacherIDEvent.snapshot.exists) {
+      final teacherID = teacherIDEvent.snapshot.value as String;
+      
+      // Now listen to the door unlock status using teacherID
+      return _database
+          .ref('door_unlock/$teacherID/status')
+          .onValue
+          .map((statusEvent) {
+        if (statusEvent.snapshot.exists) {
+          return statusEvent.snapshot.value as String?;
+        }
+        return 'idle'; // Default status when no unlock request exists
+      });
+    }
+    return Stream.value('idle'); // Default when teacherID not found
+  });
+}
+
+// NEW: Get complete unlock data for a teacher
+Stream<Map<String, dynamic>?> getManualUnlockData(String teacherID) {
+  return _database
+      .ref('door_unlock/$teacherID')
+      .onValue
+      .map((event) {
+    if (event.snapshot.exists) {
+      return Map<String, dynamic>.from(event.snapshot.value as Map);
+    }
+    return null;
+  });
+}
+
+// NEW: Clear completed unlock request (for cleanup)
+Future<bool> clearUnlockRequest(String teacherID) async {
+  try {
+    await _database.ref('door_unlock/$teacherID').remove();
+    return true;
+  } catch (e) {
+    print('❌ Error clearing unlock request: $e');
+    return false;
   }
+}
 
   // Enhanced: Stream that properly reacts to status changes and provides fresh timestamps
   Stream<TeacherStatusData> getTeacherStatusWithDuration(String teacherUid) {
