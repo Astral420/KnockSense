@@ -1,6 +1,5 @@
 import 'package:firebase_database/firebase_database.dart';
 
-
 class TeacherService {
   final FirebaseDatabase _database;
   
@@ -30,6 +29,45 @@ class TeacherService {
       print('❌ Error updating teacher status: $e');
       return false;
     }
+  }
+
+  // NEW: Manual door unlock functionality
+  Future<bool> requestManualDoorUnlock(String teacherUid, String teacherName, String teacherID) async {
+    try {
+      // Create unlock request with timestamp and teacher info
+      final unlockRequest = {
+        'teacherUid': teacherUid,
+        'teacherName': teacherName,
+        'teacherID': teacherID,
+        'requestTime': ServerValue.timestamp,
+        'status': 'pending',
+        'unlockDuration': 4000, // 4 seconds in milliseconds
+      };
+      
+      // Set the unlock request - Arduino will listen for this
+      await _database
+          .ref('manual_door_unlock/$teacherUid')
+          .set(unlockRequest);
+      
+      print('🚪 Manual door unlock requested by: $teacherName ($teacherID)');
+      return true;
+    } catch (e) {
+      print('❌ Error requesting manual door unlock: $e');
+      return false;
+    }
+  }
+
+  // NEW: Get manual unlock status
+  Stream<String?> getManualUnlockStatus(String teacherUid) {
+    return _database
+        .ref('manual_door_unlock/$teacherUid/status')
+        .onValue
+        .map((event) {
+      if (event.snapshot.exists) {
+        return event.snapshot.value as String?;
+      }
+      return null;
+    });
   }
 
   // Enhanced: Stream that properly reacts to status changes and provides fresh timestamps
