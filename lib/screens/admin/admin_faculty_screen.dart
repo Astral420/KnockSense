@@ -1,8 +1,11 @@
+// admin_faculty_screen.dart
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:knocksense/models/rfid_model.dart';
 import 'package:knocksense/models/teacher_model.dart';
+import 'package:knocksense/provider/nfc_provider.dart';
 import 'package:knocksense/provider/teacher_provider.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -358,6 +361,16 @@ class AdminFacultyScreen extends ConsumerWidget {
     return 'Prof. $cleanedName';
   }
 
+  void _showSnackBar(BuildContext context, String message, {bool isError = false}) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red.shade600 : Colors.green.shade600,
+      ),
+    );
+  }
+
   void _showTeacherDetails(BuildContext context, TeacherModel teacher) {
     // Show teacher details dialog or navigate to details page
     ScaffoldMessenger.of(context).showSnackBar(
@@ -367,12 +380,13 @@ class AdminFacultyScreen extends ConsumerWidget {
     );
   }
 
+  // ✅ UPDATED: Full implementation of the change RFID dialog
   void _showChangeRfidDialog(BuildContext context, WidgetRef ref, TeacherModel teacher) {
-    // Show RFID change dialog
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Change RFID for ${_cleanTeacherName(teacher.displayName)}'),
-      ),
+    showDialog(
+      context: context,
+      builder: (context) {
+        return _ChangeRfidDialogContent(teacher: teacher);
+      },
     );
   }
 
@@ -420,6 +434,134 @@ class AdminFacultyScreen extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+// ✅ NEW: Stateful widget to manage the dialog's state
+class _ChangeRfidDialogContent extends ConsumerStatefulWidget {
+  final TeacherModel teacher;
+  const _ChangeRfidDialogContent({required this.teacher});
+
+  @override
+  ConsumerState<_ChangeRfidDialogContent> createState() => _ChangeRfidDialogContentState();
+}
+
+class _ChangeRfidDialogContentState extends ConsumerState<_ChangeRfidDialogContent> {
+  bool _isLoading = true;
+  List<RFIDModel> _availableTags = [];
+  String? _selectedRfidUid;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAvailableRfids();
+  }
+
+  Future<void> _fetchAvailableRfids() async {
+    try {
+      final nfcService = ref.read(nfcServiceProvider);
+      final tags = await nfcService.getUnassignedRfidTags();
+      if (mounted) {
+        setState(() {
+          _availableTags = tags;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load RFID tags.';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _onSaveChanges() async {
+    setState(() => _isLoading = true);
+    try {
+      final nfcService = ref.read(nfcServiceProvider);
+      await nfcService.changeTeacherRfid(widget.teacher.teacherID, _selectedRfidUid);
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        (context as Element).findAncestorWidgetOfExactType<AdminFacultyScreen>()?._showSnackBar(
+          context,
+          'RFID successfully updated!',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+         (context as Element).findAncestorWidgetOfExactType<AdminFacultyScreen>()?._showSnackBar(
+          context,
+          e.toString().replaceAll('Exception: ', ''),
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Change Teacher RFID'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.teacher.displayName,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text('Current RFID: ${widget.teacher.rfidUid ?? "None"}'),
+          const SizedBox(height: 16),
+          if (_isLoading)
+            const Center(child: CircularProgressIndicator())
+          else if (_error != null)
+            Text(_error!, style: const TextStyle(color: Colors.red))
+          else
+            DropdownButtonFormField<String>(
+              value: _selectedRfidUid,
+              hint: const Text('Select new RFID tag'),
+              isExpanded: true,
+              decoration: const InputDecoration(border: OutlineInputBorder()),
+              items: [
+                const DropdownMenuItem<String>(
+                  value: null,
+                  child: Text('Unassign RFID', style: TextStyle(fontStyle: FontStyle.italic)),
+                ),
+                ..._availableTags.map((tag) {
+                  return DropdownMenuItem<String>(
+                    value: tag.rfid_uid,
+                    child: Text(tag.rfid_uid, style: const TextStyle(fontFamily: 'monospace')),
+                  );
+                }),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  _selectedRfidUid = value;
+                });
+              },
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _onSaveChanges,
+          child: _isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save Changes'),
+        ),
+      ],
     );
   }
 }
