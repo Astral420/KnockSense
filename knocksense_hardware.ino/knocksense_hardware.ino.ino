@@ -42,6 +42,7 @@ unsigned long lastManualUnlockCheck = 0;
 const unsigned long MANUAL_UNLOCK_CHECK_INTERVAL = 1000; // Check every second
 bool isManualUnlock = false;
 String currentManualUnlockTeacherID = "";
+unsigned long manualUnlockDuration = 4000;
 
 
 
@@ -497,6 +498,7 @@ void executeManualUnlock(String teacherID, String teacherName, String teacherUid
     isManualUnlock = true;
     doorUnlockTime = millis();
     currentManualUnlockTeacherID = teacherID;
+    manualUnlockDuration = duration; // Store the specific duration for this unlock
     
     // Send WebSocket notifications
     wsHandler.sendDoorStatus(true);
@@ -542,15 +544,45 @@ void logManualUnlockEvent(String teacherID, String teacherName, String teacherUi
 
 
 void manageDoorLock() {
-  if (isDoorUnlocked && (millis() - doorUnlockTime >= DOOR_OPEN_DURATION)) {
+  if (isDoorUnlocked) {
+    unsigned long currentDuration;
+    
+    // Use appropriate duration based on unlock type
     if (isManualUnlock) {
-      return;
+      currentDuration = manualUnlockDuration;
+    } else {
+      currentDuration = DOOR_OPEN_DURATION;
     }
-    // This is a regular RFID unlock - handle normally
-    Serial.println("🔒 Door timeout reached - locking door");
-    digitalWrite(RELAY_PIN, LOW);
-    isDoorUnlocked = false;
-    wsHandler.sendDoorStatus(false);
+    
+    // Check if duration has elapsed
+    if (millis() - doorUnlockTime >= currentDuration) {
+      if (isManualUnlock) {
+        // Handle manual unlock completion
+        Serial.println("🔒 Manual unlock timeout reached (" + String(manualUnlockDuration) + "ms) - locking door");
+        
+        // Update Firebase status to 'completed'
+        String statusPath = "/door_unlock/" + currentManualUnlockTeacherID + "/status";
+        String completedAtPath = "/door_unlock/" + currentManualUnlockTeacherID + "/completedAt";
+        
+        Firebase.RTDB.setString(&fbdo, statusPath, "completed");
+        Firebase.RTDB.setTimestamp(&fbdo, completedAtPath);
+        
+        // Reset manual unlock flags
+        isManualUnlock = false;
+        currentManualUnlockTeacherID = "";
+        manualUnlockDuration = 4000; // Reset to default
+        
+        wsHandler.sendNetworkEvent("manual_unlock_completed", "Manual unlock completed");
+      } else {
+        // This is a regular RFID unlock - handle normally
+        Serial.println("🔒 Door timeout reached (" + String(DOOR_OPEN_DURATION) + "ms) - locking door");
+      }
+      
+      // Lock the door regardless of unlock type
+      digitalWrite(RELAY_PIN, LOW);
+      isDoorUnlocked = false;
+      wsHandler.sendDoorStatus(false);
+    }
   }
 }
 
