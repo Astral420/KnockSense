@@ -168,9 +168,17 @@ Future<void> assignRfidTag(String uid, String teacherID) async {
         .orderByChild('teacherID')
         .equalTo(teacherID)
         .get();
-    
+
     if (!teacherSnapshot.exists) {
       throw Exception('Teacher with ID $teacherID not found');
+    }
+
+    
+    final teacherData = Map<String, dynamic>.from(teacherSnapshot.children.first.value as Map);
+    final existingRfidUid = teacherData['rfid_uid'] as String?;
+
+    if (existingRfidUid != null && existingRfidUid.isNotEmpty) {
+      throw Exception('Teacher is already assigned to tag $existingRfidUid. Please unassign it first.');
     }
 
     // Check if the RFID tag exists
@@ -181,13 +189,12 @@ Future<void> assignRfidTag(String uid, String teacherID) async {
 
     // Update the RFID tag with the teacher assignment
     await _database.ref('rfid_tags/$uid/assignedTo').set(teacherID);
-    
+
     // Also update the teacher's role data with the RFID UID
-    final teacherData = Map<String, dynamic>.from(teacherSnapshot.children.first.value as Map);
     final teacherUID = teacherSnapshot.children.first.key!;
-    
+
     await _database.ref('roles/teacher/$teacherUID/rfid_uid').set(uid);
-    
+
     debugPrint('Successfully assigned RFID UID: $uid to teacher: $teacherID');
   } catch (e) {
     debugPrint('Error assigning RFID tag: $e');

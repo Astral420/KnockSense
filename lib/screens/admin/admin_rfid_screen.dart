@@ -255,14 +255,14 @@ class AdminRfidScreen extends ConsumerWidget {
                       ),
                     ),
                     onPressed: scanningState.isProcessing ? null : () async {
-                      try {
-                        await ref.read(nfcScanningProvider.notifier).addScannedTag();
-                        // Show success message after the operation completes successfully
-                        _showSnackBar(context, 'RFID tag added successfully!');
-                      } catch (e) {
-                        // Show error message if something goes wrong
-                        _showSnackBar(context, 'Failed to add RFID tag: $e', isError: true);
-                      }
+                      final bool success = await ref
+                      .read(nfcScanningProvider.notifier)
+                      .addScannedTag();
+
+                  // ✅ Only show snackbar if the operation was successful
+                  if (success && context.mounted) {
+                    _showSnackBar(context, 'RFID tag added successfully!');
+                  }
                     },
                     icon: scanningState.isProcessing
                         ? const SizedBox(

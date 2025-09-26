@@ -796,15 +796,44 @@ Widget _buildDefaultAvatar(bool isBusy, bool isOffline) {
   }
 
   Future<void> _toggleStatus(String teacherUid, String currentStatus) async {
-  final teacherService = ref.read(teacherServiceProvider);
-  
-  // Toggle between online and busy only
-  String newStatus = currentStatus.toLowerCase() == 'online' ? 'busy' : 'online';
-  
-  print('🔄 Toggling status from $currentStatus to $newStatus for teacher $teacherUid');
+    final teacherService = ref.read(teacherServiceProvider);
+    
+    // Determine the new status
+    final newStatus = currentStatus.toLowerCase() == 'online' ? 'busy' : 'online';
 
-  await teacherService.updateTeacherStatus(teacherUid, newStatus);
-}
+    // Show a confirmation dialog to the user
+    final bool? shouldProceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Status Change'),
+        content: Text('Are you sure you want to change your status to "$newStatus"?'),
+        actions: [
+          // "Cancel" button
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false), // Returns false
+            child: const Text('Cancel'),
+          ),
+          // "Confirm" button
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true), // Returns true
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color.fromARGB(255, 22, 163, 74), // A green color to indicate confirmation
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+
+    // Only proceed with the update if the user pressed "Confirm"
+    if (shouldProceed == true) {
+      print('🔄 Toggling status from $currentStatus to $newStatus for teacher $teacherUid');
+      await teacherService.updateTeacherStatus(teacherUid, newStatus);
+    } else {
+      print('Status change cancelled by the user.');
+    }
+  }
 
   // NEW: Request manual door unlock
   Future<void> _requestManualUnlock(dynamic userData) async {
