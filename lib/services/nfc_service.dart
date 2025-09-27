@@ -138,6 +138,63 @@ class NFCService {
     });
   }
 
+  // ✅ NEW: Get only unassigned RFID tags for the dropdown
+  Future<List<RFIDModel>> getUnassignedRfidTags() async {
+    final allTagsStream = getRfidTagsStream();
+    final allTags = await allTagsStream.first; // Get the current list of tags
+    return allTags.where((tag) => tag.assignedTo == null && tag.status == Status.active).toList();
+  }
+
+  // ✅ NEW: Logic to change a teacher's assigned RFID
+  Future<void> changeTeacherRfid(String teacherID, String? newRfidUid) async {
+    try {
+      // 1. Find the teacher and their current RFID
+      final teacherSnapshot = await _database.ref('roles/teacher')
+          .orderByChild('teacherID').equalTo(teacherID).get();
+          
+      if (!teacherSnapshot.exists) {
+        throw Exception('Teacher not found.');
+      }
+
+      final teacherUid = teacherSnapshot.children.first.key!;
+      final teacherData = Map<String, dynamic>.from(teacherSnapshot.children.first.value as Map);
+      final oldRfidUid = teacherData['rfid_uid'] as String?;
+
+      if (oldRfidUid == newRfidUid) return; // No change needed
+
+      // 2. Prepare for an atomic update
+      final Map<String, dynamic> updates = {};
+
+      // 3. Unassign the old RFID tag, if it exists
+      if (oldRfidUid != null) {
+        updates['rfid_tags/$oldRfidUid/assignedTo'] = null;
+      }
+
+      // 4. Assign the new RFID tag, if one is selected
+      if (newRfidUid != null) {
+        final newTagSnapshot = await _database.ref('rfid_tags/$newRfidUid').get();
+        if (!newTagSnapshot.exists) {
+          throw Exception('Selected RFID tag does not exist.');
+        }
+        final newTagData = Map<String, dynamic>.from(newTagSnapshot.value as Map);
+        if (newTagData['assignedTo'] != null) {
+          throw Exception('Selected RFID tag is already assigned to another user.');
+        }
+        updates['rfid_tags/$newRfidUid/assignedTo'] = teacherID;
+      }
+      
+      // 5. Update the teacher's record with the new RFID UID (or null)
+      updates['roles/teacher/$teacherUid/rfid_uid'] = newRfidUid;
+
+      // 6. Execute all changes at once
+      await _database.ref().update(updates);
+    } catch (e) {
+      debugPrint('Error changing teacher RFID: $e');
+      rethrow;
+    }
+  }
+
+
   // Delete RFID tag from database
   Future<void> deleteRfidTag(String uid) async {
     try {
@@ -168,9 +225,17 @@ Future<void> assignRfidTag(String uid, String teacherID) async {
         .orderByChild('teacherID')
         .equalTo(teacherID)
         .get();
-    
+
     if (!teacherSnapshot.exists) {
       throw Exception('Teacher with ID $teacherID not found');
+    }
+
+    
+    final teacherData = Map<String, dynamic>.from(teacherSnapshot.children.first.value as Map);
+    final existingRfidUid = teacherData['rfid_uid'] as String?;
+
+    if (existingRfidUid != null && existingRfidUid.isNotEmpty) {
+      throw Exception('Teacher is already assigned to tag $existingRfidUid. Please unassign it first.');
     }
 
     // Check if the RFID tag exists
@@ -181,13 +246,12 @@ Future<void> assignRfidTag(String uid, String teacherID) async {
 
     // Update the RFID tag with the teacher assignment
     await _database.ref('rfid_tags/$uid/assignedTo').set(teacherID);
-    
+
     // Also update the teacher's role data with the RFID UID
-    final teacherData = Map<String, dynamic>.from(teacherSnapshot.children.first.value as Map);
     final teacherUID = teacherSnapshot.children.first.key!;
-    
+
     await _database.ref('roles/teacher/$teacherUID/rfid_uid').set(uid);
-    
+
     debugPrint('Successfully assigned RFID UID: $uid to teacher: $teacherID');
   } catch (e) {
     debugPrint('Error assigning RFID tag: $e');
@@ -252,4 +316,3 @@ Future<void> unassignRfidTag(String uid) async {
 }
 
 }
-

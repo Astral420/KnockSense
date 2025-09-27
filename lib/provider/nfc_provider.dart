@@ -42,11 +42,13 @@ class NFCScanningState {
     String? lastScannedUid,
     String? errorMessage,
     bool? isProcessing,
+    bool clearLastScannedUid = false,
+    bool clearErrorMessage = false,
   }) {
     return NFCScanningState(
       isScanning: isScanning ?? this.isScanning,
-      lastScannedUid: lastScannedUid ?? this.lastScannedUid,
-      errorMessage: errorMessage,
+      lastScannedUid: clearLastScannedUid ? null : lastScannedUid ?? this.lastScannedUid,
+      errorMessage: clearErrorMessage ? null : errorMessage ?? this.errorMessage,
       isProcessing: isProcessing ?? this.isProcessing,
     );
   }
@@ -61,8 +63,8 @@ class NFCScanningNotifier extends StateNotifier<NFCScanningState> {
   Future<void> startScanning() async {
     state = state.copyWith(
       isScanning: true,
-      errorMessage: null,
-      lastScannedUid: null,
+      clearErrorMessage: true,
+      clearLastScannedUid: true,
     );
 
     await _nfcService.startNFCScanning(
@@ -86,8 +88,8 @@ class NFCScanningNotifier extends StateNotifier<NFCScanningState> {
     state = state.copyWith(isScanning: false);
   }
 
-  Future<void> addScannedTag() async {
-    if (state.lastScannedUid == null) return;
+  Future<bool> addScannedTag() async {
+    if (state.lastScannedUid == null) return false;
 
     state = state.copyWith(isProcessing: true, errorMessage: null);
 
@@ -95,23 +97,26 @@ class NFCScanningNotifier extends StateNotifier<NFCScanningState> {
       await _nfcService.addRfidTag(state.lastScannedUid!);
       state = state.copyWith(
         isProcessing: false,
-        lastScannedUid: null,
-        errorMessage: null,
+        clearLastScannedUid: true,
+        //errorMessage: null,
       );
+      return true;
+      
     } catch (e) {
       state = state.copyWith(
         isProcessing: false,
         errorMessage: e.toString(),
       );
+      return false;
     }
   }
 
   void clearError() {
-    state = state.copyWith(errorMessage: null);
+    state = state.copyWith(clearErrorMessage: true);
   }
 
   void clearLastScanned() {
-    state = state.copyWith(lastScannedUid: null);
+    state = state.copyWith(clearLastScannedUid: true);
   }
 }
 
