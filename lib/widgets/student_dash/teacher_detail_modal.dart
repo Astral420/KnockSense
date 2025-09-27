@@ -24,8 +24,12 @@ class TeacherDetailModal extends ConsumerStatefulWidget {
 
 class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
   final TextEditingController _noteController = TextEditingController();
-  bool _isKnocking = false;
-  Set<String> _notifiedTeachers = {}; // Track which teachers student is notified for
+  bool _isScheduling = false;
+  Set<String> _notifiedTeachers = {};
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedTime;
+  bool _showSchedulingOptions = false;
+  String? _lastKnownStatus; // Track status changes
 
   @override
   void dispose() {
@@ -33,24 +37,36 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
     super.dispose();
   }
 
+  // Reset scheduling UI when teacher status changes
+  void _checkStatusChange(String currentStatus) {
+    if (_lastKnownStatus != null && _lastKnownStatus != currentStatus) {
+      setState(() {
+        _showSchedulingOptions = false;
+        _selectedDate = null;
+        _selectedTime = null;
+      });
+    }
+    _lastKnownStatus = currentStatus;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Watch the specific teacher to get real-time updates
     final teacherAsync = ref.watch(teacherByUidProvider(widget.teacher.uid));
     final currentUser = ref.watch(currentUserProvider);
     final hasPendingAppointment = ref.watch(
       hasPendingAppointmentProvider(widget.teacher.uid)
     );
     
-    // Watch the teacher's status with duration
     final statusWithDuration = ref.watch(
       teacherStatusWithDurationProvider(widget.teacher.uid)
     );
     
     return teacherAsync.when(
       data: (currentTeacher) {
-        // Use the current teacher data if available, fallback to initial teacher
         final teacher = currentTeacher ?? widget.teacher;
+        
+        // Check for status changes and reset UI if needed
+        _checkStatusChange(teacher.activeStatus);
         
         return currentUser.when(
           data: (user) => _buildModalContent(
@@ -118,12 +134,17 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                 // Note input field
                 _buildNoteInputField(),
                 
+                // Date/Time selection (show when scheduling)
+                if (_showSchedulingOptions) ...[
+                  const SizedBox(height: 20),
+                  _buildDateTimeSelection(),
+                ],
+                
                 const SizedBox(height: 24),
                 
                 // Action buttons
                 _buildActionButtons(teacher, currentUser, hasPendingAppointment),
                 
-                // Add some bottom padding for better visual balance
                 const SizedBox(height: 8),
               ],
             ),
@@ -362,7 +383,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'You already have a pending appointment with this teacher. Please wait for a response.',
+                      'You already have a pending appointment with this teacher.',
                       style: TextStyle(
                         color: Colors.orange[700],
                         fontSize: 13,
@@ -479,99 +500,548 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
     );
   }
 
-  Widget _buildActionButtons(TeacherModel teacher, UserModel? currentUser, bool hasPendingAppointment) {
-    final bool isTeacherAvailable = teacher.activeStatus.toLowerCase() == 'online';
-    final bool canKnock = !_isKnocking && 
-                         !hasPendingAppointment && 
-                         isTeacherAvailable &&
-                         currentUser != null;
-
-    return Row(
-      children: [
-        // Knock button
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: canKnock
-                ? () => _handleKnock(teacher, currentUser!)
-                : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1E293B),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              disabledBackgroundColor: Colors.grey[300],
-              disabledForegroundColor: Colors.grey[500],
-              elevation: canKnock ? 2 : 0,
-            ),
-            icon: _isKnocking
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Icon(
-                    Icons.notifications,
-                    size: 20,
-                  ),
-            label: Text(
-              _isKnocking ? 'Sending...' : 'Knock',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
+  Widget _buildDateTimeSelection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.purple.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.purple.withOpacity(0.3),
         ),
-        
-        const SizedBox(width: 12),
-        
-        // Notify Me button
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: () => _handleNotifyMe(teacher),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: _notifiedTeachers.contains(teacher.uid) 
-                  ? Colors.orange 
-                  : Colors.blue,
-              side: BorderSide(
-                color: _notifiedTeachers.contains(teacher.uid) 
-                    ? Colors.orange 
-                    : Colors.blue,
-                width: 1.5,
-              ),
-              backgroundColor: _notifiedTeachers.contains(teacher.uid)
-                  ? Colors.orange.withOpacity(0.1)
-                  : Colors.transparent,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Schedule Appointment',
+            style: TextStyle(
+              color: Colors.purple[800],
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
             ),
-            icon: Icon(
-              _notifiedTeachers.contains(teacher.uid)
-                  ? Icons.notifications_active
-                  : Icons.notifications_outlined,
-              size: 20,
-            ),
-            label: Text(
-              _notifiedTeachers.contains(teacher.uid) 
-                  ? 'Notifying' 
-                  : 'Notify Me',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+          ),
+          const SizedBox(height: 16),
+          
+          // Date selection
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _selectDate(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                        const SizedBox(width: 8),
+                        Text(
+                          _selectedDate != null
+                              ? '${_selectedDate!.month}/${_selectedDate!.day}/${_selectedDate!.year}'
+                              : 'Select Date',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: _selectedDate != null ? Colors.black : Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              
+              // Time selection
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _selectTime(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                        const SizedBox(width: 8),
+                        Text(
+                          _selectedTime != null
+                              ? _selectedTime!.format(context)
+                              : 'Select Time',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: _selectedTime != null ? Colors.black : Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(TeacherModel teacher, UserModel? currentUser, bool hasPendingAppointment) {
+    final bool canSchedule = !_isScheduling && 
+                           !hasPendingAppointment && 
+                           currentUser != null;
+    
+    final bool isOnline = teacher.activeStatus.toLowerCase() == 'online';
+
+    return Column(
+      children: [
+        // FIXED: Separate Schedule Appointment button (full width)
+        if (!isOnline && !_showSchedulingOptions) ...[
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: canSchedule
+                  ? () {
+                      setState(() {
+                        _showSchedulingOptions = true;
+                      });
+                    }
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF9C27B0),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                disabledBackgroundColor: Colors.grey[300],
+                disabledForegroundColor: Colors.grey[500],
+              ),
+              icon: const Icon(Icons.schedule),
+              label: const Text(
+                'Schedule Appointment',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
+          const SizedBox(height: 12), // Space between schedule and notify buttons
+        ],
+        
+        // Confirm/Cancel buttons when scheduling
+        if (_showSchedulingOptions) ...[
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: (_selectedDate != null && _selectedTime != null && canSchedule)
+                      ? () => _handleScheduleAppointment(teacher, currentUser!)
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9C27B0),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    disabledBackgroundColor: Colors.grey[300],
+                  ),
+                  child: _isScheduling
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text(
+                          'Confirm Schedule',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _showSchedulingOptions = false;
+                      _selectedDate = null;
+                      _selectedTime = null;
+                    });
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey[600],
+                    side: BorderSide(color: Colors.grey[400]!),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
+        
+        // FIXED: Bottom section with Knock Now (if online) and separate Notify Me
+        Row(
+          children: [
+            // Knock Now button (only for online teachers)
+            if (isOnline) ...[
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: canSchedule
+                      ? () => _handleKnock(teacher, currentUser!)
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1E293B),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    disabledBackgroundColor: Colors.grey[300],
+                    disabledForegroundColor: Colors.grey[500],
+                    elevation: canSchedule ? 2 : 0,
+                  ),
+                  icon: _isScheduling
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(
+                          Icons.notifications,
+                          size: 20,
+                        ),
+                  label: Text(
+                    _isScheduling ? 'Sending...' : 'Knock Now',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+            
+            // Notify Me button (always show, full width if no Knock Now)
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _handleNotifyMe(teacher),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _notifiedTeachers.contains(teacher.uid) 
+                      ? Colors.orange 
+                      : Colors.blue,
+                  side: BorderSide(
+                    color: _notifiedTeachers.contains(teacher.uid) 
+                        ? Colors.orange 
+                        : Colors.blue,
+                    width: 1.5,
+                  ),
+                  backgroundColor: _notifiedTeachers.contains(teacher.uid)
+                      ? Colors.orange.withOpacity(0.1)
+                      : Colors.transparent,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: Icon(
+                  _notifiedTeachers.contains(teacher.uid)
+                      ? Icons.notifications_active
+                      : Icons.notifications_outlined,
+                  size: 20,
+                ),
+                label: Text(
+                  _notifiedTeachers.contains(teacher.uid) 
+                      ? 'Notifying' 
+                      : 'Notify Me',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
+bool _validateScheduledTime(DateTime scheduledDateTime, AsyncValue statusWithDuration) {
+  // Get the status change time if available
+  final statusData = statusWithDuration.valueOrNull;
+  if (statusData != null && statusData.changedAt != null) {
+    // Ensure scheduled time is after the status change
+    if (scheduledDateTime.isBefore(statusData.changedAt!) || 
+        scheduledDateTime.isAtSameMomentAs(statusData.changedAt!)) {
+      return false;
+    }
+  }
+  
+  // Also ensure it's in the future
+  if (scheduledDateTime.isBefore(DateTime.now())) {
+    return false;
+  }
+  
+  return true;
+}
+
+// Updated _selectDate method with status change validation
+Future<void> _selectDate(BuildContext context) async {
+  final now = DateTime.now();
+  final weekFromNow = now.add(const Duration(days: 7));
+  
+  // Get the status data to check when status was last changed
+  final statusWithDuration = ref.read(
+    teacherStatusWithDurationProvider(widget.teacher.uid)
+  );
+  
+  final statusData = statusWithDuration.valueOrNull;
+  DateTime firstSelectableDate = now;
+  
+  // If we have status change data, ensure date is after status change
+  if (statusData != null && statusData.changedAt != null) {
+    // If status changed today but in the future from now, use that time
+    if (statusData.changedAt!.isAfter(now)) {
+      firstSelectableDate = statusData.changedAt!;
+    }
+  }
+  
+  final picked = await showDatePicker(
+    context: context,
+    initialDate: _selectedDate ?? 
+        (firstSelectableDate.isAfter(now) ? firstSelectableDate : now),
+    firstDate: firstSelectableDate,
+    lastDate: weekFromNow,
+    selectableDayPredicate: (DateTime day) {
+      // Exclude Sundays
+      if (day.weekday == DateTime.sunday) {
+        return false;
+      }
+      
+      // Exclude dates before status change if on the same day
+      if (statusData != null && statusData.changedAt != null) {
+        final statusChangeDate = DateTime(
+          statusData.changedAt!.year,
+          statusData.changedAt!.month,
+          statusData.changedAt!.day,
+        );
+        final checkDate = DateTime(day.year, day.month, day.day);
+        
+        // If the date is before the status change date, disable it
+        if (checkDate.isBefore(statusChangeDate)) {
+          return false;
+        }
+      }
+      
+      return true;
+    },
+    builder: (context, child) {
+      return Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: Color(0xFF9C27B0),
+            onPrimary: Colors.white,
+            onSurface: Colors.black,
+          ),
+        ),
+        child: child!,
+      );
+    },
+  );
+
+  if (picked != null) {
+    setState(() {
+      _selectedDate = picked;
+      // Reset time selection if date changes
+      _selectedTime = null;
+    });
+  }
+}
+
+// Updated _selectTime method with better validation
+Future<void> _selectTime(BuildContext context) async {
+  if (_selectedDate == null) {
+    _showErrorMessage('Please select a date first');
+    return;
+  }
+  
+  // Get current status data
+  final statusWithDuration = ref.read(
+    teacherStatusWithDurationProvider(widget.teacher.uid)
+  );
+  
+  final picked = await showTimePicker(
+    context: context,
+    initialTime: _selectedTime ?? TimeOfDay.now(),
+    builder: (context, child) {
+      return Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: Color(0xFF9C27B0),
+            onPrimary: Colors.white,
+            onSurface: Colors.black,
+          ),
+        ),
+        child: MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+          child: child!,
+        ),
+      );
+    },
+  );
+
+  if (picked != null) {
+    // Validate time is before or at 6:00 PM
+    if (picked.hour > 18 || (picked.hour == 18 && picked.minute > 0)) {
+      _showErrorMessage('Appointments can only be scheduled until 6:00 PM. Please select an earlier time.');
+      return;
+    }
+    
+    // Create the full scheduled DateTime
+    final scheduledDateTime = DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      picked.hour,
+      picked.minute,
+    );
+    
+    // Validate against status change time and current time
+    if (!_validateScheduledTime(scheduledDateTime, statusWithDuration)) {
+      final statusData = statusWithDuration.valueOrNull;
+      if (statusData?.changedAt != null && scheduledDateTime.isBefore(statusData!.changedAt!)) {
+        _showErrorMessage(
+          'Cannot schedule before teacher\'s last status update. '
+          'Teacher status was last changed at ${_formatTimeForDisplay(statusData.changedAt!)}.'
+        );
+      } else {
+        _showErrorMessage('Cannot schedule appointments in the past. Please select a future time.');
+      }
+      return;
+    }
+    
+    setState(() {
+      _selectedTime = picked;
+    });
+  }
+}
+
+// Helper method to format time for display
+String _formatTimeForDisplay(DateTime dateTime) {
+  final hour = dateTime.hour;
+  final minute = dateTime.minute.toString().padLeft(2, '0');
+  final period = hour >= 12 ? 'PM' : 'AM';
+  final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+  return '$displayHour:$minute $period';
+}
+
+// Updated _handleScheduleAppointment with additional validation
+Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentUser) async {
+  if (currentUser.studentNumber == null) {
+    _showErrorMessage('Student information not found. Please contact support.');
+    return;
+  }
+
+  if (_selectedDate == null || _selectedTime == null) {
+    _showErrorMessage('Please select both date and time.');
+    return;
+  }
+
+  setState(() {
+    _isScheduling = true;
+  });
+
+  try {
+    // Combine date and time
+    final scheduledDateTime = DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      _selectedTime!.hour,
+      _selectedTime!.minute,
+    );
+    
+    // Final validation before submitting
+    final statusWithDuration = ref.read(
+      teacherStatusWithDurationProvider(teacher.uid)
+    );
+    
+    if (!_validateScheduledTime(scheduledDateTime, statusWithDuration)) {
+      _showErrorMessage('Invalid appointment time. Please select a valid future time.');
+      setState(() {
+        _isScheduling = false;
+      });
+      return;
+    }
+    
+    // Additional validation: Check if appointment is after 6 PM (defensive check)
+    if (scheduledDateTime.hour > 18 || 
+        (scheduledDateTime.hour == 18 && scheduledDateTime.minute > 0)) {
+      _showErrorMessage('Appointments cannot be scheduled after 6:00 PM.');
+      setState(() {
+        _isScheduling = false;
+      });
+      return;
+    }
+    
+    final appointmentService = ref.read(appointmentServiceProvider);
+    final note = _noteController.text.trim();
+    
+    final result = await appointmentService.createAppointment(
+      student: currentUser,
+      teacher: teacher,
+      studentNote: note.isNotEmpty ? note : null,
+      scheduledTime: scheduledDateTime,
+      isScheduled: true,
+    );
+    
+    if (result['success'] == true) {
+      Navigator.pop(context);
+      _showSuccessMessage(
+        'Appointment scheduled with ${teacher.displayName} for '
+        '${_selectedTime!.format(context)} on ${_selectedDate!.month}/${_selectedDate!.day}'
+      );
+    } else {
+      _showErrorMessage(result['error'] ?? 'Failed to schedule appointment. Please try again.');
+    }
+  } catch (e) {
+    _showErrorMessage('An error occurred: ${e.toString()}');
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isScheduling = false;
+      });
+    }
+  }
+}
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
@@ -597,7 +1067,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
     }
 
     setState(() {
-      _isKnocking = true;
+      _isScheduling = true;
     });
 
     try {
@@ -608,6 +1078,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
         student: currentUser,
         teacher: teacher,
         studentNote: note.isNotEmpty ? note : null,
+        isScheduled: false, // Immediate appointment
       );
       
       if (result['success'] == true) {
@@ -621,11 +1092,12 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
     } finally {
       if (mounted) {
         setState(() {
-          _isKnocking = false;
+          _isScheduling = false;
         });
       }
     }
   }
+
 
   void _handleNotifyMe(TeacherModel teacher) {
     setState(() {

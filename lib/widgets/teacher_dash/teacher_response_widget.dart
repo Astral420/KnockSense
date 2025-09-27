@@ -903,8 +903,25 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
     });
 
     try {
-      final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
-      final note = _noteController.text.trim();
+    final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
+    final note = _noteController.text.trim();
+    
+    // If action is meetNow, immediately complete the appointment
+    if (action == TeacherAction.meetNow) {
+      final success = await appointmentNotifier.completeAppointment(
+        studentNumber: widget.appointment.studentNumber,
+        appointmentId: widget.appointment.appointmentId,
+        teacherUid: widget.currentUser.uid,
+      );
+      
+      if (success && mounted) {
+        Navigator.pop(context);
+        _showSuccessMessage('Meeting completed successfully!');
+      } else if (mounted) {
+        _showErrorMessage('Failed to complete meeting. Please try again.');
+      }
+      return; // Exit early
+    }
       
       DateTime? scheduledTime;
       if (action == TeacherAction.meetLater) {

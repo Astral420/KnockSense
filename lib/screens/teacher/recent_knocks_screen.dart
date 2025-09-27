@@ -11,11 +11,12 @@ import 'package:intl/intl.dart';
 import 'package:knocksense/widgets/common/useravatar_widget.dart';
 import 'package:knocksense/widgets/teacher_dash/reject_all_modal.dart';
 import 'package:knocksense/widgets/teacher_dash/teacher_response_widget.dart';
+import 'package:knocksense/screens/teacher/future_appointments_screen.dart';
 
 class RecentKnocksScreen extends ConsumerWidget {
   const RecentKnocksScreen({Key? key}) : super(key: key);
 
-   void _showRejectAllModal(BuildContext context, UserModel user, List<AppointmentModel> appointments) {
+  void _showRejectAllModal(BuildContext context, UserModel user, List<AppointmentModel> appointments) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -27,11 +28,20 @@ class RecentKnocksScreen extends ConsumerWidget {
     );
   }
 
+  void _navigateToFutureAppointments(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const FutureAppointmentsScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(currentUserProvider);
-    // Use teacherActiveAppointmentsProvider instead of teacherPendingAppointmentsProvider
-    final appointmentsAsync = ref.watch(teacherActiveAppointmentsProvider);
+    // Use teacherTodayAppointmentsProvider for today's appointments only
+    final todayAppointmentsAsync = ref.watch(teacherTodayAppointmentsProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFDF6E3), // Cream background matching design
@@ -41,8 +51,6 @@ class RecentKnocksScreen extends ConsumerWidget {
             if (user == null) {
               return const Center(child: Text('User not found'));
             }
-
-            
 
             return Column(
               children: [
@@ -63,7 +71,7 @@ class RecentKnocksScreen extends ConsumerWidget {
                       const Expanded(
                         child: Center(
                           child: Text(
-                            'Recent Knocks',
+                            'Today\'s Appointments',
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
@@ -72,41 +80,81 @@ class RecentKnocksScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                        appointmentsAsync.when(
-                          data: (appointments) {
-                            if (appointments.isNotEmpty) {
-                              return PopupMenuButton<String>(
-                                onSelected: (value) {
-                                  if (value == 'reject_all') {
-                                    _showRejectAllModal(context, user, appointments);
-                                  }
-                                },
-                                icon: const Icon(
-                                  Icons.more_horiz,
-                                  size: 28,
-                                  color: Color(0xFF6B4423),
+                      todayAppointmentsAsync.when(
+                        data: (appointments) {
+                          return PopupMenuButton<String>(
+                            onSelected: (value) {
+                              if (value == 'reject_all' && appointments.isNotEmpty) {
+                                _showRejectAllModal(context, user, appointments);
+                              } else if (value == 'future_appointments') {
+                                _navigateToFutureAppointments(context);
+                              }
+                            },
+                            icon: const Icon(
+                              Icons.more_horiz,
+                              size: 28,
+                              color: Color(0xFF6B4423),
+                            ),
+                            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                              const PopupMenuItem<String>(
+                                value: 'future_appointments',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.schedule, size: 20),
+                                    SizedBox(width: 12),
+                                    Text('Future Appointments'),
+                                  ],
                                 ),
-                                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                                  const PopupMenuItem<String>(
-                                    value: 'reject_all',
-                                    child: Text('Reject All Appointments'),
+                              ),
+                              if (appointments.isNotEmpty) ...[
+                                const PopupMenuDivider(),
+                                const PopupMenuItem<String>(
+                                  value: 'reject_all',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.cancel, size: 20, color: Colors.red),
+                                      SizedBox(width: 12),
+                                      Text('Reject All Today\'s Appointments'),
+                                    ],
                                   ),
-                                ],
-                              );
-                            } else {
-                              return const SizedBox(width: 48);
+                                ),
+                              ],
+                            ],
+                          );
+                        },
+                        loading: () => PopupMenuButton<String>(
+                          onSelected: (value) {
+                            if (value == 'future_appointments') {
+                              _navigateToFutureAppointments(context);
                             }
                           },
-                          loading: () => const SizedBox(width: 48),
-                          error: (_, __) => const SizedBox(width: 48),
+                          icon: const Icon(
+                            Icons.more_horiz,
+                            size: 28,
+                            color: Color(0xFF6B4423),
+                          ),
+                          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                            const PopupMenuItem<String>(
+                              value: 'future_appointments',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.schedule, size: 20),
+                                  SizedBox(width: 12),
+                                  Text('Future Appointments'),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                        error: (_, __) => const SizedBox(width: 48),
                       ),
-                      ),
+                    ],
+                  ),
+                ),
 
                 // Appointments List
                 Expanded(
-                  child: appointmentsAsync.when(
+                  child: todayAppointmentsAsync.when(
                     data: (appointments) {
                       if (appointments.isEmpty) {
                         return Center(
@@ -114,13 +162,13 @@ class RecentKnocksScreen extends ConsumerWidget {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
-                                Icons.notifications_off_outlined,
+                                Icons.today_outlined,
                                 size: 64,
                                 color: Colors.brown[300],
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                'No recent knocks',
+                                'No appointments today',
                                 style: TextStyle(
                                   fontSize: 18,
                                   color: Colors.brown[600],
@@ -129,7 +177,7 @@ class RecentKnocksScreen extends ConsumerWidget {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Students will appear here when they knock',
+                                'Today\'s appointments will appear here',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: Colors.brown[400],
@@ -145,7 +193,7 @@ class RecentKnocksScreen extends ConsumerWidget {
                         itemCount: appointments.length,
                         itemBuilder: (context, index) {
                           final appointment = appointments[index];
-                          return _buildKnockCard(
+                          return _buildAppointmentCard(
                             context: context,
                             appointment: appointment,
                             user: user,
@@ -155,7 +203,7 @@ class RecentKnocksScreen extends ConsumerWidget {
                     },
                     loading: () => const LoadingWidget(),
                     error: (err, stack) => Center(
-                      child: Text('Error loading knocks: $err'),
+                      child: Text('Error loading appointments: $err'),
                     ),
                   ),
                 ),
@@ -171,103 +219,115 @@ class RecentKnocksScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildKnockCard({
-  required BuildContext context,
-  required AppointmentModel appointment,
-  required dynamic user,
-}) {
-  return GestureDetector(
-    onTap: () {
-      // Show the teacher response widget as a modal
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
+  Widget _buildAppointmentCard({
+    required BuildContext context,
+    required AppointmentModel appointment,
+    required dynamic user,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        // Show the teacher response widget as a modal
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: TeacherResponseWidget(
+              appointment: appointment,
+              currentUser: user,
+            ),
           ),
-          child: TeacherResponseWidget(
-            appointment: appointment,
-            currentUser: user,
-          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _getCardColor(appointment),
+          borderRadius: BorderRadius.circular(16),
         ),
-      );
-    },
-    child: Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _getCardColor(appointment),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          // Student Avatar with photo support
-          UserAvatar.custom(
-            photoUrl: appointment.studentPhotoUrl,
-            displayName: appointment.cleanedStudentName,
-            radius: 28, // Slightly larger for better visibility
-            showBorder: false,
-            backgroundColor: const Color(0xFFFFC107), // Amber color fallback
-            textColor: Colors.black87,
-          ),
-          const SizedBox(width: 16),
-          
-          // Student info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
+          children: [
+            // Student Avatar with photo support
+            UserAvatar.custom(
+              photoUrl: appointment.studentPhotoUrl,
+              displayName: appointment.cleanedStudentName,
+              radius: 28, // Slightly larger for better visibility
+              showBorder: false,
+              backgroundColor: const Color(0xFFFFC107), // Amber color fallback
+              textColor: Colors.black87,
+            ),
+            const SizedBox(width: 16),
+            
+            // Student info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    appointment.studentName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  
+                  // Show scheduled time if it's a scheduled appointment
+                  if (appointment.isScheduled && appointment.scheduledTime != null) ...[
+                    Text(
+                      'Scheduled: ${DateFormat('h:mm a').format(appointment.scheduledTime!)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.brown[700],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                  ],
+                  
+                  if (appointment.studentNote != null && appointment.studentNote!.isNotEmpty) ...[
+                    Text(
+                      appointment.studentNote!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.brown[600],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            
+            // Time and status info
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  appointment.studentName,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                  _getTimeAgo(appointment.createdAt),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.brown[500],
                   ),
                 ),
-               
-                if (appointment.studentNote != null && appointment.studentNote!.isNotEmpty) ...[
+                // Status badge if needed
+                if (_getStatusBadge(appointment) != null) ...[
                   const SizedBox(height: 4),
-                  Text(
-                    appointment.studentNote!,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.brown[600],
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  _getStatusBadge(appointment)!,
                 ],
               ],
             ),
-          ),
-          
-          // Time ago
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                _getTimeAgo(appointment.createdAt),
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.brown[500],
-                ),
-              ),
-              // Optional: Add status badge if needed
-              if (_getStatusBadge(appointment) != null) ...[
-                const SizedBox(height: 4),
-                _getStatusBadge(appointment)!,
-              ],
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
-}
+    );
+  }
 
   Color _getCardColor(AppointmentModel appointment) {
     // Check if appointment is in waiting or meeting state
@@ -280,77 +340,70 @@ class RecentKnocksScreen extends ConsumerWidget {
       return const Color(0xFFFFE0B2); // Light orange for waiting
     } else if (isMeetNow) {
       return const Color(0xFFE8F5E8); // Light green for meeting
+    } else if (appointment.isScheduled) {
+      return const Color(0xFFE3F2FD); // Light blue for scheduled
     } else {
       return const Color(0xFFFFE69C); // Default light yellow/amber
     }
   }
 
   Widget? _getStatusBadge(AppointmentModel appointment) {
-    final isWaiting = appointment.status == AppointmentStatus.accepted && 
-                     appointment.teacherAction == TeacherAction.wait5Minutes;
-    final isMeetNow = appointment.status == AppointmentStatus.accepted && 
-                      appointment.teacherAction == TeacherAction.meetNow;
-    
-    if (isWaiting) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.orange,
-          borderRadius: BorderRadius.circular(12),
+  final isWaiting = appointment.status == AppointmentStatus.accepted && 
+                   appointment.teacherAction == TeacherAction.wait5Minutes;
+  final isMeetLater = appointment.status == AppointmentStatus.accepted && 
+                      appointment.teacherAction == TeacherAction.meetLater;
+  
+  if (isWaiting) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.orange,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Text(
+        'Waiting',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
         ),
-        child: const Text(
-          'Waiting',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-          ),
+      ),
+    );
+  } else if (isMeetLater) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.blue,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Text(
+        'Later',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
         ),
-      );
-    } else if (isMeetNow) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.green,
-          borderRadius: BorderRadius.circular(12),
+      ),
+    );
+  } else if (appointment.isScheduled) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.purple,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Text(
+        'Scheduled',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
         ),
-        child: const Text(
-          'In Progress',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
-    }
-    return null;
+      ),
+    );
   }
-
-  // String _getInitials(String name) {
-  //   if (name.isEmpty) return '??';
-    
-  //   // Remove any role indicators in parentheses
-  //   final cleanName = name.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
-    
-  //   final parts = cleanName.split(' ');
-  //   if (parts.length >= 2) {
-  //     // Take first letter of first name and last name
-  //     final firstName = parts.first;
-  //     final lastName = parts.last;
-      
-  //     if (firstName.isNotEmpty && lastName.isNotEmpty) {
-  //       return '${firstName[0]}${lastName[0]}'.toUpperCase();
-  //     }
-  //   }
-    
-  //   // If only one name or parsing fails, return first two letters
-  //   if (cleanName.length >= 2) {
-  //     return cleanName.substring(0, 2).toUpperCase();
-  //   }
-    
-  //   return cleanName.isNotEmpty ? cleanName[0].toUpperCase() : '??';
-  // }
+  return null;
+}
 
   String _getTimeAgo(DateTime dateTime) {
     final now = DateTime.now();
@@ -371,3 +424,21 @@ class RecentKnocksScreen extends ConsumerWidget {
       return DateFormat('MMM d').format(dateTime);
     }
   }
+}
+
+// Provider for today's appointments specifically
+final teacherTodayAppointmentsProvider = StreamProvider<List<AppointmentModel>>((ref) {
+  final user = ref.watch(currentUserProvider);
+  final appointmentService = ref.watch(appointmentServiceProvider);
+  
+  return user.when(
+    data: (userData) {
+      if (userData == null || userData.role != UserRole.teacher) {
+        return Stream.value([]);
+      }
+      return appointmentService.getTeacherTodayAppointments(userData.uid);
+    },
+    loading: () => Stream.value([]),
+    error: (_, __) => Stream.value([]),
+  );
+});

@@ -3,7 +3,7 @@ class AppointmentModel {
   final String studentUid;
   final String studentNumber;
   final String studentName;
-  final String? studentPhotoUrl; // Add this field
+  final String? studentPhotoUrl;
   final String teacherUid;
   final String teacherName;
   final String? teacherPhotoUrl;
@@ -13,7 +13,9 @@ class AppointmentModel {
   final String? studentNote;
   final String? teacherResponse;
   final TeacherAction? teacherAction;
-  final DateTime? scheduledTime;
+  final DateTime? scheduledTime; // This now represents the actual appointment date/time
+  final bool isScheduled; // New field to distinguish scheduled vs immediate appointments
+  final bool notificationSent; // Track if near-appointment notification was sent
 
   String get cleanedStudentName {
     return studentName.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
@@ -23,12 +25,36 @@ class AppointmentModel {
     return teacherName.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
   }
 
+  // Check if appointment is today
+  bool get isToday {
+    final now = DateTime.now();
+    final appointmentDate = scheduledTime ?? createdAt;
+    return appointmentDate.year == now.year &&
+           appointmentDate.month == now.month &&
+           appointmentDate.day == now.day;
+  }
+
+  // Check if appointment is in the future
+  bool get isFuture {
+    if (scheduledTime == null) return false;
+    final now = DateTime.now();
+    return scheduledTime!.isAfter(now) && !isToday;
+  }
+
+  // Check if appointment is near (within 15 minutes)
+  bool get isNear {
+    if (scheduledTime == null) return false;
+    final now = DateTime.now();
+    final difference = scheduledTime!.difference(now);
+    return difference.inMinutes <= 15 && difference.inMinutes >= 0;
+  }
+
   AppointmentModel({
     required this.appointmentId,
     required this.studentUid,
     required this.studentNumber,
     required this.studentName,
-    this.studentPhotoUrl, // Add to constructor
+    this.studentPhotoUrl,
     required this.teacherUid,
     required this.teacherName,
     this.teacherPhotoUrl,
@@ -39,6 +65,8 @@ class AppointmentModel {
     this.teacherResponse,
     this.teacherAction,
     this.scheduledTime,
+    this.isScheduled = false,
+    this.notificationSent = false,
   });
 
   factory AppointmentModel.fromJson(String id, Map<String, dynamic> json) {
@@ -79,7 +107,7 @@ class AppointmentModel {
       studentUid: json['studentUid'] as String,
       studentNumber: json['studentNumber'] as String,
       studentName: json['studentName'] as String,
-      studentPhotoUrl: json['studentPhotoUrl'] as String?, // Parse student photo URL
+      studentPhotoUrl: json['studentPhotoUrl'] as String?,
       teacherUid: json['teacherUid'] as String,
       teacherName: json['teacherName'] as String,
       teacherPhotoUrl: json['teacherPhotoUrl'] as String?,
@@ -98,6 +126,8 @@ class AppointmentModel {
             )
           : null,
       scheduledTime: parseToDateTime(json['scheduledTime']),
+      isScheduled: json['isScheduled'] ?? false,
+      notificationSent: json['notificationSent'] ?? false,
     );
   }
 
@@ -105,7 +135,7 @@ class AppointmentModel {
     'studentUid': studentUid,
     'studentNumber': studentNumber,
     'studentName': studentName,
-    'studentPhotoUrl': studentPhotoUrl, // Include in JSON
+    'studentPhotoUrl': studentPhotoUrl,
     'teacherUid': teacherUid,
     'teacherName': teacherName,
     'teacherPhotoUrl': teacherPhotoUrl,
@@ -116,6 +146,8 @@ class AppointmentModel {
     'teacherResponse': teacherResponse,
     'teacherAction': teacherAction?.name,
     'scheduledTime': scheduledTime?.millisecondsSinceEpoch,
+    'isScheduled': isScheduled,
+    'notificationSent': notificationSent,
   };
 
   AppointmentModel copyWith({
@@ -123,7 +155,7 @@ class AppointmentModel {
     String? studentUid,
     String? studentNumber,
     String? studentName,
-    String? studentPhotoUrl, // Add to copyWith
+    String? studentPhotoUrl,
     String? teacherUid,
     String? teacherName,
     String? teacherPhotoUrl,
@@ -134,6 +166,8 @@ class AppointmentModel {
     String? teacherResponse,
     TeacherAction? teacherAction,
     DateTime? scheduledTime,
+    bool? isScheduled,
+    bool? notificationSent,
   }) {
     return AppointmentModel(
       appointmentId: appointmentId ?? this.appointmentId,
@@ -151,12 +185,14 @@ class AppointmentModel {
       teacherResponse: teacherResponse ?? this.teacherResponse,
       teacherAction: teacherAction ?? this.teacherAction,
       scheduledTime: scheduledTime ?? this.scheduledTime,
+      isScheduled: isScheduled ?? this.isScheduled,
+      notificationSent: notificationSent ?? this.notificationSent,
     );
   }
 
   @override
   String toString() {
-    return 'AppointmentModel(id: $appointmentId, student: $studentName, teacher: $teacherName, status: $status, createdAt: $createdAt)';
+    return 'AppointmentModel(id: $appointmentId, student: $studentName, teacher: $teacherName, status: $status, scheduledTime: $scheduledTime, isScheduled: $isScheduled)';
   }
 }
 

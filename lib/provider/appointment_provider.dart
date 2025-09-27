@@ -103,6 +103,45 @@ final hasPendingAppointmentProvider = FutureProvider.family<bool, String>((ref, 
   );
 });
 
+// Provider for teacher's future appointments
+final teacherFutureAppointmentsProvider = StreamProvider<List<AppointmentModel>>((ref) {
+  final user = ref.watch(currentUserProvider);
+  final appointmentService = ref.watch(appointmentServiceProvider);
+  
+  return user.when(
+    data: (userData) {
+      if (userData == null || userData.role != UserRole.teacher) {
+        return Stream.value([]);
+      }
+      return appointmentService.getTeacherFutureAppointments(userData.uid);
+    },
+    loading: () => Stream.value([]),
+    error: (_, __) => Stream.value([]),
+  );
+});
+
+final nearAppointmentsProvider = StreamProvider<List<AppointmentModel>>((ref) {
+  final futureAppointments = ref.watch(teacherFutureAppointmentsProvider);
+  
+  return futureAppointments.when(
+    data: (appointments) {
+      final nearAppointments = appointments.where((appointment) => appointment.isNear).toList();
+      
+      // Trigger notification for near appointments that haven't been notified
+      for (var appointment in nearAppointments) {
+        if (!appointment.notificationSent) {
+          // Trigger notification logic here
+          // You would update the notificationSent field in Firebase
+        }
+      }
+      
+      return Stream.value(nearAppointments);
+    },
+    loading: () => Stream.value([]),
+    error: (_, __) => Stream.value([]),
+  );
+});
+
 // Notifier for handling appointment actions
 class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
   final AppointmentService _service;
