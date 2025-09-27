@@ -16,6 +16,7 @@
 #include "WebSocketHandler.h"
 #include "NetworkManager.h"
 #include "KnockSenseNetworkManager.h"
+#include "time.h"
 
 // ---------- RFID / Hardware Configuration ----------
 #define NR_OF_READERS 2
@@ -124,9 +125,30 @@ void setup() {
   digitalWrite(RELAY_PIN, LOW);
   Serial.println("✅ Hardware initialized - Door locked");
 
+
+
+
   // Initialize network management
   Serial.println("\n🌐 Starting Network Manager...");
   networkMgr.begin();
+
+  // Init Setup Time
+  configTime(8 * 3600, 0, "pool.ntp.org", "time.google.com"); // UTC+8
+  Serial.print("Waiting for time");
+  time_t now = time(nullptr);
+  int tries = 0;
+  while (now < 1600000000 && tries++ < 20) { // crude check for valid time
+    Serial.print(".");
+    delay(1000);
+    now = time(nullptr);
+  }
+  Serial.println();
+  if (now < 1600000000) {
+    Serial.println("Time not set!");
+  } else {
+    Serial.println("Time set.");
+  }
+
 
   // Initialize web services
   Serial.println("\n🖥️  Starting Web Services...");
@@ -156,7 +178,7 @@ void loop() {
   checkRFID();
   manageDoorLock();
   checkManualDoorUnlock(); 
-  manageDoorLock();
+ 
   
 
   
@@ -500,9 +522,6 @@ void executeManualUnlock(String teacherID, String teacherName, String teacherUid
     currentManualUnlockTeacherID = teacherID;
     manualUnlockDuration = duration; // Store the specific duration for this unlock
     
-    // Send WebSocket notifications
-    wsHandler.sendDoorStatus(true);
-    wsHandler.sendNetworkEvent("manual_unlock", "Manual unlock by: " + teacherName);
     
     Serial.println("🔓 Door manually unlocked for " + String(duration) + "ms");
     Serial.println("   Requested by: " + teacherName + " (" + teacherID + ")");
