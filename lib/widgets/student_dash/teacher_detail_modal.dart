@@ -30,6 +30,8 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
   TimeOfDay? _selectedTime;
   bool _showSchedulingOptions = false;
   String? _lastKnownStatus; // Track status changes
+  String? _errorMessage; // NEW: Add error message state
+  String? _infoMessage; // NEW: Add info message state
 
   @override
   void dispose() {
@@ -44,9 +46,23 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
         _showSchedulingOptions = false;
         _selectedDate = null;
         _selectedTime = null;
+        _errorMessage = null; // Clear errors when status changes
+        _infoMessage = null;
       });
     }
     _lastKnownStatus = currentStatus;
+  }
+
+  // NEW: Method to clear messages after a delay
+  void _clearMessagesAfterDelay() {
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) {
+        setState(() {
+          _errorMessage = null;
+          _infoMessage = null;
+        });
+      }
+    });
   }
 
   @override
@@ -125,6 +141,16 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                 // Status notifications
                 ..._buildStatusNotifications(teacher, hasPendingAppointment),
                 
+                // NEW: Error and Info Messages Display
+                if (_errorMessage != null) ...[
+                  _buildErrorMessage(_errorMessage!),
+                  const SizedBox(height: 16),
+                ],
+                if (_infoMessage != null) ...[
+                  _buildInfoMessage(_infoMessage!),
+                  const SizedBox(height: 16),
+                ],
+                
                 // Teacher message if available
                 if (teacher.teacherMsg != null && teacher.teacherMsg!.isNotEmpty) ...[
                   _buildTeacherMessage(teacher.teacherMsg!),
@@ -148,6 +174,130 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                 const SizedBox(height: 8),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // NEW: Build error message widget
+  Widget _buildErrorMessage(String message) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.red.withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.error_outline,
+              color: Colors.red,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Error',
+                  style: TextStyle(
+                    color: Colors.red[800],
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: TextStyle(
+                    color: Colors.red[700],
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.close, size: 18, color: Colors.red[600]),
+            onPressed: () {
+              setState(() {
+                _errorMessage = null;
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // NEW: Build info message widget
+  Widget _buildInfoMessage(String message) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.green.withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_circle_outline,
+              color: Colors.green,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Success',
+                  style: TextStyle(
+                    color: Colors.green[800],
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: TextStyle(
+                    color: Colors.green[700],
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.close, size: 18, color: Colors.green[600]),
+            onPressed: () {
+              setState(() {
+                _infoMessage = null;
+              });
+            },
           ),
         ],
       ),
@@ -610,6 +760,8 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                   ? () {
                       setState(() {
                         _showSchedulingOptions = true;
+                        _errorMessage = null; // Clear any existing errors
+                        _infoMessage = null;
                       });
                     }
                   : null,
@@ -680,6 +832,8 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                       _showSchedulingOptions = false;
                       _selectedDate = null;
                       _selectedTime = null;
+                      _errorMessage = null; // Clear errors when canceling
+                      _infoMessage = null;
                     });
                   },
                   style: OutlinedButton.styleFrom(
@@ -794,6 +948,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
       ],
     );
   }
+
 bool _validateScheduledTime(DateTime scheduledDateTime, AsyncValue statusWithDuration) {
   // Get the status change time if available
   final statusData = statusWithDuration.valueOrNull;
@@ -842,9 +997,9 @@ Future<void> _selectDate(BuildContext context) async {
     lastDate: weekFromNow,
     selectableDayPredicate: (DateTime day) {
       // Exclude Sundays
-      if (day.weekday == DateTime.sunday) {
-        return false;
-      }
+      // if (day.weekday == DateTime.sunday) {
+      //   return false;
+      // }
       
       // Exclude dates before status change if on the same day
       if (statusData != null && statusData.changedAt != null) {
@@ -889,7 +1044,10 @@ Future<void> _selectDate(BuildContext context) async {
 // Updated _selectTime method with better validation
 Future<void> _selectTime(BuildContext context) async {
   if (_selectedDate == null) {
-    _showErrorMessage('Please select a date first');
+    setState(() {
+      _errorMessage = 'Please select a date first';
+    });
+    _clearMessagesAfterDelay();
     return;
   }
   
@@ -921,7 +1079,10 @@ Future<void> _selectTime(BuildContext context) async {
   if (picked != null) {
     // Validate time is before or at 6:00 PM
     if (picked.hour > 18 || (picked.hour == 18 && picked.minute > 0)) {
-      _showErrorMessage('Appointments can only be scheduled until 6:00 PM. Please select an earlier time.');
+      setState(() {
+        _errorMessage = 'Appointments can only be scheduled until 6:00 PM. Please select an earlier time.';
+      });
+      _clearMessagesAfterDelay();
       return;
     }
     
@@ -938,18 +1099,22 @@ Future<void> _selectTime(BuildContext context) async {
     if (!_validateScheduledTime(scheduledDateTime, statusWithDuration)) {
       final statusData = statusWithDuration.valueOrNull;
       if (statusData?.changedAt != null && scheduledDateTime.isBefore(statusData!.changedAt!)) {
-        _showErrorMessage(
-          'Cannot schedule before teacher\'s last status update. '
-          'Teacher status was last changed at ${_formatTimeForDisplay(statusData.changedAt!)}.'
-        );
+        setState(() {
+          _errorMessage = 'Cannot schedule before teacher\'s last status update. '
+              'Teacher status was last changed at ${_formatTimeForDisplay(statusData.changedAt!)}.';
+        });
       } else {
-        _showErrorMessage('Cannot schedule appointments in the past. Please select a future time.');
+        setState(() {
+          _errorMessage = 'Cannot schedule appointments in the past. Please select a future time.';
+        });
       }
+      _clearMessagesAfterDelay();
       return;
     }
     
     setState(() {
       _selectedTime = picked;
+      _errorMessage = null; // Clear error if time selection is valid
     });
   }
 }
@@ -966,17 +1131,25 @@ String _formatTimeForDisplay(DateTime dateTime) {
 // Updated _handleScheduleAppointment with additional validation
 Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentUser) async {
   if (currentUser.studentNumber == null) {
-    _showErrorMessage('Student information not found. Please contact support.');
+    setState(() {
+      _errorMessage = 'Student information not found. Please contact support.';
+    });
+    _clearMessagesAfterDelay();
     return;
   }
 
   if (_selectedDate == null || _selectedTime == null) {
-    _showErrorMessage('Please select both date and time.');
+    setState(() {
+      _errorMessage = 'Please select both date and time.';
+    });
+    _clearMessagesAfterDelay();
     return;
   }
 
   setState(() {
     _isScheduling = true;
+    _errorMessage = null;
+    _infoMessage = null;
   });
 
   try {
@@ -995,20 +1168,22 @@ Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentU
     );
     
     if (!_validateScheduledTime(scheduledDateTime, statusWithDuration)) {
-      _showErrorMessage('Invalid appointment time. Please select a valid future time.');
       setState(() {
+        _errorMessage = 'Invalid appointment time. Please select a valid future time.';
         _isScheduling = false;
       });
+      _clearMessagesAfterDelay();
       return;
     }
     
     // Additional validation: Check if appointment is after 6 PM (defensive check)
     if (scheduledDateTime.hour > 18 || 
         (scheduledDateTime.hour == 18 && scheduledDateTime.minute > 0)) {
-      _showErrorMessage('Appointments cannot be scheduled after 6:00 PM.');
       setState(() {
+        _errorMessage = 'Appointments cannot be scheduled after 6:00 PM.';
         _isScheduling = false;
       });
+      _clearMessagesAfterDelay();
       return;
     }
     
@@ -1025,15 +1200,23 @@ Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentU
     
     if (result['success'] == true) {
       Navigator.pop(context);
+      // Instead of ScaffoldMessenger, we could show the success message in modal
+      // But since we're closing the modal, we'll keep the ScaffoldMessenger for success
       _showSuccessMessage(
         'Appointment scheduled with ${teacher.displayName} for '
         '${_selectedTime!.format(context)} on ${_selectedDate!.month}/${_selectedDate!.day}'
       );
     } else {
-      _showErrorMessage(result['error'] ?? 'Failed to schedule appointment. Please try again.');
+      setState(() {
+        _errorMessage = result['error'] ?? 'Failed to schedule appointment. Please try again.';
+      });
+      _clearMessagesAfterDelay();
     }
   } catch (e) {
-    _showErrorMessage('An error occurred: ${e.toString()}');
+    setState(() {
+      _errorMessage = 'An error occurred: ${e.toString()}';
+    });
+    _clearMessagesAfterDelay();
   } finally {
     if (mounted) {
       setState(() {
@@ -1062,12 +1245,17 @@ Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentU
 
   Future<void> _handleKnock(TeacherModel teacher, UserModel currentUser) async {
     if (currentUser.studentNumber == null) {
-      _showErrorMessage('Student information not found. Please contact support.');
+      setState(() {
+        _errorMessage = 'Student information not found. Please contact support.';
+      });
+      _clearMessagesAfterDelay();
       return;
     }
 
     setState(() {
       _isScheduling = true;
+      _errorMessage = null;
+      _infoMessage = null;
     });
 
     try {
@@ -1085,10 +1273,16 @@ Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentU
         Navigator.pop(context);
         _showSuccessMessage('Appointment request sent to ${teacher.displayName}');
       } else {
-        _showErrorMessage(result['error'] ?? 'Failed to send appointment request. Please try again.');
+        setState(() {
+          _errorMessage = result['error'] ?? 'Failed to send appointment request. Please try again.';
+        });
+        _clearMessagesAfterDelay();
       }
     } catch (e) {
-      _showErrorMessage('An error occurred: ${e.toString()}');
+      setState(() {
+        _errorMessage = 'An error occurred: ${e.toString()}';
+      });
+      _clearMessagesAfterDelay();
     } finally {
       if (mounted) {
         setState(() {
@@ -1098,19 +1292,19 @@ Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentU
     }
   }
 
-
   void _handleNotifyMe(TeacherModel teacher) {
     setState(() {
       if (_notifiedTeachers.contains(teacher.uid)) {
         _notifiedTeachers.remove(teacher.uid);
         print('🔕 Student unsubscribed from notifications for ${teacher.displayName}');
-        _showInfoMessage('Notifications disabled for ${teacher.displayName}');
+        _infoMessage = 'Notifications disabled for ${teacher.displayName}';
       } else {
         _notifiedTeachers.add(teacher.uid);
         print('🔔 Student subscribed to notifications for ${teacher.displayName}');
-        _showSuccessMessage('You\'ll be notified when ${teacher.displayName} becomes available');
+        _infoMessage = 'You\'ll be notified when ${teacher.displayName} becomes available';
       }
     });
+    _clearMessagesAfterDelay();
     
     // TODO: Implement FCM notification setup
     // This would typically involve:

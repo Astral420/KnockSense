@@ -68,9 +68,15 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   build_runner: ^2.7.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
+
+flutter_launcher_icons:
+      android: "launcher_icon"
+      ios: true
+      image_path: "assets/icons/logo/knocksense_logo.png"  
 
 # The following section is specific to Flutter packages.
 flutter:
@@ -81,6 +87,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/
+
+  
 
   # To add assets to your application, add an assets section, like this:
   # assets:
