@@ -197,6 +197,32 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
       return false;
     }
   }
+
+   Future<bool> respondToScheduledAppointment({
+    required String studentNumber,
+    required String appointmentId,
+    required String teacherUid,
+    required bool accept,
+    required String teacherResponse, // Required for both accept and reject
+  }) async {
+    state = const AsyncValue.loading();
+    
+    try {
+      final success = await _service.respondToScheduledAppointment(
+        studentNumber: studentNumber,
+        appointmentId: appointmentId,
+        teacherUid: teacherUid,
+        accept: accept,
+        teacherResponse: teacherResponse,
+      );
+      
+      state = const AsyncValue.data(null);
+      return success;
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      return false;
+    }
+  }
   
   Future<bool> cancelAppointment({
     required String studentNumber,
@@ -244,6 +270,61 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
     }
   }
 }
+
+final teacherTodayAppointmentsProvider = Provider<List<AppointmentModel>>((ref) {
+  // Watch the single source of truth for all appointments
+  final allAppointmentsAsync = ref.watch(teacherAllAppointmentsProvider);
+
+  return allAppointmentsAsync.when(
+    data: (appointments) {
+      final now = DateTime.now();
+      final List<AppointmentModel> filteredAppointments = [];
+
+      for (var appointment in appointments) {
+        bool shouldInclude = false;
+
+        // Logic from your getTeacherTodayAppointments service function
+        // Check if it's a scheduled appointment for today
+        if (appointment.scheduledTime != null) {
+          final scheduledDate = appointment.scheduledTime!;
+          final isScheduledForToday = scheduledDate.year == now.year &&
+                                      scheduledDate.month == now.month &&
+                                      scheduledDate.day == now.day;
+
+          // Include if scheduled for today and is due
+          if (isScheduledForToday && scheduledDate.isBefore(now.add(const Duration(minutes: 10)))) {
+            shouldInclude = true;
+          }
+        }
+
+        // Also include immediate appointments created today
+        if (appointment.isToday && !appointment.isScheduled) {
+          shouldInclude = true;
+        }
+
+        // Only include active appointments in this view
+        if ((appointment.status == AppointmentStatus.pending ||
+            appointment.status == AppointmentStatus.accepted) && shouldInclude) {
+          filteredAppointments.add(appointment);
+        }
+      }
+
+      // Sort by priority: near appointments first, then by time
+      filteredAppointments.sort((a, b) {
+        if (a.isNear && !b.isNear) return -1;
+        if (!a.isNear && b.isNear) return 1;
+        
+        final aTime = a.scheduledTime ?? a.createdAt;
+        final bTime = a.scheduledTime ?? a.createdAt;
+        return aTime.compareTo(bTime);
+      });
+
+      return filteredAppointments;
+    },
+    loading: () => [], // Return empty list while loading
+    error: (_, __) => [], // Return empty list on error
+  );
+});
 
 // Provider for appointment actions
 final appointmentNotifierProvider = StateNotifierProvider<AppointmentNotifier, AsyncValue<void>>((ref) {

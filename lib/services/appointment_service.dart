@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,9 +10,16 @@ import 'package:knocksense/models/teacher_model.dart';
 class AppointmentService {
   final FirebaseDatabase _database;
   static const int MAX_APPOINTMENTS_PER_TEACHER = 3;
+  Timer? _appointmentMonitorTimer;
+
+  StreamSubscription? _appointmentMonitorSubscription;
+  final Set<String> _monitoredAppointments = {};
 
   AppointmentService({required FirebaseDatabase database}) 
-      : _database = database;
+      : _database = database{
+
+        _startAppointmentMonitoring();
+      }
 
   String _cleanName(String name) {
     return name.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
@@ -166,60 +175,286 @@ class AppointmentService {
     }
   }
 
-  // Get today's appointments for teacher
-  Stream<List<AppointmentModel>> getTeacherTodayAppointments(String teacherUid) {
-    return _database
-        .ref('teacher_appointments/$teacherUid')
-        .onValue
-        .asyncMap((event) async {
-      final List<AppointmentModel> appointments = [];
+   void _startAppointmentMonitoring() {
+  // Listen to all scheduled appointments
+  _appointmentMonitorSubscription = _database
+      .ref('teacher_appointments')
+      .onValue
+      .listen((event) => _handleAppointmentChanges(event));
+}
+
+Future<void> _handleAppointmentChanges(DatabaseEvent event) async {
+  if (!event.snapshot.exists || event.snapshot.value == null) return;
+  
+  final now = DateTime.now();
+  final teacherData = Map<String, dynamic>.from(event.snapshot.value as Map);
+  
+  for (var teacherEntry in teacherData.entries) {
+    final teacherUid = teacherEntry.key;
+    final appointments = Map<String, dynamic>.from(teacherEntry.value as Map);
+    
+    for (var appointmentEntry in appointments.entries) {
+      final appointmentId = appointmentEntry.key;
+      final uniqueKey = '$teacherUid-$appointmentId';
       
-      if (event.snapshot.exists && event.snapshot.value != null) {
-        final indexData = Map<String, dynamic>.from(event.snapshot.value as Map);
+      // Skip if already monitoring this appointment
+      if (_monitoredAppointments.contains(uniqueKey)) continue;
+      
+      final indexData = Map<String, dynamic>.from(appointmentEntry.value as Map);
+      
+      if (indexData['isScheduled'] == true && 
+          indexData['scheduledTime'] != null &&
+          indexData['status'] == AppointmentStatus.pending.name) {
         
-        for (var entry in indexData.entries) {
-          final appointmentIndex = Map<String, dynamic>.from(entry.value as Map);
-          final studentNumber = appointmentIndex['studentNumber'] as String;
-          final appointmentId = appointmentIndex['appointmentId'] as String;
-          
-          final appointmentSnapshot = await _database
-              .ref('appointments/$studentNumber/$appointmentId')
-              .get();
-              
-          if (appointmentSnapshot.exists) {
-            final appointmentData = Map<String, dynamic>.from(appointmentSnapshot.value as Map);
+        final scheduledTime = DateTime.fromMillisecondsSinceEpoch(
+          indexData['scheduledTime'] as int
+        );
+        
+        // Calculate delay until auto-rejection (2 minutes after scheduled time)
+        final autoRejectTime = scheduledTime.add(const Duration(minutes: 2));
+        final delay = autoRejectTime.difference(now);
+        
+        if (delay.isNegative) {
+          // Already past the time, reject immediately
+          await _autoRejectAppointment(
+            studentNumber: indexData['studentNumber'] as String,
+            appointmentId: appointmentId,
+            teacherUid: teacherUid,
+            reason: "The professor hasn't been able to accept or deny the scheduled meeting request.",
+          );
+          _monitoredAppointments.add(uniqueKey);
+        } else {
+          // Schedule future rejection
+          _monitoredAppointments.add(uniqueKey);
+          Timer(delay, () async {
+            // Check if still pending before auto-rejecting
+            final snapshot = await _database
+                .ref('teacher_appointments/$teacherUid/$appointmentId')
+                .get();
             
-            if (appointmentData['studentPhotoUrl'] == null && appointmentData['studentUid'] != null) {
-              appointmentData['studentPhotoUrl'] = await _getUserPhotoUrl(appointmentData['studentUid']);
+            if (snapshot.exists) {
+              final data = Map<String, dynamic>.from(snapshot.value as Map);
+              if (data['status'] == AppointmentStatus.pending.name) {
+                await _autoRejectAppointment(
+                  studentNumber: data['studentNumber'] as String,
+                  appointmentId: appointmentId,
+                  teacherUid: teacherUid,
+                  reason: "The professor hasn't been able to accept or deny the scheduled meeting request.",
+                );
+              }
             }
-            if (appointmentData['teacherPhotoUrl'] == null && appointmentData['teacherUid'] != null) {
-              appointmentData['teacherPhotoUrl'] = await _getUserPhotoUrl(appointmentData['teacherUid']);
-            }
-            
-            final appointment = AppointmentModel.fromJson(appointmentId, appointmentData);
-            
-            // Filter for today's appointments (including scheduled ones)
-            if (appointment.isToday && 
-                (appointment.status == AppointmentStatus.pending ||
-                 appointment.status == AppointmentStatus.accepted)) {
-              appointments.add(appointment);
-            }
-          }
+            _monitoredAppointments.remove(uniqueKey);
+          });
         }
-        
-        // Sort by scheduled time or created time
-        appointments.sort((a, b) {
-          final aTime = a.scheduledTime ?? a.createdAt;
-          final bTime = b.scheduledTime ?? b.createdAt;
-          return aTime.compareTo(bTime);
-        });
       }
+    }
+  }
+}
+
+
+
+  // // Check appointments for auto-transfer and auto-rejection
+  // Future<void> _checkAndUpdateAppointments() async {
+  //   try {
+  //     final now = DateTime.now();
       
-      return appointments;
-    });
+  //     // Get all teacher appointments across the system
+  //     final snapshot = await _database.ref('teacher_appointments').get();
+      
+  //     if (!snapshot.exists || snapshot.value == null) return;
+      
+  //     final teacherData = Map<String, dynamic>.from(snapshot.value as Map);
+      
+  //     for (var teacherEntry in teacherData.entries) {
+  //       final teacherUid = teacherEntry.key;
+  //       final appointments = Map<String, dynamic>.from(teacherEntry.value as Map);
+        
+  //       for (var appointmentEntry in appointments.entries) {
+  //         final appointmentId = appointmentEntry.key;
+  //         final indexData = Map<String, dynamic>.from(appointmentEntry.value as Map);
+  //         final studentNumber = indexData['studentNumber'] as String;
+          
+  //         // Get full appointment data
+  //         final appointmentSnapshot = await _database
+  //             .ref('appointments/$studentNumber/$appointmentId')
+  //             .get();
+              
+  //         if (!appointmentSnapshot.exists) continue;
+          
+  //         final appointmentData = Map<String, dynamic>.from(appointmentSnapshot.value as Map);
+          
+  //         // Check if this is a scheduled appointment
+  //         if (appointmentData['isScheduled'] == true && 
+  //             appointmentData['scheduledTime'] != null) {
+            
+  //           final scheduledTime = DateTime.fromMillisecondsSinceEpoch(
+  //             appointmentData['scheduledTime'] as int
+  //           );
+            
+  //           final status = appointmentData['status'] as String;
+            
+  //           // Auto-reject if more than 2 minutes past scheduled time and still pending
+  //           if (status == AppointmentStatus.pending.name) {
+  //             final minutesPast = now.difference(scheduledTime).inMinutes;
+              
+  //             if (minutesPast > 2) {
+  //               await _autoRejectAppointment(
+  //                 studentNumber: studentNumber,
+  //                 appointmentId: appointmentId,
+  //                 teacherUid: teacherUid,
+  //                 reason: "The professor hasn't been able to accept or deny the scheduled meeting request.",
+  //               );
+  //             }
+  //           }
+  //         }
+  //       }
+  //     }
+  //   } catch (e) {
+  //     debugPrint('Error in appointment monitoring: $e');
+  //   }
+  // }
+
+  // Auto-reject appointment
+  Future<void> _autoRejectAppointment({
+    required String studentNumber,
+    required String appointmentId,
+    required String teacherUid,
+    required String reason,
+  }) async {
+    try {
+      final updates = <String, dynamic>{};
+      
+      updates['appointments/$studentNumber/$appointmentId/status'] = 
+          AppointmentStatus.cancelled.name;
+      updates['appointments/$studentNumber/$appointmentId/autoRejected'] = true;
+      updates['appointments/$studentNumber/$appointmentId/autoRejectedAt'] = 
+          ServerValue.timestamp;
+      updates['appointments/$studentNumber/$appointmentId/teacherResponse'] = reason;
+      
+      updates['teacher_appointments/$teacherUid/$appointmentId/status'] = 
+          AppointmentStatus.cancelled.name;
+      updates['teacher_appointments/$teacherUid/$appointmentId/autoRejected'] = true;
+      
+      await _database.ref().update(updates);
+      
+      // Send notification to student
+      await _sendAutoRejectionNotification(studentNumber, reason);
+      
+      debugPrint('Auto-rejected appointment $appointmentId for student $studentNumber');
+    } catch (e) {
+      debugPrint('Error auto-rejecting appointment: $e');
+    }
   }
 
-  // Get future appointments for teacher
+  // Get today's appointments for teacher
+ Stream<List<AppointmentModel>> getTeacherTodayAppointments(String teacherUid) {
+  final ref = _database.ref('teacher_appointments/$teacherUid');
+
+  // Listen for real-time changes at the teacher's appointment index
+  return ref.onValue.asyncMap((event) async {
+    if (!event.snapshot.exists || event.snapshot.value == null) {
+      return []; // Return an empty list if there's no data
+    }
+
+    final indexData = Map<String, dynamic>.from(event.snapshot.value as Map);
+    final List<Future<AppointmentModel?>> appointmentFutures = [];
+
+    // Create a list of futures to fetch all appointment details in parallel
+    for (var entry in indexData.entries) {
+      final appointmentIndex = Map<String, dynamic>.from(entry.value as Map);
+      final studentNumber = appointmentIndex['studentNumber'] as String;
+      final appointmentId = appointmentIndex['appointmentId'] as String;
+
+      appointmentFutures.add(
+        _fetchAppointmentDetails(studentNumber, appointmentId),
+      );
+    }
+
+    // Wait for all futures to complete
+    final appointmentsNullable = await Future.wait(appointmentFutures);
+    final appointments = appointmentsNullable.whereType<AppointmentModel>().toList();
+
+    // The rest of your filtering and sorting logic...
+    final now = DateTime.now();
+    final List<AppointmentModel> filteredAppointments = [];
+
+    for (var appointment in appointments) {
+    // Skip completed, cancelled, or denied appointments
+    if (appointment.status == AppointmentStatus.completed ||
+        appointment.status == AppointmentStatus.cancelled ||
+        appointment.status == AppointmentStatus.denied) {
+        continue; // Skip these appointments entirely
+    }
+    
+    bool shouldInclude = false;
+
+     if (appointment.scheduledTime != null) {
+        final scheduledDate = appointment.scheduledTime!;
+        if (scheduledDate.year == now.year &&
+            scheduledDate.month == now.month &&
+            scheduledDate.day == now.day &&
+            scheduledDate.isBefore(now.add(const Duration(minutes: 10)))) {
+            shouldInclude = true;
+        }
+    }
+        
+        // Also include immediate appointments created today
+        if (appointment.isToday && !appointment.isScheduled) {
+            shouldInclude = true;
+        }
+        
+        // Include active appointments regardless of date check
+        if (appointment.status == AppointmentStatus.pending ||
+            appointment.status == AppointmentStatus.accepted) {
+            if (shouldInclude) {
+                filteredAppointments.add(appointment);
+            }
+        }
+    }
+
+    // Sort by priority
+    filteredAppointments.sort((a, b) {
+      if (a.isNear && !b.isNear) return -1;
+      if (!a.isNear && b.isNear) return 1;
+      
+      final aTime = a.scheduledTime ?? a.createdAt;
+      final bTime = b.scheduledTime ?? b.createdAt;
+      return aTime.compareTo(bTime);
+    });
+
+    return filteredAppointments;
+  });
+}
+
+Future<AppointmentModel?> _fetchAppointmentDetails(String studentNumber, String appointmentId) async {
+  final appointmentSnapshot = await _database
+      .ref('appointments/$studentNumber/$appointmentId')
+      .get();
+      
+  if (appointmentSnapshot.exists) {
+    final appointmentData = Map<String, dynamic>.from(appointmentSnapshot.value as Map);
+    
+    // Fetch photo URLs in parallel
+    final photoUrls = await Future.wait([
+      if (appointmentData['studentPhotoUrl'] == null && appointmentData['studentUid'] != null)
+        _getUserPhotoUrl(appointmentData['studentUid'])
+      else
+        Future.value(appointmentData['studentPhotoUrl']),
+
+      if (appointmentData['teacherPhotoUrl'] == null && appointmentData['teacherUid'] != null)
+        _getUserPhotoUrl(appointmentData['teacherUid'])
+      else
+        Future.value(appointmentData['teacherPhotoUrl']),
+    ]);
+
+    appointmentData['studentPhotoUrl'] = photoUrls[0];
+    appointmentData['teacherPhotoUrl'] = photoUrls[1];
+    
+    return AppointmentModel.fromJson(appointmentId, appointmentData);
+  }
+  return null;
+}
+
   Stream<List<AppointmentModel>> getTeacherFutureAppointments(String teacherUid) {
     return _database
         .ref('teacher_appointments/$teacherUid')
@@ -253,10 +488,9 @@ class AppointmentService {
             
             // Filter for future appointments
             if (appointment.isFuture && 
-                (appointment.status == AppointmentStatus.pending ||
-                 appointment.status == AppointmentStatus.accepted)) {
+              appointment.status == AppointmentStatus.pending) {  // Only show pending future appointments
               appointments.add(appointment);
-            }
+          }
           }
         }
         
@@ -272,13 +506,14 @@ class AppointmentService {
     });
   }
 
+
   // Simple accept/reject for scheduled appointments when time is near
-  Future<bool> respondToScheduledAppointment({
+   Future<bool> respondToScheduledAppointment({
     required String studentNumber,
     required String appointmentId,
     required String teacherUid,
     required bool accept,
-    String? teacherResponse,
+    required String teacherResponse, // Made required for scheduled appointments
   }) async {
     try {
       final updates = <String, dynamic>{};
@@ -287,13 +522,13 @@ class AppointmentService {
       
       updates['appointments/$studentNumber/$appointmentId/status'] = newStatus.name;
       updates['appointments/$studentNumber/$appointmentId/respondedAt'] = ServerValue.timestamp;
+      updates['appointments/$studentNumber/$appointmentId/teacherResponse'] = teacherResponse;
       
-      if (teacherResponse != null) {
-        updates['appointments/$studentNumber/$appointmentId/teacherResponse'] = teacherResponse;
-      }
-      
+      // For scheduled appointments, if accepted, treat as "meet now"
       if (accept) {
         updates['appointments/$studentNumber/$appointmentId/teacherAction'] = TeacherAction.meetNow.name;
+        // Mark as completed since it's an immediate meeting
+        updates['appointments/$studentNumber/$appointmentId/completedAt'] = ServerValue.timestamp;
       } else {
         updates['appointments/$studentNumber/$appointmentId/teacherAction'] = TeacherAction.reject.name;
       }
@@ -303,6 +538,7 @@ class AppointmentService {
       
       await _database.ref().update(updates);
       
+      // Send notification with the teacher's response/location
       await _sendScheduledAppointmentResponse(studentNumber, accept, teacherResponse);
       
       return true;
@@ -552,10 +788,34 @@ class AppointmentService {
     debugPrint('Scheduled appointment notification: $studentName scheduled for $scheduledTime');
   }
 
-  Future<void> _sendScheduledAppointmentResponse(String studentNumber, bool accepted, String? message) async {
-    final status = accepted ? 'accepted' : 'declined';
-    debugPrint('Scheduled appointment $status. Message: $message');
+  Future<void> _sendScheduledAppointmentResponse(
+    String studentNumber, 
+    bool accepted, 
+    String message,
+  ) async {
+    if (accepted) {
+      // Message should contain location information
+      debugPrint('Scheduled appointment accepted. Professor location: $message');
+    } else {
+      // Message contains rejection reason
+      debugPrint('Scheduled appointment rejected. Reason: $message');
+    }
+    // Implement actual notification logic here
   }
+
+  // Auto-rejection notification
+  Future<void> _sendAutoRejectionNotification(
+    String studentNumber,
+    String message,
+  ) async {
+    debugPrint('Auto-rejection notification sent to student: $message');
+    // Implement actual notification logic here
+  }
+
+  void dispose() {
+  _appointmentMonitorSubscription?.cancel();
+  _monitoredAppointments.clear();
+}
 
   Future<void> _sendNotificationToStudent(
     String studentNumber, 
@@ -636,6 +896,9 @@ class AppointmentService {
     return false;
   }
 }
+
+
+
 
 
 

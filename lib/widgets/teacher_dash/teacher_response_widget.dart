@@ -61,9 +61,26 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
     }
   }
 
+  // Add this method to check if appointment needs scheduled response
+  bool _isScheduledAppointmentRequiringResponse() {
+    // Check if this is a scheduled appointment that's now due
+    if (widget.appointment.isScheduled && widget.appointment.scheduledTime != null) {
+      final now = DateTime.now();
+      final scheduledTime = widget.appointment.scheduledTime!;
+      
+      // If scheduled time has passed or is within 10 minutes
+      if (scheduledTime.isBefore(now.add(const Duration(minutes: 10)))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+
   @override
   Widget build(BuildContext context) {
-    // Check if appointment is already accepted with specific actions
+    // Check appointment type and status
+    final isScheduledDue = _isScheduledAppointmentRequiringResponse();
     final isWaiting = widget.appointment.status == AppointmentStatus.accepted && 
                       widget.appointment.teacherAction == TeacherAction.wait5Minutes;
     final isMeetNow = widget.appointment.status == AppointmentStatus.accepted && 
@@ -180,14 +197,18 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
             
             const SizedBox(height: 24),
             
-            // Show different UI based on appointment status
-            if (isWaiting) ...[
+            // Decision logic for which UI to show
+            if (isScheduledDue && widget.appointment.status == AppointmentStatus.pending) ...[
+              // For scheduled appointments when professor was offline/busy
+              _buildScheduledAppointmentResponseUI(),
+            ] else if (isWaiting) ...[
               _buildWaitingManagementUI(),
             ] else if (isMeetNow) ...[
               _buildMeetNowManagementUI(),
             ] else if (isMeetLater) ...[
               _buildMeetLaterManagementUI(),
             ] else ...[
+              // Regular pending appointment (immediate request when online)
               _buildPendingAppointmentUI(),
             ],
           ],
@@ -195,6 +216,8 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
       ),
     );
   }
+
+  
 
   Color _getStatusColor(bool isWaiting, bool isMeetNow, bool isMeetLater) {
     if (isWaiting) return Colors.orange;
@@ -870,6 +893,195 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
     );
   }
 
+  // New method for scheduled appointment response
+  Widget _buildScheduledAppointmentResponseUI() {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.blue.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blue.withOpacity(0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Scheduled Appointment',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Scheduled for: ${DateFormat('h:mm a').format(widget.appointment.scheduledTime!)}',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Please provide your location if accepting, or reason if rejecting.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 20),
+        
+        // Required note input
+        TextField(
+          controller: _noteController,
+          onChanged: (_) => _clearNoteError(),
+          maxLines: 3,
+          decoration: InputDecoration(
+            hintText: 'Enter your location (if accepting) or reason (if rejecting)...',
+            hintStyle: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 14,
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.grey[200]!,
+                width: _hasNoteError ? 2 : 1,
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.grey[200]!,
+                width: _hasNoteError ? 2 : 1,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.blue,
+                width: 2,
+              ),
+            ),
+            contentPadding: const EdgeInsets.all(16),
+          ),
+        ),
+        
+        if (_hasNoteError) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Please provide your location or rejection reason',
+            style: TextStyle(
+              color: Colors.red,
+              fontSize: 12,
+            ),
+          ),
+        ],
+        
+        const SizedBox(height: 20),
+        
+        // Only Accept/Reject buttons for scheduled appointments
+        Column(
+          children: [
+            // Accept Meeting button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isResponding 
+                    ? null 
+                    : () => _handleScheduledAccept(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  disabledBackgroundColor: Colors.grey[300],
+                ),
+                child: _isResponding
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text(
+                        'Accept Meeting',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Reject Meeting button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isResponding 
+                    ? null 
+                    : () => _handleScheduledReject(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEF4444),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  disabledBackgroundColor: Colors.grey[300],
+                ),
+                child: const Text(
+                  'Reject Meeting',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Close button
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: _isResponding ? null : () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.grey[600],
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   String _getInitials(String name) {
     if (name.isEmpty) return '??';
     
@@ -1149,6 +1361,100 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
     }
   }
 
+  // Handler for scheduled appointment accept
+  Future<void> _handleScheduledAccept() async {
+    final note = _noteController.text.trim();
+    
+    // Validate that note (location) is provided
+    if (note.isEmpty) {
+      setState(() {
+        _hasNoteError = true;
+      });
+      return;
+    }
+    
+    setState(() {
+      _isResponding = true;
+    });
+
+    try {
+      final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
+      
+      // Use the scheduled appointment response method
+      final success = await appointmentNotifier.respondToScheduledAppointment(
+        studentNumber: widget.appointment.studentNumber,
+        appointmentId: widget.appointment.appointmentId,
+        teacherUid: widget.currentUser.uid,
+        accept: true,
+        teacherResponse: note, // This will be the location
+      );
+      
+      if (success && mounted) {
+        Navigator.pop(context);
+        _showSuccessMessage('Meeting accepted! Student has been notified of your location.');
+      } else if (mounted) {
+        _showErrorMessage('Failed to accept appointment. Please try again.');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorMessage('An error occurred: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isResponding = false;
+        });
+      }
+    }
+  }
+
+  // Handler for scheduled appointment reject
+  Future<void> _handleScheduledReject() async {
+    final reason = _noteController.text.trim();
+    
+    // Validate that reason is provided
+    if (reason.isEmpty) {
+      setState(() {
+        _hasNoteError = true;
+      });
+      return;
+    }
+    
+    setState(() {
+      _isResponding = true;
+    });
+
+    try {
+      final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
+      
+      // Use the scheduled appointment response method
+      final success = await appointmentNotifier.respondToScheduledAppointment(
+        studentNumber: widget.appointment.studentNumber,
+        appointmentId: widget.appointment.appointmentId,
+        teacherUid: widget.currentUser.uid,
+        accept: false,
+        teacherResponse: reason, // This will be the rejection reason
+      );
+      
+      if (success && mounted) {
+        Navigator.pop(context);
+        _showSuccessMessage('Appointment rejected. Student has been notified.');
+      } else if (mounted) {
+        _showErrorMessage('Failed to reject appointment. Please try again.');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorMessage('An error occurred: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isResponding = false;
+        });
+      }
+    }
+  }
+
   String _getSuccessMessage(TeacherAction action) {
     switch (action) {
       case TeacherAction.meetNow:
@@ -1189,4 +1495,5 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
       ),
     );
   }
+  
 }

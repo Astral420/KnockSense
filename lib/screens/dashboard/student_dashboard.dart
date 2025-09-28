@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
 import 'package:knocksense/models/appointment_model.dart';
 import 'package:knocksense/provider/appointment_provider.dart';
 import 'package:knocksense/provider/auth_provider.dart';
@@ -340,24 +341,43 @@ class StudentDashboard extends ConsumerWidget {
                             ),
                           ),
                           trailing: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _getAppointmentStatusColor(appointment.status)
-                                  .withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              _formatAppointmentStatus(appointment),
-                              style: TextStyle(
-                                color: _getAppointmentStatusColor(appointment.status),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ),
+  padding: const EdgeInsets.symmetric(
+    horizontal: 8,
+    vertical: 4,
+  ),
+  decoration: BoxDecoration(
+    color: _getAppointmentStatusColor(appointment.status)
+        .withOpacity(0.1),
+    borderRadius: BorderRadius.circular(12),
+  ),
+  child: Column( // ✅ Use a Column to hold multiple widgets
+    mainAxisSize: MainAxisSize.min, // Ensure column doesn't expand
+    crossAxisAlignment: CrossAxisAlignment.end, // Align text to the right
+    children: [
+      Text(
+        _formatAppointmentStatus(appointment),
+        style: TextStyle(
+          color: _getAppointmentStatusColor(appointment.status),
+          fontWeight: FontWeight.w600,
+          fontSize: 10,
+        ),
+      ),
+      // ✅ Use a collection `if` inside the children list
+      if (appointment.isScheduled && appointment.scheduledTime != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 2.0), // Optional spacing
+          child: Text(
+            DateFormat('h:mm a').format(appointment.scheduledTime!),
+            style: TextStyle(
+              color: _getAppointmentStatusColor(appointment.status)
+                  .withOpacity(0.7),
+              fontSize: 9,
+            ),
+          ),
+        ),
+    ],
+  ),
+),
                         ),
                       ),
                     );
@@ -725,6 +745,18 @@ Color _getAppointmentStatusColor(AppointmentStatus status) {
 }
 
 String _formatAppointmentStatus(AppointmentModel appointment) {
+  // Handle scheduled appointments
+  if (appointment.isScheduled) {
+    if (appointment.status == AppointmentStatus.pending) {
+      return 'Scheduled';
+    } else if (appointment.status == AppointmentStatus.accepted) {
+      return 'Confirmed';
+    } else if (appointment.status == AppointmentStatus.denied) {
+      return 'Rejected';
+    }
+  }
+  
+  // Your existing logic for immediate appointments
   if (appointment.status == AppointmentStatus.accepted) {
     switch (appointment.teacherAction) {
       case TeacherAction.meetNow:
@@ -732,7 +764,7 @@ String _formatAppointmentStatus(AppointmentModel appointment) {
       case TeacherAction.wait5Minutes:
         return 'Wait 5 Min';
       case TeacherAction.meetLater:
-        return 'Scheduled';
+        return 'Later';
       default:
         return 'Accepted';
     }

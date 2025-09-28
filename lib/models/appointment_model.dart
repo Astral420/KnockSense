@@ -46,7 +46,7 @@ class AppointmentModel {
     if (scheduledTime == null) return false;
     final now = DateTime.now();
     final difference = scheduledTime!.difference(now);
-    return difference.inMinutes <= 15 && difference.inMinutes >= 0;
+    return difference.inMinutes <= 10 && difference.inMinutes >= 5;
   }
 
   AppointmentModel({
