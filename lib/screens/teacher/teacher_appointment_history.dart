@@ -307,7 +307,7 @@ class TeacherAppointmentHistory extends ConsumerWidget {
     
     switch (status) {
       case AppointmentStatus.completed:
-        return const Color.fromARGB(255, 59, 141, 207); // blue
+        return const Color.fromARGB(255, 112, 177, 231); // blue
       case AppointmentStatus.pending:
         return const Color(0xFFFFF3CD); // Light yellow
       case AppointmentStatus.accepted:

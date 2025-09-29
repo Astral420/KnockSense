@@ -1199,9 +1199,8 @@ Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentU
     );
     
     if (result['success'] == true) {
+      ref.invalidate(hasPendingAppointmentProvider(teacher.uid));
       Navigator.pop(context);
-      // Instead of ScaffoldMessenger, we could show the success message in modal
-      // But since we're closing the modal, we'll keep the ScaffoldMessenger for success
       _showSuccessMessage(
         'Appointment scheduled with ${teacher.displayName} for '
         '${_selectedTime!.format(context)} on ${_selectedDate!.month}/${_selectedDate!.day}'
@@ -1270,6 +1269,7 @@ Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentU
       );
       
       if (result['success'] == true) {
+        ref.invalidate(hasPendingAppointmentProvider(teacher.uid));
         Navigator.pop(context);
         _showSuccessMessage('Appointment request sent to ${teacher.displayName}');
       } else {

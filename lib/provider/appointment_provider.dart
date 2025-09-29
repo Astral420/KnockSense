@@ -84,22 +84,17 @@ final teacherAllAppointmentsProvider = StreamProvider<List<AppointmentModel>>((r
 });
 
 // Provider to check if student has pending appointment with specific teacher
-final hasPendingAppointmentProvider = FutureProvider.family<bool, String>((ref, teacherUid) async {
-  final user = ref.watch(currentUserProvider);
+final hasPendingAppointmentProvider = StreamProvider.family<bool, String>((ref, teacherUid) {
   final appointmentService = ref.watch(appointmentServiceProvider);
-  
-  return user.when(
-    data: (userData) async {
-      if (userData == null || userData.studentNumber == null) {
-        return false;
-      }
-      return await appointmentService.hasPendingAppointment(
-        studentNumber: userData.studentNumber!,
-        teacherUid: teacherUid,
-      );
-    },
-    loading: () => false,
-    error: (_, __) => false,
+  final currentUser = ref.watch(currentUserProvider).value;
+
+  if (currentUser == null || currentUser.studentNumber == null) {
+    return Stream.value(false);
+  }
+
+  return appointmentService.hasPendingAppointmentStream(
+    studentNumber: currentUser.studentNumber!,
+    teacherUid: teacherUid,
   );
 });
 
@@ -269,6 +264,29 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
       return false;
     }
   }
+
+  // NEW METHOD ADDED
+  Future<bool> meetAndCompleteAppointment({
+    required String studentNumber,
+    required String appointmentId,
+    required String teacherUid,
+    String? teacherNote,
+  }) async {
+    state = const AsyncValue.loading();
+    try {
+      final success = await _service.meetAndCompleteAppointment(
+        studentNumber: studentNumber,
+        appointmentId: appointmentId,
+        teacherUid: teacherUid,
+        teacherNote: teacherNote,
+      );
+      state = const AsyncValue.data(null);
+      return success;
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      return false;
+    }
+  }
 }
 
 final teacherTodayAppointmentsProvider = Provider<List<AppointmentModel>>((ref) {
@@ -333,8 +351,8 @@ final appointmentNotifierProvider = StateNotifierProvider<AppointmentNotifier, A
 });
 
 
-// ======== NEWLY ADDED PROVIDER ========
-// Filtered appointment history for teachers, mirroring the student's logic.
+
+
 final filteredTeacherHistoryProvider = Provider<List<AppointmentModel>>((ref) {
   final appointments = ref.watch(teacherAllAppointmentsProvider);
   final dateRange = ref.watch(dateRangeProvider);
