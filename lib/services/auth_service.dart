@@ -3,6 +3,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/services/microsoft_graph_service.dart';
+import 'package:knocksense/services/notification_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth;
@@ -35,6 +36,8 @@ class AuthService {
           final oauthCredential = userCredential.credential as dynamic;
           accessToken = oauthCredential.accessToken;
 
+          
+
         } else {
           debugPrint("Usercredential is null");
         }
@@ -44,6 +47,9 @@ class AuthService {
           firebaseUser: userCredential.user!,
           principalName: userCredential.additionalUserInfo?.profile?['upn'] as String?,
         );
+
+        final notificationService = NotificationService();
+        await notificationService.saveUserToken(user.uid, user.role.name);
 
         // 2. Fetch the photo in the background. Don't await it.
         if (accessToken != null) {
@@ -94,6 +100,10 @@ class AuthService {
             firebaseUser: userCredential.user!,
             isAdmin: true,
           );
+
+          
+
+          
         } else {
           // Not admin, sign out
           await _auth.signOut();
@@ -263,6 +273,12 @@ class AuthService {
 
   // Sign out
   Future<void> signOut() async {
+
+    if (currentUser != null) {
+    final notificationService = NotificationService();
+    await notificationService.clearUserToken(currentUser!.uid);
+  }
+
     await _auth.signOut();
   }
 

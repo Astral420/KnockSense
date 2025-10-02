@@ -1,9 +1,22 @@
+import 'dart:io';
+
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Initialize Firebase if needed
+  await Firebase.initializeApp();
+  debugPrint('Background message received: ${message.notification?.title}');
+  
+  
+}
+
 class NotificationService {
+  bool get _isPlatformSupported => Platform.isAndroid;
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
@@ -17,25 +30,65 @@ class NotificationService {
   final Set<String> _subscribedTeachers = {};
 
   Future<void> initialize() async {
+
+    if (!Platform.isAndroid) {
+    debugPrint('Notification service is only available on Android');
+    return;
+  }
+
     // Request permission
     await _requestPermission();
     
     // Initialize local notifications
     await _initializeLocalNotifications();
     
+    // CREATE ANDROID NOTIFICATION CHANNEL (ADD THIS!)
+    await _createNotificationChannel();
+    
     // Get FCM token
     final token = await _messaging.getToken();
     debugPrint('FCM Token: $token');
-    
     // Handle foreground messages
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
     
     // Handle background messages
-    FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     
     // Handle notification taps
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
+
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'appointments', // Your channel ID
+    'Appointment Notifications',
+    description: 'Notifications for appointment updates',
+    importance: Importance.max, // You have Importance.high
+    playSound: true,
+    enableVibration: true,
+    enableLights: true,
+    showBadge: true,
+);
+
+
+
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'appointments',
+      'Appointment Notifications',
+      importance: Importance.max,
+      priority: Priority.max,
+      showWhen: true,
+      playSound: true,
+      enableVibration: true,
+      enableLights: true,
+      fullScreenIntent: true, // Shows notification even on lock screen
+      category: AndroidNotificationCategory.message,
+      visibility: NotificationVisibility.public,
+    );
+
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   }
+
+  
 
   Future<void> _requestPermission() async {
     final settings = await _messaging.requestPermission(
@@ -69,6 +122,7 @@ class NotificationService {
 
   // Subscribe to teacher status updates
   Future<void> subscribeToTeacher(String teacherUid, String studentUid) async {
+    if (!_isPlatformSupported) return;
     try {
       // Subscribe to FCM topic
       await _messaging.subscribeToTopic('teacher_$teacherUid');
@@ -90,6 +144,7 @@ class NotificationService {
 
   // Unsubscribe from teacher status updates
   Future<void> unsubscribeFromTeacher(String teacherUid, String studentUid) async {
+    if (!_isPlatformSupported) return;
     try {
       await _messaging.unsubscribeFromTopic('teacher_$teacherUid');
       _subscribedTeachers.remove(teacherUid);
@@ -134,6 +189,7 @@ class NotificationService {
     required String body,
     Map<String, dynamic>? payload,
   }) async {
+    if (!_isPlatformSupported) return;
     const androidDetails = AndroidNotificationDetails(
       'appointments',
       'Appointment Notifications',
@@ -164,16 +220,19 @@ class NotificationService {
 
   // Store FCM token for user
   Future<void> saveUserToken(String uid, String role) async {
+  if (!_isPlatformSupported) return; 
   try {
     final token = await _messaging.getToken();
     if (token != null) {
-      // Store tokens as a map to support multiple devices
-      await _database.ref('fcm_tokens/$uid/$token').set({
+      // FIXED: Use a simpler structure with token as value, not key
+      final deviceId = DateTime.now().millisecondsSinceEpoch.toString();
+      await _database.ref('fcm_tokens/$uid/$deviceId').set({
         'token': token,
         'role': role,
-        'deviceId': token.substring(0, 20), // Simple device identifier
         'updatedAt': ServerValue.timestamp,
+        'platform': 'android',
       });
+      debugPrint('FCM token saved for user $uid');
     }
   } catch (e) {
     debugPrint('Error saving FCM token: $e');
@@ -181,6 +240,7 @@ class NotificationService {
 }
 
 Future<void> clearUserToken(String uid) async {
+  if (!_isPlatformSupported) return;
   try {
     final token = await _messaging.getToken();
     if (token != null) {
@@ -200,6 +260,7 @@ Future<void> clearUserToken(String uid) async {
 
   // Handle foreground messages
   void _handleForegroundMessage(RemoteMessage message) {
+    if (!_isPlatformSupported) return;
     debugPrint('Foreground message: ${message.notification?.title}');
     
     // Show local notification
@@ -214,18 +275,37 @@ Future<void> clearUserToken(String uid) async {
 
   // Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
+    if (!_isPlatformSupported) return;
     debugPrint('Notification tapped: ${response.payload}');
     // Navigate to appropriate screen based on payload
   }
 
   void _handleMessageOpenedApp(RemoteMessage message) {
+    if (!_isPlatformSupported) return;
     debugPrint('Message opened app: ${message.data}');
     // Navigate to appropriate screen based on message data
   }
 }
 
-// Background message handler (must be top-level function)
-@pragma('vm:entry-point')
-Future<void> _handleBackgroundMessage(RemoteMessage message) async {
-  debugPrint('Background message: ${message.notification?.title}');
+Future<void> _createNotificationChannel() async {
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'appointments', // id
+    'Appointment Notifications', // title
+    description: 'Notifications for appointment updates',
+    importance: Importance.high,
+    playSound: true,
+    enableVibration: true,
+  );
+
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+  
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);
+  
+  debugPrint('Android notification channel created');
 }
+
+  
+

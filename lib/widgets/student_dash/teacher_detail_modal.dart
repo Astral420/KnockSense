@@ -998,9 +998,9 @@ Future<void> _selectDate(BuildContext context) async {
     lastDate: weekFromNow,
     selectableDayPredicate: (DateTime day) {
       // Exclude Sundays
-      // if (day.weekday == DateTime.sunday) {
-      //   return false;
-      // }
+      if (day.weekday == DateTime.sunday) {
+        return false;
+      }
       
       // Exclude dates before status change if on the same day
       if (statusData != null && statusData.changedAt != null) {

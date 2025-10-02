@@ -727,25 +727,67 @@ String _getTeacherInitials(String teacherName) {
 
 String _formatAppointmentDate(DateTime date) {
   final now = DateTime.now();
-  final difference = now.difference(date);
   
-  if (difference.inDays == 0) {
+  // Get the start of today (midnight)
+  final todayStart = DateTime(now.year, now.month, now.day);
+  final dateStart = DateTime(date.year, date.month, date.day);
+  
+  // Calculate difference in actual calendar days
+  final dayDifference = todayStart.difference(dateStart).inDays;
+  
+  if (dayDifference == 0) {
+    // Same calendar day
     return 'Today ${_formatTime(date)}';
-  } else if (difference.inDays == 1) {
+  } else if (dayDifference == 1) {
+    // Yesterday
     return 'Yesterday ${_formatTime(date)}';
-  } else if (difference.inDays < 7) {
-    return '${difference.inDays} days ago';
+  } else if (dayDifference < 7) {
+    // Within a week
+    return '$dayDifference days ago';
+  } else if (dayDifference < 30) {
+    // Within a month
+    final weeks = (dayDifference / 7).floor();
+    return weeks == 1 ? '1 week ago' : '$weeks weeks ago';
   } else {
-    return '${date.month}/${date.day}/${date.year}';
+    // Older than a month - show full date
+    return DateFormat('MMM d, yyyy').format(date);
   }
 }
 
+// Also update the _formatTime function to be cleaner:
 String _formatTime(DateTime date) {
-  final hour = date.hour;
-  final minute = date.minute.toString().padLeft(2, '0');
-  final period = hour >= 12 ? 'PM' : 'AM';
-  final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-  return '$displayHour:$minute $period';
+  return DateFormat('h:mm a').format(date);
+}
+
+// Alternative more detailed version if you want relative time for today:
+String _formatAppointmentDateDetailed(DateTime date) {
+  final now = DateTime.now();
+  final difference = now.difference(date);
+  
+  // Get the start of today (midnight)
+  final todayStart = DateTime(now.year, now.month, now.day);
+  final dateStart = DateTime(date.year, date.month, date.day);
+  final dayDifference = todayStart.difference(dateStart).inDays;
+  
+  if (dayDifference == 0) {
+    // Same calendar day - show relative time
+    if (difference.inMinutes < 60) {
+      return '${difference.inMinutes} min${difference.inMinutes != 1 ? 's' : ''} ago';
+    } else if (difference.inHours < 12) {
+      return '${difference.inHours} hour${difference.inHours != 1 ? 's' : ''} ago';
+    } else {
+      return 'Today ${_formatTime(date)}';
+    }
+  } else if (dayDifference == 1) {
+    return 'Yesterday ${_formatTime(date)}';
+  } else if (dayDifference < 7) {
+    return '$dayDifference days ago';
+  } else if (dayDifference < 30) {
+    final weeks = (dayDifference / 7).floor();
+    return weeks == 1 ? '1 week ago' : '$weeks weeks ago';
+  } else {
+    return DateFormat('MMM d, yyyy').format(date);
+  }
 }
 
 Color _getAppointmentStatusColor(AppointmentStatus status) {
