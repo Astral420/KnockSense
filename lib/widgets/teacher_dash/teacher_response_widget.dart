@@ -203,8 +203,6 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
               _buildScheduledAppointmentResponseUI(),
             ] else if (isWaiting) ...[
               _buildWaitingManagementUI(),
-            ] else if (isMeetNow) ...[
-              _buildMeetNowManagementUI(),
             ] else if (isMeetLater) ...[
               _buildMeetLaterManagementUI(),
             ] else ...[
@@ -221,14 +219,12 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
 
   Color _getStatusColor(bool isWaiting, bool isMeetNow, bool isMeetLater) {
     if (isWaiting) return Colors.orange;
-    if (isMeetNow) return Colors.green;
     if (isMeetLater) return Colors.blue;
     return Colors.grey;
   }
 
   String _getStatusText(bool isWaiting, bool isMeetNow, bool isMeetLater) {
     if (isWaiting) return 'Waiting';
-    if (isMeetNow) return 'In Progress';
     if (isMeetLater) return 'Scheduled';
     return 'Unknown';
   }
@@ -409,99 +405,99 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
     );
   }
 
-  Widget _buildMeetNowManagementUI() {
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.green.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.green.withOpacity(0.3)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Meeting in Progress',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.green,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'The student should be with you now.',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
+  // Widget _buildMeetNowManagementUI() {
+  //   return Column(
+  //     children: [
+  //       Container(
+  //         width: double.infinity,
+  //         padding: const EdgeInsets.all(16),
+  //         decoration: BoxDecoration(
+  //           color: Colors.green.withOpacity(0.1),
+  //           borderRadius: BorderRadius.circular(12),
+  //           border: Border.all(color: Colors.green.withOpacity(0.3)),
+  //         ),
+  //         child: Column(
+  //           crossAxisAlignment: CrossAxisAlignment.start,
+  //           children: [
+  //             const Text(
+  //               'Meeting in Progress',
+  //               style: TextStyle(
+  //                 fontSize: 16,
+  //                 fontWeight: FontWeight.w600,
+  //                 color: Colors.green,
+  //               ),
+  //             ),
+  //             const SizedBox(height: 8),
+  //             Text(
+  //               'The student should be with you now.',
+  //               style: TextStyle(
+  //                 fontSize: 14,
+  //                 color: Colors.grey[600],
+  //               ),
+  //             ),
+  //           ],
+  //         ),
+  //       ),
         
-        const SizedBox(height: 20),
+  //       const SizedBox(height: 20),
         
-        // Action button to complete meeting
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _isResponding 
-                ? null 
-                : () => _handleCompleteMeeting(),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3B82F6),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              disabledBackgroundColor: Colors.grey[300],
-            ),
-            child: _isResponding
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text(
-                    'Finish Meeting',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-          ),
-        ),
+  //       // Action button to complete meeting
+  //       SizedBox(
+  //         width: double.infinity,
+  //         child: ElevatedButton(
+  //           onPressed: _isResponding 
+  //               ? null 
+  //               : () => _handleCompleteMeeting(),
+  //           style: ElevatedButton.styleFrom(
+  //             backgroundColor: const Color(0xFF3B82F6),
+  //             foregroundColor: Colors.white,
+  //             padding: const EdgeInsets.symmetric(vertical: 16),
+  //             shape: RoundedRectangleBorder(
+  //               borderRadius: BorderRadius.circular(12),
+  //             ),
+  //             disabledBackgroundColor: Colors.grey[300],
+  //           ),
+  //           child: _isResponding
+  //               ? const SizedBox(
+  //                   width: 20,
+  //                   height: 20,
+  //                   child: CircularProgressIndicator(
+  //                     strokeWidth: 2,
+  //                     valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+  //                   ),
+  //                 )
+  //               : const Text(
+  //                   'Finish Meeting',
+  //                   style: TextStyle(
+  //                     fontSize: 16,
+  //                     fontWeight: FontWeight.w600,
+  //                   ),
+  //                 ),
+  //         ),
+  //       ),
         
-        const SizedBox(height: 16),
+  //       const SizedBox(height: 16),
         
-        SizedBox(
-          width: double.infinity,
-          child: TextButton(
-            onPressed: _isResponding ? null : () => Navigator.pop(context),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.grey[600],
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
-            child: const Text(
-              'Close',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  //       SizedBox(
+  //         width: double.infinity,
+  //         child: TextButton(
+  //           onPressed: _isResponding ? null : () => Navigator.pop(context),
+  //           style: TextButton.styleFrom(
+  //             foregroundColor: Colors.grey[600],
+  //             padding: const EdgeInsets.symmetric(vertical: 16),
+  //           ),
+  //           child: const Text(
+  //             'Close',
+  //             style: TextStyle(
+  //               fontSize: 16,
+  //               fontWeight: FontWeight.w500,
+  //             ),
+  //           ),
+  //         ),
+  //       ),
+  //     ],
+  //   );
+  // }
 
   Widget _buildMeetLaterManagementUI() {
     return Column(
@@ -1082,16 +1078,16 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
     );
   }
 
-  String _getInitials(String name) {
-    if (name.isEmpty) return '??';
+  // String _getInitials(String name) {
+  //   if (name.isEmpty) return '??';
     
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    } else {
-      return parts[0][0].toUpperCase();
-    }
-  }
+  //   final parts = name.trim().split(' ');
+  //   if (parts.length >= 2) {
+  //     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  //   } else {
+  //     return parts[0][0].toUpperCase();
+  //   }
+  // }
 
   Future<void> _handleResponse(TeacherAction action) async {
     // Validate that Meet Later requires a note
@@ -1169,41 +1165,38 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
   }
 
   Future<void> _handleMeetNowFromWaiting() async {
-    setState(() {
-      _isResponding = true;
-    });
+  setState(() {
+    _isResponding = true;
+  });
 
-    try {
-      final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
-      final note = _noteController.text.trim(); 
-      
-      final success = await appointmentNotifier.respondToAppointment(
-        studentNumber: widget.appointment.studentNumber,
-        appointmentId: widget.appointment.appointmentId,
-        teacherUid: widget.currentUser.uid,
-        action: TeacherAction.meetNow,
-        teacherResponse: note.isNotEmpty ? note : null,
-        scheduledTime: null,
-      );
-      
-      if (success && mounted) {
-        Navigator.pop(context); // Close modal
-        _showSuccessMessage('Student has been notified to meet you now!');
-      } else if (mounted) {
-        _showErrorMessage('Failed to update appointment. Please try again.');
-      }
-    } catch (e) {
-      if (mounted) {
-        _showErrorMessage('An error occurred: ${e.toString()}');
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isResponding = false;
-        });
-      }
+  try {
+    final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
+    
+    // Directly complete the appointment instead of just updating status
+    final success = await appointmentNotifier.completeAppointment(
+      studentNumber: widget.appointment.studentNumber,
+      appointmentId: widget.appointment.appointmentId,
+      teacherUid: widget.currentUser.uid,
+    );
+    
+    if (success && mounted) {
+      Navigator.pop(context); // Close modal
+      _showSuccessMessage('Meeting completed successfully!');
+    } else if (mounted) {
+      _showErrorMessage('Failed to complete meeting. Please try again.');
+    }
+  } catch (e) {
+    if (mounted) {
+      _showErrorMessage('An error occurred: ${e.toString()}');
+    }
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isResponding = false;
+      });
     }
   }
+}
 
   Future<void> _handleMeetNowFromLater() async {
     setState(() {
@@ -1212,24 +1205,22 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
 
     try {
       final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
-      final note = _noteController.text.trim().isNotEmpty 
-          ? _noteController.text.trim() 
-          : 'Meeting time changed - student can meet now';
-      
-      final success = await appointmentNotifier.respondToAppointment(
+      final note = _noteController.text.trim().isNotEmpty
+          ? _noteController.text.trim()
+          : 'Meeting now instead of later.';
+
+      final success = await appointmentNotifier.meetAndCompleteAppointment(
         studentNumber: widget.appointment.studentNumber,
         appointmentId: widget.appointment.appointmentId,
         teacherUid: widget.currentUser.uid,
-        action: TeacherAction.meetNow,
-        teacherResponse: note,
-        scheduledTime: null,
+        teacherNote: note,
       );
-      
+
       if (success && mounted) {
         Navigator.pop(context); // Close modal
-        _showSuccessMessage('Student has been notified to meet you now!');
+        _showSuccessMessage('Meeting has been completed.');
       } else if (mounted) {
-        _showErrorMessage('Failed to update appointment. Please try again.');
+        _showErrorMessage('Failed to complete meeting. Please try again.');
       }
     } catch (e) {
       if (mounted) {
@@ -1328,38 +1319,38 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
     }
   }
 
-  Future<void> _handleCompleteMeeting() async {
-    setState(() {
-      _isResponding = true;
-    });
+  // Future<void> _handleCompleteMeeting() async {
+  //   setState(() {
+  //     _isResponding = true;
+  //   });
 
-    try {
-      final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
+  //   try {
+  //     final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
       
-      final success = await appointmentNotifier.completeAppointment(
-        studentNumber: widget.appointment.studentNumber,
-        appointmentId: widget.appointment.appointmentId,
-        teacherUid: widget.currentUser.uid,
-      );
+  //     final success = await appointmentNotifier.completeAppointment(
+  //       studentNumber: widget.appointment.studentNumber,
+  //       appointmentId: widget.appointment.appointmentId,
+  //       teacherUid: widget.currentUser.uid,
+  //     );
       
-      if (success && mounted) {
-        Navigator.pop(context); // Close modal
-        _showSuccessMessage('Meeting has been completed successfully!');
-      } else if (mounted) {
-        _showErrorMessage('Failed to complete meeting. Please try again.');
-      }
-    } catch (e) {
-      if (mounted) {
-        _showErrorMessage('An error occurred: ${e.toString()}');
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isResponding = false;
-        });
-      }
-    }
-  }
+  //     if (success && mounted) {
+  //       Navigator.pop(context); // Close modal
+  //       _showSuccessMessage('Meeting has been completed successfully!');
+  //     } else if (mounted) {
+  //       _showErrorMessage('Failed to complete meeting. Please try again.');
+  //     }
+  //   } catch (e) {
+  //     if (mounted) {
+  //       _showErrorMessage('An error occurred: ${e.toString()}');
+  //     }
+  //   } finally {
+  //     if (mounted) {
+  //       setState(() {
+  //         _isResponding = false;
+  //       });
+  //     }
+  //   }
+  // }
 
   // Handler for scheduled appointment accept
   Future<void> _handleScheduledAccept() async {

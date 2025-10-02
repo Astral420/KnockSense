@@ -9,6 +9,7 @@ import 'package:knocksense/provider/teacher_provider.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/provider/appointment_provider.dart';
 import 'package:knocksense/provider/teacher_service_provider.dart';
+import 'package:knocksense/services/notification_service.dart';
 
 class TeacherDetailModal extends ConsumerStatefulWidget {
   final TeacherModel teacher;
@@ -997,9 +998,9 @@ Future<void> _selectDate(BuildContext context) async {
     lastDate: weekFromNow,
     selectableDayPredicate: (DateTime day) {
       // Exclude Sundays
-      // if (day.weekday == DateTime.sunday) {
-      //   return false;
-      // }
+      if (day.weekday == DateTime.sunday) {
+        return false;
+      }
       
       // Exclude dates before status change if on the same day
       if (statusData != null && statusData.changedAt != null) {
@@ -1199,9 +1200,8 @@ Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentU
     );
     
     if (result['success'] == true) {
+      ref.invalidate(hasPendingAppointmentProvider(teacher.uid));
       Navigator.pop(context);
-      // Instead of ScaffoldMessenger, we could show the success message in modal
-      // But since we're closing the modal, we'll keep the ScaffoldMessenger for success
       _showSuccessMessage(
         'Appointment scheduled with ${teacher.displayName} for '
         '${_selectedTime!.format(context)} on ${_selectedDate!.month}/${_selectedDate!.day}'
@@ -1270,6 +1270,7 @@ Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentU
       );
       
       if (result['success'] == true) {
+        ref.invalidate(hasPendingAppointmentProvider(teacher.uid));
         Navigator.pop(context);
         _showSuccessMessage('Appointment request sent to ${teacher.displayName}');
       } else {
@@ -1292,26 +1293,50 @@ Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentU
     }
   }
 
-  void _handleNotifyMe(TeacherModel teacher) {
-    setState(() {
-      if (_notifiedTeachers.contains(teacher.uid)) {
-        _notifiedTeachers.remove(teacher.uid);
-        print('🔕 Student unsubscribed from notifications for ${teacher.displayName}');
-        _infoMessage = 'Notifications disabled for ${teacher.displayName}';
-      } else {
-        _notifiedTeachers.add(teacher.uid);
-        print('🔔 Student subscribed to notifications for ${teacher.displayName}');
-        _infoMessage = 'You\'ll be notified when ${teacher.displayName} becomes available';
-      }
-    });
-    _clearMessagesAfterDelay();
+  void _handleNotifyMe(TeacherModel teacher) async {
+  final currentUser = ref.read(currentUserProvider).value;
+  if (currentUser == null) return;
+  
+  final notificationService = NotificationService();
+  
+  setState(() {
+    if (_notifiedTeachers.contains(teacher.uid)) {
+      _notifiedTeachers.remove(teacher.uid);
+      notificationService.unsubscribeFromTeacher(teacher.uid, currentUser.uid);
+      print('📕 Student unsubscribed from notifications for ${teacher.displayName}');
+      _infoMessage = 'Notifications disabled for ${teacher.displayName}';
+    } else {
+      _notifiedTeachers.add(teacher.uid);
+      notificationService.subscribeToTeacher(teacher.uid, currentUser.uid);
+      print('🔔 Student subscribed to notifications for ${teacher.displayName}');
+      _infoMessage = 'You\'ll be notified when ${teacher.displayName} becomes available';
+    }
+  });
+  _clearMessagesAfterDelay();
+}
+
+@override
+void initState() {
+  super.initState();
+  _loadNotificationSubscriptions();
+}
+
+void _loadNotificationSubscriptions() async {
+  final currentUser = ref.read(currentUserProvider).value;
+  if (currentUser != null) {
+    final notificationService = NotificationService();
+    await notificationService.loadSubscriptions(currentUser.uid);
     
-    // TODO: Implement FCM notification setup
-    // This would typically involve:
-    // - Setting up a listener for teacher status changes
-    // - Storing user preference for notifications in Firebase/local storage
-    // - Scheduling FCM notification when status changes to online
+    // Update UI to reflect subscribed teachers
+    if (notificationService.isSubscribedToTeacher(widget.teacher.uid)) {
+      setState(() {
+        _notifiedTeachers.add(widget.teacher.uid);
+      });
+    }
   }
+}
+
+
 
   void _showSuccessMessage(String message) {
     if (mounted) {

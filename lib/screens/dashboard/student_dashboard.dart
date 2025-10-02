@@ -243,175 +243,175 @@ class StudentDashboard extends ConsumerWidget {
 
                 // Recently Knocked Section (Placeholder for now)
                 SliverToBoxAdapter(
-  child: Padding(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Recently Knocked',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        // Watch the student appointments and show recent ones
-        Consumer(
-          builder: (context, ref, child) {
-            final appointmentsAsync = ref.watch(studentAppointmentsProvider);
-            
-            return appointmentsAsync.when(
-              data: (appointments) {
-                // Get the 3 most recent appointments
-                final recentAppointments = appointments.take(3).toList();
-                
-                if (recentAppointments.isEmpty) {
-                  return Card(
-                    elevation: 0,
-                    color: Colors.grey[100],
-                    child: const ListTile(
-                      leading: Icon(Icons.schedule, color: Colors.grey),
-                      title: Text('No recent appointments'),
-                      subtitle: Text('Your recent appointments will appear here'),
-                    ),
-                  );
-                }
-                
-                return Column(
-                  children: recentAppointments.map((appointment) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Card(
-                        elevation: 0,
-                        color: Colors.white,
-                        child: ListTile(
-                          leading: appointment.teacherPhotoUrl != null
-                              ? CachedNetworkImage(
-                                  imageUrl: appointment.teacherPhotoUrl!,
-                                  imageBuilder: (context, imageProvider) => CircleAvatar(
-                                    radius: 20,
-                                    backgroundImage: imageProvider,
-                                  ),
-                                  placeholder: (context, url) => const CircleAvatar(
-                                    radius: 20,
-                                    backgroundColor: Colors.amber,
-                                    child: SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    ),
-                                  ),
-                                  errorWidget: (context, url, error) => CircleAvatar(
-                                    radius: 20,
-                                    backgroundColor: Colors.amber,
-                                    child: Text(
-                                      _getTeacherInitials(appointment.cleanedTeacherName),
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              : CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor: Colors.amber,
-                                  child: Text(
-                                    _getTeacherInitials(appointment.cleanedTeacherName),
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                          title: Text(
-                            appointment.cleanedTeacherName,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Recently Knocked',
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
                           ),
-                          subtitle: Text(
-                            _formatAppointmentDate(appointment.createdAt),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                          trailing: Container(
-  padding: const EdgeInsets.symmetric(
-    horizontal: 8,
-    vertical: 4,
-  ),
-  decoration: BoxDecoration(
-    color: _getAppointmentStatusColor(appointment.status)
-        .withOpacity(0.1),
-    borderRadius: BorderRadius.circular(12),
-  ),
-  child: Column( // ✅ Use a Column to hold multiple widgets
-    mainAxisSize: MainAxisSize.min, // Ensure column doesn't expand
-    crossAxisAlignment: CrossAxisAlignment.end, // Align text to the right
-    children: [
-      Text(
-        _formatAppointmentStatus(appointment),
-        style: TextStyle(
-          color: _getAppointmentStatusColor(appointment.status),
-          fontWeight: FontWeight.w600,
-          fontSize: 10,
-        ),
-      ),
-      // ✅ Use a collection `if` inside the children list
-      if (appointment.isScheduled && appointment.scheduledTime != null)
-        Padding(
-          padding: const EdgeInsets.only(top: 2.0), // Optional spacing
-          child: Text(
-            DateFormat('h:mm a').format(appointment.scheduledTime!),
-            style: TextStyle(
-              color: _getAppointmentStatusColor(appointment.status)
-                  .withOpacity(0.7),
-              fontSize: 9,
-            ),
-          ),
-        ),
-    ],
-  ),
-),
                         ),
-                      ),
-                    );
-                  }).toList(),
-                );
-              },
-              loading: () => Card(
-                elevation: 0,
-                color: Colors.grey[100],
-                child: const ListTile(
-                  leading: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                        const SizedBox(height: 16),
+                        // Watch the student appointments and show recent ones
+                        Consumer(
+                          builder: (context, ref, child) {
+                            final appointmentsAsync = ref.watch(studentAppointmentsProvider);
+                            
+                            return appointmentsAsync.when(
+                              data: (appointments) {
+                                // Get the 3 most recent appointments
+                                final recentAppointments = appointments.take(3).toList();
+                                
+                                if (recentAppointments.isEmpty) {
+                                  return Card(
+                                    elevation: 0,
+                                    color: Colors.grey[100],
+                                    child: const ListTile(
+                                      leading: Icon(Icons.schedule, color: Colors.grey),
+                                      title: Text('No recent appointments'),
+                                      subtitle: Text('Your recent appointments will appear here'),
+                                    ),
+                                  );
+                                }
+                                
+                                return Column(
+                                  children: recentAppointments.map((appointment) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: Card(
+                                        elevation: 0,
+                                        color: Colors.white,
+                                        child: ListTile(
+                                          leading: appointment.teacherPhotoUrl != null
+                                              ? CachedNetworkImage(
+                                                  imageUrl: appointment.teacherPhotoUrl!,
+                                                  imageBuilder: (context, imageProvider) => CircleAvatar(
+                                                    radius: 20,
+                                                    backgroundImage: imageProvider,
+                                                  ),
+                                                  placeholder: (context, url) => const CircleAvatar(
+                                                    radius: 20,
+                                                    backgroundColor: Colors.amber,
+                                                    child: SizedBox(
+                                                      width: 16,
+                                                      height: 16,
+                                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                                    ),
+                                                  ),
+                                                  errorWidget: (context, url, error) => CircleAvatar(
+                                                    radius: 20,
+                                                    backgroundColor: Colors.amber,
+                                                    child: Text(
+                                                      _getTeacherInitials(appointment.cleanedTeacherName),
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: Colors.black87,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                )
+                                              : CircleAvatar(
+                                                  radius: 20,
+                                                  backgroundColor: Colors.amber,
+                                                  child: Text(
+                                                    _getTeacherInitials(appointment.cleanedTeacherName),
+                                                    style: const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Colors.black87,
+                                                    ),
+                                                  ),
+                                                ),
+                                          title: Text(
+                                            appointment.cleanedTeacherName,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          subtitle: Text(
+                                            _formatAppointmentDate(appointment.createdAt),
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                          trailing: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: _getAppointmentStatusColor(appointment.status)
+                                                  .withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: Column( // ✅ Use a Column to hold multiple widgets
+                                              mainAxisSize: MainAxisSize.min, // Ensure column doesn't expand
+                                              crossAxisAlignment: CrossAxisAlignment.end, // Align text to the right
+                                              children: [
+                                                Text(
+                                                  _formatAppointmentStatus(appointment),
+                                                  style: TextStyle(
+                                                    color: _getAppointmentStatusColor(appointment.status),
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 10,
+                                                  ),
+                                                ),
+                                                // ✅ Use a collection `if` inside the children list
+                                                if (appointment.isScheduled && appointment.scheduledTime != null)
+                                                  Padding(
+                                                    padding: const EdgeInsets.only(top: 2.0), // Optional spacing
+                                                    child: Text(
+                                                      DateFormat('h:mm a').format(appointment.scheduledTime!),
+                                                      style: TextStyle(
+                                                        color: _getAppointmentStatusColor(appointment.status)
+                                                            .withOpacity(0.7),
+                                                        fontSize: 9,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                );
+                              },
+                              loading: () => Card(
+                                elevation: 0,
+                                color: Colors.grey[100],
+                                child: const ListTile(
+                                  leading: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                  title: Text('Loading recent appointments...'),
+                                ),
+                              ),
+                              error: (error, stack) => Card(
+                                elevation: 0,
+                                color: Colors.red[50],
+                                child: ListTile(
+                                  leading: Icon(Icons.error_outline, color: Colors.red[400]),
+                                  title: const Text('Error loading appointments'),
+                                  subtitle: Text(error.toString()),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
                   ),
-                  title: Text('Loading recent appointments...'),
                 ),
-              ),
-              error: (error, stack) => Card(
-                elevation: 0,
-                color: Colors.red[50],
-                child: ListTile(
-                  leading: Icon(Icons.error_outline, color: Colors.red[400]),
-                  title: const Text('Error loading appointments'),
-                  subtitle: Text(error.toString()),
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    ),
-  ),
-),
 
                 // Teachers List with Status (Vertical) - now automatically filtered
                 teachers.when(
@@ -512,86 +512,107 @@ class StudentDashboard extends ConsumerWidget {
                                   _cleanTeacherName(teacher.displayName),
                                   style: const TextStyle(fontWeight: FontWeight.w600),
                                 ),
+                                // START MODIFICATION
                                 subtitle: statusWithDuration.when(
                                   data: (statusData) {
-                                    // ✅ TASK: Only show duration if status is NOT 'online'
+                                    String idAndDurationText;
+                                    // Determine the first line of text (ID and optional duration)
                                     if (statusData != null && teacher.activeStatus.toLowerCase() != 'online') {
                                       final duration = TeacherService.calculateDurationRealTime(statusData.changedAt);
-                                      return Text(
-                                        '${teacher.teacherID} • $duration', // e.g., "Teacher_001 • 5 mins ago"
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 12,
-                                        ),
-                                      );
+                                      idAndDurationText = '${teacher.teacherID} • $duration';
+                                    } else {
+                                      idAndDurationText = teacher.teacherID;
                                     }
-                                    // Fallback for 'online' status or if data is null
-                                    return Text(
-                                      teacher.teacherID, // e.g., "Teacher_001"
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 12,
-                                      ),
-                                    );
-                                  },
-                                    loading: () => Text(
-                                      teacher.teacherID,
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    error: (_, __) => Text(
-                                      teacher.teacherID,
-                                      style: TextStyle(
-                                        color: Colors.grey[600],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                  trailing: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _getStatusColor(teacher.activeStatus)
-                                          .withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
+
+                                    // Return a Column to stack the ID/duration and the teacher note
+                                    return Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
+                                        // First line: Teacher ID and duration
                                         Text(
-                                          _formatStatus(teacher.activeStatus),
+                                          idAndDurationText,
                                           style: TextStyle(
-                                            color: _getStatusColor(teacher.activeStatus),
-                                            fontWeight: FontWeight.w600,
+                                            color: Colors.grey[600],
                                             fontSize: 12,
                                           ),
                                         ),
-                                        statusWithDuration.when(
-                                          data: (statusData) {
-                                            if (statusData != null && statusData.changedAt != null) {
-                                              // Use real-time duration
-                                              final duration = TeacherService.calculateDurationRealTime(statusData.changedAt);
-                                              return Text(
-                                                duration,
-                                                style: TextStyle(
-                                                  color: _getStatusColor(teacher.activeStatus)
-                                                      .withOpacity(0.7),
-                                                  fontSize: 9,
-                                                ),
-                                              );
-                                            }
-                                            return const SizedBox.shrink();
-                                          },
-                                          loading: () => const SizedBox.shrink(),
-                                          error: (_, __) => const SizedBox.shrink(),
-                                        ),
+                                        // Second line: Teacher note (if it exists)
+                                        if (teacher.teacherMsg != null && teacher.teacherMsg!.isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 4.0), // Add space
+                                            child: Text(
+                                              '“${teacher.teacherMsg!}”', // Add quotes for style
+                                              style: TextStyle(
+                                                color: Colors.grey[800],
+                                                fontSize: 12,
+                                                fontStyle: FontStyle.italic,
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
                                       ],
+                                    );
+                                  },
+                                  loading: () => Text( // Keep loading and error states simple
+                                    teacher.teacherID,
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 12,
                                     ),
                                   ),
+                                  error: (_, __) => Text(
+                                    teacher.teacherID,
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                // END MODIFICATION
+                                trailing: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _getStatusColor(teacher.activeStatus)
+                                        .withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        _formatStatus(teacher.activeStatus),
+                                        style: TextStyle(
+                                          color: _getStatusColor(teacher.activeStatus),
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      statusWithDuration.when(
+                                        data: (statusData) {
+                                          if (statusData != null && statusData.changedAt != null) {
+                                            // Use real-time duration
+                                            final duration = TeacherService.calculateDurationRealTime(statusData.changedAt);
+                                            return Text(
+                                              duration,
+                                              style: TextStyle(
+                                                color: _getStatusColor(teacher.activeStatus)
+                                                    .withOpacity(0.7),
+                                                fontSize: 9,
+                                              ),
+                                            );
+                                          }
+                                          return const SizedBox.shrink();
+                                        },
+                                        loading: () => const SizedBox.shrink(),
+                                        error: (_, __) => const SizedBox.shrink(),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                                 onTap: () => context.showTeacherDetail(teacher),
                               ),
                             ),
@@ -706,25 +727,67 @@ String _getTeacherInitials(String teacherName) {
 
 String _formatAppointmentDate(DateTime date) {
   final now = DateTime.now();
-  final difference = now.difference(date);
   
-  if (difference.inDays == 0) {
+  // Get the start of today (midnight)
+  final todayStart = DateTime(now.year, now.month, now.day);
+  final dateStart = DateTime(date.year, date.month, date.day);
+  
+  // Calculate difference in actual calendar days
+  final dayDifference = todayStart.difference(dateStart).inDays;
+  
+  if (dayDifference == 0) {
+    // Same calendar day
     return 'Today ${_formatTime(date)}';
-  } else if (difference.inDays == 1) {
+  } else if (dayDifference == 1) {
+    // Yesterday
     return 'Yesterday ${_formatTime(date)}';
-  } else if (difference.inDays < 7) {
-    return '${difference.inDays} days ago';
+  } else if (dayDifference < 7) {
+    // Within a week
+    return '$dayDifference days ago';
+  } else if (dayDifference < 30) {
+    // Within a month
+    final weeks = (dayDifference / 7).floor();
+    return weeks == 1 ? '1 week ago' : '$weeks weeks ago';
   } else {
-    return '${date.month}/${date.day}/${date.year}';
+    // Older than a month - show full date
+    return DateFormat('MMM d, yyyy').format(date);
   }
 }
 
+// Also update the _formatTime function to be cleaner:
 String _formatTime(DateTime date) {
-  final hour = date.hour;
-  final minute = date.minute.toString().padLeft(2, '0');
-  final period = hour >= 12 ? 'PM' : 'AM';
-  final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-  return '$displayHour:$minute $period';
+  return DateFormat('h:mm a').format(date);
+}
+
+// Alternative more detailed version if you want relative time for today:
+String _formatAppointmentDateDetailed(DateTime date) {
+  final now = DateTime.now();
+  final difference = now.difference(date);
+  
+  // Get the start of today (midnight)
+  final todayStart = DateTime(now.year, now.month, now.day);
+  final dateStart = DateTime(date.year, date.month, date.day);
+  final dayDifference = todayStart.difference(dateStart).inDays;
+  
+  if (dayDifference == 0) {
+    // Same calendar day - show relative time
+    if (difference.inMinutes < 60) {
+      return '${difference.inMinutes} min${difference.inMinutes != 1 ? 's' : ''} ago';
+    } else if (difference.inHours < 12) {
+      return '${difference.inHours} hour${difference.inHours != 1 ? 's' : ''} ago';
+    } else {
+      return 'Today ${_formatTime(date)}';
+    }
+  } else if (dayDifference == 1) {
+    return 'Yesterday ${_formatTime(date)}';
+  } else if (dayDifference < 7) {
+    return '$dayDifference days ago';
+  } else if (dayDifference < 30) {
+    final weeks = (dayDifference / 7).floor();
+    return weeks == 1 ? '1 week ago' : '$weeks weeks ago';
+  } else {
+    return DateFormat('MMM d, yyyy').format(date);
+  }
 }
 
 Color _getAppointmentStatusColor(AppointmentStatus status) {

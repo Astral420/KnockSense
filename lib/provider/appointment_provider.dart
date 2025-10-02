@@ -84,22 +84,17 @@ final teacherAllAppointmentsProvider = StreamProvider<List<AppointmentModel>>((r
 });
 
 // Provider to check if student has pending appointment with specific teacher
-final hasPendingAppointmentProvider = FutureProvider.family<bool, String>((ref, teacherUid) async {
-  final user = ref.watch(currentUserProvider);
+final hasPendingAppointmentProvider = StreamProvider.family<bool, String>((ref, teacherUid) {
   final appointmentService = ref.watch(appointmentServiceProvider);
-  
-  return user.when(
-    data: (userData) async {
-      if (userData == null || userData.studentNumber == null) {
-        return false;
-      }
-      return await appointmentService.hasPendingAppointment(
-        studentNumber: userData.studentNumber!,
-        teacherUid: teacherUid,
-      );
-    },
-    loading: () => false,
-    error: (_, __) => false,
+  final currentUser = ref.watch(currentUserProvider).value;
+
+  if (currentUser == null || currentUser.studentNumber == null) {
+    return Stream.value(false);
+  }
+
+  return appointmentService.hasPendingAppointmentStream(
+    studentNumber: currentUser.studentNumber!,
+    teacherUid: teacherUid,
   );
 });
 
@@ -269,10 +264,32 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
       return false;
     }
   }
+
+  // NEW METHOD ADDED
+  Future<bool> meetAndCompleteAppointment({
+    required String studentNumber,
+    required String appointmentId,
+    required String teacherUid,
+    String? teacherNote,
+  }) async {
+    state = const AsyncValue.loading();
+    try {
+      final success = await _service.meetAndCompleteAppointment(
+        studentNumber: studentNumber,
+        appointmentId: appointmentId,
+        teacherUid: teacherUid,
+        teacherNote: teacherNote,
+      );
+      state = const AsyncValue.data(null);
+      return success;
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      return false;
+    }
+  }
 }
 
 final teacherTodayAppointmentsProvider = Provider<List<AppointmentModel>>((ref) {
-  // Watch the single source of truth for all appointments
   final allAppointmentsAsync = ref.watch(teacherAllAppointmentsProvider);
 
   return allAppointmentsAsync.when(
@@ -281,9 +298,15 @@ final teacherTodayAppointmentsProvider = Provider<List<AppointmentModel>>((ref) 
       final List<AppointmentModel> filteredAppointments = [];
 
       for (var appointment in appointments) {
+        // Skip cancelled, denied, AND completed appointments
+        if (appointment.status == AppointmentStatus.cancelled ||
+            appointment.status == AppointmentStatus.denied ||
+            appointment.status == AppointmentStatus.completed) {
+          continue;
+        }
+
         bool shouldInclude = false;
 
-        // Logic from your getTeacherTodayAppointments service function
         // Check if it's a scheduled appointment for today
         if (appointment.scheduledTime != null) {
           final scheduledDate = appointment.scheduledTime!;
@@ -291,41 +314,52 @@ final teacherTodayAppointmentsProvider = Provider<List<AppointmentModel>>((ref) 
                                       scheduledDate.month == now.month &&
                                       scheduledDate.day == now.day;
 
-          // Include if scheduled for today and is due
-          if (isScheduledForToday && scheduledDate.isBefore(now.add(const Duration(minutes: 10)))) {
-            shouldInclude = true;
+          if (isScheduledForToday) {
+            // NEW: Check if scheduled appointment has expired (2 minutes past scheduled time)
+            final expirationTime = scheduledDate.add(const Duration(minutes: 2));
+            
+            // Only include if not expired OR if already accepted/in progress
+            if (now.isBefore(expirationTime) || 
+                appointment.status == AppointmentStatus.accepted) {
+              shouldInclude = true;
+            }
+            // If expired and still pending, it will be auto-rejected soon, so exclude it
           }
-        }
-
-        // Also include immediate appointments created today
-        if (appointment.isToday && !appointment.isScheduled) {
+        } 
+        // Also include immediate appointments created today (not scheduled)
+        else if (appointment.isToday && !appointment.isScheduled) {
           shouldInclude = true;
         }
 
-        // Only include active appointments in this view
-        if ((appointment.status == AppointmentStatus.pending ||
-            appointment.status == AppointmentStatus.accepted) && shouldInclude) {
+        if (shouldInclude) {
           filteredAppointments.add(appointment);
         }
       }
 
-      // Sort by priority: near appointments first, then by time
+      // Sort by priority
       filteredAppointments.sort((a, b) {
+        // Pending appointments come before accepted
+        if (a.status == AppointmentStatus.pending && 
+            b.status != AppointmentStatus.pending) return -1;
+        if (a.status != AppointmentStatus.pending && 
+            b.status == AppointmentStatus.pending) return 1;
+        
+        // Near appointments come first
         if (a.isNear && !b.isNear) return -1;
         if (!a.isNear && b.isNear) return 1;
         
+        // Finally sort by time
         final aTime = a.scheduledTime ?? a.createdAt;
-        final bTime = a.scheduledTime ?? a.createdAt;
+        final bTime = b.scheduledTime ?? b.createdAt;
         return aTime.compareTo(bTime);
       });
 
       return filteredAppointments;
     },
-    loading: () => [], // Return empty list while loading
-    error: (_, __) => [], // Return empty list on error
+    loading: () => [],
+    error: (_, __) => [],
   );
 });
-
 // Provider for appointment actions
 final appointmentNotifierProvider = StateNotifierProvider<AppointmentNotifier, AsyncValue<void>>((ref) {
   final service = ref.watch(appointmentServiceProvider);
@@ -333,8 +367,8 @@ final appointmentNotifierProvider = StateNotifierProvider<AppointmentNotifier, A
 });
 
 
-// ======== NEWLY ADDED PROVIDER ========
-// Filtered appointment history for teachers, mirroring the student's logic.
+
+
 final filteredTeacherHistoryProvider = Provider<List<AppointmentModel>>((ref) {
   final appointments = ref.watch(teacherAllAppointmentsProvider);
   final dateRange = ref.watch(dateRangeProvider);

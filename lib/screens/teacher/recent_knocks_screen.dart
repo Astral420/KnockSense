@@ -37,94 +37,65 @@ class RecentKnocksScreen extends ConsumerWidget {
     );
   }
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final currentUser = ref.watch(currentUserProvider);
-    // Use teacherTodayAppointmentsProvider for today's appointments only
-    final todayAppointmentsAsync = ref.watch(teacherTodayAppointmentsProvider);
+@override
+Widget build(BuildContext context, WidgetRef ref) {
+  final currentUserAsync = ref.watch(currentUserProvider);
+  // 1. Watch the original ASYNC provider to handle loading/error states
+  final allAppointmentsAsync = ref.watch(teacherAllAppointmentsProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFFDF6E3), // Cream background matching design
-      body: SafeArea(
-        child: currentUser.when(
-          data: (user) {
-            if (user == null) {
-              return const Center(child: Text('User not found'));
-            }
+  return Scaffold(
+    backgroundColor: const Color(0xFFFDF6E3),
+    body: SafeArea(
+      child: currentUserAsync.when(
+        data: (user) {
+          if (user == null) {
+            return const Center(child: Text('User not found'));
+          }
 
-            return Column(
-              children: [
-                // Header
-                Container(
-                  color: const Color(0xFFFDF6E3),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: const Icon(
-                          Icons.chevron_left,
-                          size: 32,
-                          color: Color(0xFF6B4423), // Brown color
+          // 2. Use .when() on the async provider at the top level
+          return allAppointmentsAsync.when(
+            data: (allAppointments) {
+              // 3. Once data is loaded, get the synchronously filtered list
+              final todayAppointments = ref.watch(teacherTodayAppointmentsProvider);
+
+              // 4. Build the rest of the UI with the final, filtered list
+              return Column(
+                children: [
+                  // Header
+                  Container(
+                    color: const Color(0xFFFDF6E3),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 20),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Icon(
+                            Icons.chevron_left,
+                            size: 32,
+                            color: Color(0xFF6B4423), // Brown color
+                          ),
                         ),
-                      ),
-                      const Expanded(
-                        child: Center(
-                          child: Text(
-                            'Today\'s Appointments',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF6B4423), // Brown color
+                        const Expanded(
+                          child: Center(
+                            child: Text(
+                              'Today\'s Appointments',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF6B4423), // Brown color
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      todayAppointmentsAsync.when(
-                        data: (appointments) {
-                          return PopupMenuButton<String>(
-                            onSelected: (value) {
-                              if (value == 'reject_all' && appointments.isNotEmpty) {
-                                _showRejectAllModal(context, user, appointments);
-                              } else if (value == 'future_appointments') {
-                                _navigateToFutureAppointments(context);
-                              }
-                            },
-                            icon: const Icon(
-                              Icons.more_horiz,
-                              size: 28,
-                              color: Color(0xFF6B4423),
-                            ),
-                            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                              const PopupMenuItem<String>(
-                                value: 'future_appointments',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.schedule, size: 20),
-                                    SizedBox(width: 12),
-                                    Text('Future Appointments'),
-                                  ],
-                                ),
-                              ),
-                              if (appointments.isNotEmpty) ...[
-                                const PopupMenuDivider(),
-                                const PopupMenuItem<String>(
-                                  value: 'reject_all',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.cancel, size: 20, color: Colors.red),
-                                      SizedBox(width: 12),
-                                      Text('Reject All Today\'s Appointments'),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ],
-                          );
-                        },
-                        loading: () => PopupMenuButton<String>(
+                        // CORRECTED: The PopupMenuButton no longer needs .when()
+                        PopupMenuButton<String>(
                           onSelected: (value) {
-                            if (value == 'future_appointments') {
+                            if (value == 'reject_all' &&
+                                todayAppointments.isNotEmpty) {
+                              _showRejectAllModal(
+                                  context, user, todayAppointments);
+                            } else if (value == 'future_appointments') {
                               _navigateToFutureAppointments(context);
                             }
                           },
@@ -133,7 +104,8 @@ class RecentKnocksScreen extends ConsumerWidget {
                             size: 28,
                             color: Color(0xFF6B4423),
                           ),
-                          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                          itemBuilder: (BuildContext context) =>
+                              <PopupMenuEntry<String>>[
                             const PopupMenuItem<String>(
                               value: 'future_appointments',
                               child: Row(
@@ -144,19 +116,31 @@ class RecentKnocksScreen extends ConsumerWidget {
                                 ],
                               ),
                             ),
+                            if (todayAppointments.isNotEmpty) ...[
+                              const PopupMenuDivider(),
+                              const PopupMenuItem<String>(
+                                value: 'reject_all',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.cancel,
+                                        size: 20, color: Colors.red),
+                                    SizedBox(width: 12),
+                                    Text('Reject All Today\'s Appointments'),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
-                        error: (_, __) => const SizedBox(width: 48),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
 
-                // Appointments List
-                Expanded(
-                  child: todayAppointmentsAsync.when(
-                    data: (appointments) {
-                      if (appointments.isEmpty) {
+                  // Appointments List
+                  Expanded(
+                    child: Builder(builder: (context) {
+                      // CORRECTED: The main list no longer needs .when()
+                      if (todayAppointments.isEmpty) {
                         return Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -189,10 +173,11 @@ class RecentKnocksScreen extends ConsumerWidget {
                       }
 
                       return ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        itemCount: appointments.length,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        itemCount: todayAppointments.length,
                         itemBuilder: (context, index) {
-                          final appointment = appointments[index];
+                          final appointment = todayAppointments[index];
                           return _buildAppointmentCard(
                             context: context,
                             appointment: appointment,
@@ -200,24 +185,22 @@ class RecentKnocksScreen extends ConsumerWidget {
                           );
                         },
                       );
-                    },
-                    loading: () => const LoadingWidget(),
-                    error: (err, stack) => Center(
-                      child: Text('Error loading appointments: $err'),
-                    ),
+                    }),
                   ),
-                ),
-              ],
-            );
-          },
-          loading: () => const LoadingWidget(),
-          error: (err, stack) => Center(
-            child: Text('Error: $err'),
-          ),
-        ),
+                ],
+              );
+            },
+            loading: () => const LoadingWidget(),
+            error: (err, stack) =>
+                Center(child: Text('Error loading appointments: $err')),
+          );
+        },
+        loading: () => const LoadingWidget(),
+        error: (err, stack) => Center(child: Text('Error: $err')),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildAppointmentCard({
     required BuildContext context,
@@ -427,18 +410,3 @@ class RecentKnocksScreen extends ConsumerWidget {
 }
 
 // Provider for today's appointments specifically
-final teacherTodayAppointmentsProvider = StreamProvider<List<AppointmentModel>>((ref) {
-  final user = ref.watch(currentUserProvider);
-  final appointmentService = ref.watch(appointmentServiceProvider);
-  
-  return user.when(
-    data: (userData) {
-      if (userData == null || userData.role != UserRole.teacher) {
-        return Stream.value([]);
-      }
-      return appointmentService.getTeacherTodayAppointments(userData.uid);
-    },
-    loading: () => Stream.value([]),
-    error: (_, __) => Stream.value([]),
-  );
-});
