@@ -601,7 +601,7 @@ Future<AppointmentModel?> _fetchAppointmentDetails(String studentNumber, String 
       await _sendNotificationToStudent(studentNumber, action, teacherResponse);
 
       if (action == TeacherAction.wait5Minutes) {
-        await _scheduleWaitReminder(studentNumber, appointmentId, 5);
+        await _scheduleWaitReminder(studentNumber, appointmentId, 5, teacherUid);
       }
 
       return true;
@@ -1026,6 +1026,7 @@ String _getNotificationBody(TeacherAction action, String? message) {
   String studentNumber,
   String appointmentId,
   int minutes,
+  String teacherUid,
 ) async {
   try {
     // Get student UID from student number
@@ -1041,6 +1042,7 @@ String _getNotificationBody(TeacherAction action, String? message) {
         (studentSnapshot.value as Map).values.first
       );
       final studentUid = studentData['uid'] as String;
+      final studentName = (studentData['displayName'] as String?) ?? studentNumber;
       
       final reminderTime = DateTime.now().add(Duration(minutes: minutes));
     
@@ -1055,6 +1057,22 @@ String _getNotificationBody(TeacherAction action, String? message) {
       'data': {
         'type': 'wait_reminder',
         'appointmentId': appointmentId,
+      },
+      'createdAt': ServerValue.timestamp,
+    });
+
+    // Also notify the teacher when the wait window ends
+    await _database.ref('scheduled_notifications').push().set({
+      'teacherUid': teacherUid,
+      'appointmentId': appointmentId,
+      'type': 'wait_reminder_teacher',
+      'scheduledFor': reminderTime.millisecondsSinceEpoch,
+      'title': 'Wait window ended',
+      'body': '$studentName\'s $minutes minute wait has ended.',
+      'data': {
+        'type': 'wait_reminder_teacher',
+        'appointmentId': appointmentId,
+        'studentNumber': studentNumber,
       },
       'createdAt': ServerValue.timestamp,
     });

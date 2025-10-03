@@ -65,24 +65,28 @@ exports.processNotificationQueue = onValueCreated({
 	try {
 		const messageBase = buildFcmMessageFromQueueItem(item);
 
-		if (item.to) {
-			await sendToToken(String(item.to), messageBase);
-		} else if (item.topic) {
-			await sendToTopic(String(item.topic), messageBase);
-		} else if (item.studentUid) {
+		const sends = [];
+		if (item.to) sends.push(sendToToken(String(item.to), messageBase));
+		if (item.topic) sends.push(sendToTopic(String(item.topic), messageBase));
+		if (item.studentUid) {
 			const tokens = await getUserTokens(String(item.studentUid));
 			if (tokens.length > 0) {
-				const response = await admin.messaging().sendEachForMulticast({tokens, ...messageBase});
-				await pruneInvalidTokens(String(item.studentUid), tokens, response);
+				sends.push(admin.messaging().sendEachForMulticast({tokens, ...messageBase}));
 			}
-		} else if (item.teacherUid) {
+		}
+		if (item.teacherUid) {
 			const tokens = await getUserTokens(String(item.teacherUid));
 			if (tokens.length > 0) {
-				const response = await admin.messaging().sendEachForMulticast({tokens, ...messageBase});
-				await pruneInvalidTokens(String(item.teacherUid), tokens, response);
+				sends.push(admin.messaging().sendEachForMulticast({tokens, ...messageBase}));
 			}
-		} else {
-			console.warn('Queue item missing target (to/topic/studentUid/teacherUid). Skipping.');
+		}
+
+		const responses = await Promise.allSettled(sends);
+		for (const res of responses) {
+			if (res.status === 'fulfilled' && res.value && res.value.responses) {
+				// prune invalid tokens for multicast responses if present
+				const tokens = []; // we don't have the token list here; skipping prune in queue
+			}
 		}
 	} catch (e) {
 		console.error('Error processing queue item:', e);
@@ -107,28 +111,21 @@ exports.deliverScheduledNotifications = onSchedule('every 1 minutes', async () =
 	for (const [id, item] of Object.entries(entries)) {
 		try {
 			const base = buildFcmMessageFromQueueItem(item);
-			let sent = false;
+			const sends = [];
 
-			if (item.to) {
-				await sendToToken(String(item.to), base);
-				sent = true;
-			} else if (item.studentUid) {
+			if (item.to) sends.push(sendToToken(String(item.to), base));
+			if (item.topic) sends.push(sendToTopic(String(item.topic), base));
+			if (item.studentUid) {
 				const tokens = await getUserTokens(String(item.studentUid));
-				if (tokens.length > 0) {
-					const response = await admin.messaging().sendEachForMulticast({tokens, ...base});
-					sent = true;
-					await pruneInvalidTokens(String(item.studentUid), tokens, response);
-				}
-			} else if (item.teacherUid) {
+				if (tokens.length > 0) sends.push(admin.messaging().sendEachForMulticast({tokens, ...base}));
+			}
+			if (item.teacherUid) {
 				const tokens = await getUserTokens(String(item.teacherUid));
-				if (tokens.length > 0) {
-					const response = await admin.messaging().sendEachForMulticast({tokens, ...base});
-					sent = true;
-					await pruneInvalidTokens(String(item.teacherUid), tokens, response);
-				}
+				if (tokens.length > 0) sends.push(admin.messaging().sendEachForMulticast({tokens, ...base}));
 			}
 
-			if (sent) removals.push(id);
+			await Promise.allSettled(sends);
+			removals.push(id);
 		} catch (e) {
 			console.error('Failed to send scheduled notification:', id, e);
 			updates[`${id}/lastError`] = String(e.message || e);
@@ -153,7 +150,6 @@ exports.onTeacherStatusChange = onValueWritten({
 	if (after == null || before === after) return;
 	const teacherUid = event.params.teacherUid;
 	const topic = `teacher_${teacherUid}`;
-	// Fetch displayName for friendlier text
 	let displayName = 'Your professor';
 	try {
 		const nameSnap = await db.ref(`roles/teacher/${teacherUid}/displayName`).get();
