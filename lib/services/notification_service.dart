@@ -57,35 +57,7 @@ class NotificationService {
     // Handle notification taps
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
 
-    const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'appointments', // Your channel ID
-    'Appointment Notifications',
-    description: 'Notifications for appointment updates',
-    importance: Importance.max, // You have Importance.high
-    playSound: true,
-    enableVibration: true,
-    enableLights: true,
-    showBadge: true,
-);
-
-
-
-
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'appointments',
-      'Appointment Notifications',
-      importance: Importance.max,
-      priority: Priority.max,
-      showWhen: true,
-      playSound: true,
-      enableVibration: true,
-      enableLights: true,
-      fullScreenIntent: true, // Shows notification even on lock screen
-      category: AndroidNotificationCategory.message,
-      visibility: NotificationVisibility.public,
-    );
-
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    // Channel is created in _createNotificationChannel(); no need to redefine here
   }
 
   
@@ -242,17 +214,27 @@ class NotificationService {
 Future<void> clearUserToken(String uid) async {
   if (!_isPlatformSupported) return;
   try {
-    final token = await _messaging.getToken();
-    if (token != null) {
-      // Remove only this device's token
-      await _database.ref('fcm_tokens/$uid/$token').remove();
-      
-      // Unsubscribe from all topics
-      for (String teacherUid in _subscribedTeachers) {
-        await _messaging.unsubscribeFromTopic('teacher_$teacherUid');
+    final currentToken = await _messaging.getToken();
+    if (currentToken == null) return;
+
+    // Find and remove the device entry whose stored token matches currentToken
+    final tokensRef = _database.ref('fcm_tokens/$uid');
+    final snapshot = await tokensRef.get();
+    if (snapshot.exists && snapshot.value is Map) {
+      final Map<String, dynamic> devices = Map<String, dynamic>.from(snapshot.value as Map);
+      for (final entry in devices.entries) {
+        final value = entry.value;
+        if (value is Map && value['token'] == currentToken) {
+          await tokensRef.child(entry.key).remove();
+        }
       }
-      _subscribedTeachers.clear();
     }
+
+    // Unsubscribe from all topics for this runtime
+    for (String teacherUid in _subscribedTeachers) {
+      await _messaging.unsubscribeFromTopic('teacher_$teacherUid');
+    }
+    _subscribedTeachers.clear();
   } catch (e) {
     debugPrint('Error clearing FCM token: $e');
   }

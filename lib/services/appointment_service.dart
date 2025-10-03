@@ -10,7 +10,6 @@ import 'package:knocksense/models/teacher_model.dart';
 class AppointmentService {
   final FirebaseDatabase _database;
   static const int MAX_APPOINTMENTS_PER_TEACHER = 3;
-  Timer? _appointmentMonitorTimer;
 
   StreamSubscription? _appointmentMonitorSubscription;
   final Set<String> _monitoredAppointments = {};
@@ -89,8 +88,7 @@ class AppointmentService {
     }
   }
 
-  // ... (the rest of this file is unchanged)
-  // ... (createAppointment, _handleAppointmentChanges, etc. all remain the same)
+  
 
   // Updated create appointment method with scheduling
   Future<Map<String, dynamic>> createAppointment({
@@ -195,10 +193,11 @@ class AppointmentService {
       });
 
       // Send notification based on appointment type
-      if (isScheduled) {
-        await _sendScheduledNotificationToTeacher(teacher.uid, student.displayName, effectiveScheduledTime!);
-      } else {
-        await _sendNotificationToTeacher(teacher.uid, student.displayName);
+      if (isScheduled && scheduledTime != null) {
+        
+      await _sendScheduledNotificationToTeacher(teacher.uid, student.displayName, scheduledTime);
+      
+      await _sendScheduledAppointmentReminder(teacher.uid, student.displayName, scheduledTime);
       }
 
       return {
@@ -777,10 +776,7 @@ Future<AppointmentModel?> _fetchAppointmentDetails(String studentNumber, String 
 }
 
 
-  // Notification methods
-  Future<void> _sendNotificationToTeacher(String teacherUid, String studentName) async {
-    debugPrint('Immediate appointment notification sent to teacher: New request from $studentName');
-  }
+  
 
   Future<void> _sendScheduledNotificationToTeacher(
   String teacherUid, 
@@ -1046,28 +1042,54 @@ String _getNotificationBody(TeacherAction action, String? message) {
       );
       final studentUid = studentData['uid'] as String;
       
-      // Schedule a reminder by creating a scheduled notification
-      // This will be picked up by Firebase Cloud Functions
-      await _database.ref('scheduled_notifications').push().set({
-        'studentUid': studentUid,
-        'studentNumber': studentNumber,
-        'appointmentId': appointmentId,
+      final reminderTime = DateTime.now().add(Duration(minutes: minutes));
+    
+    await _database.ref('scheduled_notifications').push().set({
+      'studentUid': studentUid,
+      'studentNumber': studentNumber,
+      'appointmentId': appointmentId,
+      'type': 'wait_reminder',
+      'scheduledFor': reminderTime.millisecondsSinceEpoch, // Use actual time, not ServerValue.timestamp
+      'title': 'Appointment Reminder',
+      'body': 'Your $minutes minute wait is over. You can now proceed to your appointment.',
+      'data': {
         'type': 'wait_reminder',
-        'scheduledFor': ServerValue.timestamp,
-        'delayMinutes': minutes,
-        'title': 'Appointment Reminder',
-        'body': 'Your $minutes minute wait is over. You can now proceed to your appointment.',
-        'data': {
-          'type': 'wait_reminder',
-          'appointmentId': appointmentId,
-        },
-        'createdAt': ServerValue.timestamp,
-      });
+        'appointmentId': appointmentId,
+      },
+      'createdAt': ServerValue.timestamp,
+    });
       
       debugPrint('Wait reminder scheduled for student $studentNumber in $minutes minutes');
     }
   } catch (e) {
     debugPrint('Error scheduling wait reminder: $e');
+  }
+}
+
+Future<void> _sendScheduledAppointmentReminder(
+  String teacherUid,
+  String studentName,
+  DateTime scheduledTime,
+) async {
+  try {
+    // Schedule a reminder 10 minutes before appointment
+    final reminderTime = scheduledTime.subtract(const Duration(minutes: 10));
+    
+    if (reminderTime.isAfter(DateTime.now())) {
+      await _database.ref('scheduled_notifications').push().set({
+        'teacherUid': teacherUid,
+        'type': 'scheduled_appointment_reminder',
+        'scheduledFor': reminderTime.millisecondsSinceEpoch,
+        'title': 'Upcoming Appointment',
+        'body': 'Appointment with $studentName in 10 minutes',
+        'data': {
+          'type': 'appointment_reminder',
+        },
+        'createdAt': ServerValue.timestamp,
+      });
+    }
+  } catch (e) {
+    debugPrint('Error scheduling appointment reminder: $e');
   }
 }
 
