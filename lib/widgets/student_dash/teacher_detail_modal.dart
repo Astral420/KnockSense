@@ -1078,6 +1078,16 @@ Future<void> _selectTime(BuildContext context) async {
   );
 
   if (picked != null) {
+
+    // NEW: Validate time is not before 6:30 AM
+    if (picked.hour < 6 || (picked.hour == 6 && picked.minute < 30)) {
+      setState(() {
+        _errorMessage = 'Appointments cannot be scheduled before 6:30 AM (reset time). Please select a later time.';
+      });
+      _clearMessagesAfterDelay();
+      return;
+    }
+    
     // Validate time is before or at 6:00 PM
     if (picked.hour > 18 || (picked.hour == 18 && picked.minute > 0)) {
       setState(() {

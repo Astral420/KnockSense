@@ -9,6 +9,16 @@ import 'package:knocksense/models/teacher_model.dart';
 // Date Range provider (moved here to avoid duplication)
 final dateRangeProvider = StateProvider<DateTimeRange?>((ref) => null);
 
+final appointmentRefreshProvider = StreamProvider.autoDispose<DateTime>((ref) async* {
+  // Emit current time immediately
+  yield DateTime.now();
+  
+  // Then emit every 30 seconds to check for expired appointments and date changes
+  await for (final _ in Stream.periodic(const Duration(seconds: 30))) {
+    yield DateTime.now();
+  }
+});
+
 // Appointment service provider
 final appointmentServiceProvider = Provider<AppointmentService>((ref) {
   final database = ref.watch(firebaseDatabaseProvider);
@@ -289,75 +299,24 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
   }
 }
 
-final teacherTodayAppointmentsProvider = Provider<List<AppointmentModel>>((ref) {
-  final allAppointmentsAsync = ref.watch(teacherAllAppointmentsProvider);
-
-  return allAppointmentsAsync.when(
-    data: (appointments) {
-      final now = DateTime.now();
-      final List<AppointmentModel> filteredAppointments = [];
-
-      for (var appointment in appointments) {
-        // Skip cancelled, denied, AND completed appointments
-        if (appointment.status == AppointmentStatus.cancelled ||
-            appointment.status == AppointmentStatus.denied ||
-            appointment.status == AppointmentStatus.completed) {
-          continue;
-        }
-
-        bool shouldInclude = false;
-
-        // Check if it's a scheduled appointment for today
-        if (appointment.scheduledTime != null) {
-          final scheduledDate = appointment.scheduledTime!;
-          final isScheduledForToday = scheduledDate.year == now.year &&
-                                      scheduledDate.month == now.month &&
-                                      scheduledDate.day == now.day;
-
-          if (isScheduledForToday) {
-            // NEW: Check if scheduled appointment has expired (2 minutes past scheduled time)
-            final expirationTime = scheduledDate.add(const Duration(minutes: 2));
-            
-            // Only include if not expired OR if already accepted/in progress
-            if (now.isBefore(expirationTime) || 
-                appointment.status == AppointmentStatus.accepted) {
-              shouldInclude = true;
-            }
-            // If expired and still pending, it will be auto-rejected soon, so exclude it
-          }
-        } 
-        // Also include immediate appointments created today (not scheduled)
-        else if (appointment.isToday && !appointment.isScheduled) {
-          shouldInclude = true;
-        }
-
-        if (shouldInclude) {
-          filteredAppointments.add(appointment);
-        }
+final teacherTodayAppointmentsProvider = StreamProvider<List<AppointmentModel>>((ref) {
+  // Watch the refresh provider to trigger periodic updates
+  ref.watch(appointmentRefreshProvider);
+  
+  final user = ref.watch(currentUserProvider);
+  final appointmentService = ref.watch(appointmentServiceProvider);
+  
+  return user.when(
+    data: (userData) {
+      if (userData == null || userData.role != UserRole.teacher) {
+        return Stream.value([]);
       }
-
-      // Sort by priority
-      filteredAppointments.sort((a, b) {
-        // Pending appointments come before accepted
-        if (a.status == AppointmentStatus.pending && 
-            b.status != AppointmentStatus.pending) return -1;
-        if (a.status != AppointmentStatus.pending && 
-            b.status == AppointmentStatus.pending) return 1;
-        
-        // Near appointments come first
-        if (a.isNear && !b.isNear) return -1;
-        if (!a.isNear && b.isNear) return 1;
-        
-        // Finally sort by time
-        final aTime = a.scheduledTime ?? a.createdAt;
-        final bTime = b.scheduledTime ?? b.createdAt;
-        return aTime.compareTo(bTime);
-      });
-
-      return filteredAppointments;
+      
+      // Use the stream directly from the service
+      return appointmentService.getTeacherTodayAppointments(userData.uid);
     },
-    loading: () => [],
-    error: (_, __) => [],
+    loading: () => Stream.value([]),
+    error: (_, __) => Stream.value([]),
   );
 });
 // Provider for appointment actions

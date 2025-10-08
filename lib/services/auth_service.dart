@@ -180,6 +180,12 @@ class AuthService {
       final existingUser =
           UserModel.fromJson(Map<String, dynamic>.from(snapshot.value as Map));
 
+      // Preserve existing teacherID for teachers
+      if (role == UserRole.teacher) {
+        teacherID = existingUser.teacherID;
+        
+      }
+
       // Only update photoUrl if we have a new one, otherwise keep existing
       user = existingUser.copyWith(
         lastLogin: DateTime.now(),

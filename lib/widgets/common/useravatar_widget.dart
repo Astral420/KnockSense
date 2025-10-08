@@ -139,15 +139,8 @@ class UserAvatar extends ConsumerWidget {
   }
 
   Widget _buildDefaultAvatar(BuildContext context) {
-    return CircleAvatar(
-      radius: radius,
-      backgroundColor: backgroundColor ?? Theme.of(context).primaryColor.withOpacity(0.1),
-      child: Icon(
-        Icons.person,
-        size: radius * 1.2,
-        color: textColor ?? Theme.of(context).primaryColor,
-      ),
-    );
+    final name = displayName ?? 'User';
+    return _buildInitialsAvatar(context, name);
   }
 
   String getInitials(String name) {

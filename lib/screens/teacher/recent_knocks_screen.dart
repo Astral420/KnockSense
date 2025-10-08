@@ -42,6 +42,10 @@ Widget build(BuildContext context, WidgetRef ref) {
   final currentUserAsync = ref.watch(currentUserProvider);
   // 1. Watch the original ASYNC provider to handle loading/error states
   final allAppointmentsAsync = ref.watch(teacherAllAppointmentsProvider);
+  // Watch today's appointments (AsyncValue<List<AppointmentModel>>)
+  final todayAppointmentsAsync = ref.watch(teacherTodayAppointmentsProvider);
+  // Safe synchronous value for lightweight checks (e.g., menu enablement)
+  final todayAppointments = todayAppointmentsAsync.asData?.value ?? <AppointmentModel>[];
 
   return Scaffold(
     backgroundColor: const Color(0xFFFDF6E3),
@@ -55,10 +59,7 @@ Widget build(BuildContext context, WidgetRef ref) {
           // 2. Use .when() on the async provider at the top level
           return allAppointmentsAsync.when(
             data: (allAppointments) {
-              // 3. Once data is loaded, get the synchronously filtered list
-              final todayAppointments = ref.watch(teacherTodayAppointmentsProvider);
-
-              // 4. Build the rest of the UI with the final, filtered list
+              // 3. Build the rest of the UI with the final, filtered list
               return Column(
                 children: [
                   // Header
@@ -138,54 +139,58 @@ Widget build(BuildContext context, WidgetRef ref) {
 
                   // Appointments List
                   Expanded(
-                    child: Builder(builder: (context) {
-                      // CORRECTED: The main list no longer needs .when()
-                      if (todayAppointments.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.today_outlined,
-                                size: 64,
-                                color: Colors.brown[300],
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'No appointments today',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.brown[600],
-                                  fontWeight: FontWeight.w500,
+                    child: todayAppointmentsAsync.when(
+                      data: (appointments) {
+                        if (appointments.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.today_outlined,
+                                  size: 64,
+                                  color: Colors.brown[300],
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Today\'s appointments will appear here',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.brown[400],
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No appointments today',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.brown[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      return ListView.builder(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        itemCount: todayAppointments.length,
-                        itemBuilder: (context, index) {
-                          final appointment = todayAppointments[index];
-                          return _buildAppointmentCard(
-                            context: context,
-                            appointment: appointment,
-                            user: user,
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Today\'s appointments will appear here',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.brown[400],
+                                  ),
+                                ),
+                              ],
+                            ),
                           );
-                        },
-                      );
-                    }),
+                        }
+
+                        return ListView.builder(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          itemCount: appointments.length,
+                          itemBuilder: (context, index) {
+                            final appointment = appointments[index];
+                            return _buildAppointmentCard(
+                              context: context,
+                              appointment: appointment,
+                              user: user,
+                            );
+                          },
+                        );
+                      },
+                      loading: () => const LoadingWidget(),
+                      error: (err, stack) =>
+                          Center(child: Text('Error loading today\'s appointments: $err')),
+                    ),
                   ),
                 ],
               );
