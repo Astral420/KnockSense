@@ -78,7 +78,7 @@ dev_dependencies:
 flutter_launcher_icons:
       android: "launcher_icon"
       ios: true
-      image_path: "assets/icons/logo/knocksense_logo.png"  
+      image_path: "assets/icons/logo/knocksense_logo_2.png"  
 
 # The following section is specific to Flutter packages.
 flutter:
@@ -89,6 +89,16 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/
+
+    - assets/logo_stage1.png
+    - assets/logo_stage2.png
+    - assets/logo_stage3.png
+    - assets/logo_badge.png
+    
+    # Onboarding images
+    - assets/onb1.png
+    - assets/onb2.png
+    - assets/onb3.png
 
   
 
