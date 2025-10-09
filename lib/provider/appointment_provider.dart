@@ -210,6 +210,16 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
     required bool accept,
     required String teacherResponse, // Required for both accept and reject
   }) async {
+
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('📡 NOTIFIER: respondToScheduledAppointment called');
+    print('   Student: $studentNumber');
+    print('   Appointment: $appointmentId');
+    print('   Teacher: $teacherUid');
+    print('   Accept: $accept');
+    print('   Response: $teacherResponse');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     state = const AsyncValue.loading();
     
     try {
@@ -220,10 +230,14 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
         accept: accept,
         teacherResponse: teacherResponse,
       );
+
+      print('📡 NOTIFIER: Service returned - Success: $success');
       
       state = const AsyncValue.data(null);
       return success;
     } catch (e, stack) {
+
+      print('❌ NOTIFIER: Error - $e');
       state = AsyncValue.error(e, stack);
       return false;
     }

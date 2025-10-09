@@ -1363,6 +1363,14 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
       });
       return;
     }
+
+     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+     print('🎯 TEACHER: Accepting scheduled appointment');
+     print('   Student Number: ${widget.appointment.studentNumber}');
+     print('   Appointment ID: ${widget.appointment.appointmentId}');
+     print('   Teacher UID: ${widget.currentUser.uid}');
+     print('   Teacher Note: $note');
+     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     setState(() {
       _isResponding = true;
@@ -1379,6 +1387,8 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
         accept: true,
         teacherResponse: note, // This will be the location
       );
+
+      print('🎯 TEACHER: Response sent - Success: $success');
       
       if (success && mounted) {
         Navigator.pop(context);
@@ -1387,6 +1397,9 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
         _showErrorMessage('Failed to accept appointment. Please try again.');
       }
     } catch (e) {
+
+      print('❌ TEACHER: Error accepting appointment: $e');
+      
       if (mounted) {
         _showErrorMessage('An error occurred: ${e.toString()}');
       }

@@ -666,6 +666,16 @@ Future<AppointmentModel?> _fetchAppointmentDetails(String studentNumber, String 
     required String teacherResponse, // Made required for scheduled appointments
   }) async {
     try {
+
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('🔧 SERVICE: respondToScheduledAppointment');
+      print('   Student: $studentNumber');
+      print('   Appointment: $appointmentId');
+      print('   Accept: $accept');
+      print('   Response: $teacherResponse');
+
+
+
       final updates = <String, dynamic>{};
       
       // ✅ PROBLEM 3 FIX: Change logic to mark as completed on acceptance
@@ -693,12 +703,26 @@ Future<AppointmentModel?> _fetchAppointmentDetails(String studentNumber, String 
       updates['teacher_appointments/$teacherUid/$appointmentId/respondedAt'] = ServerValue.timestamp;
       
       await _database.ref().update(updates);
+
+        print('🔧 SERVICE: Updating database...');
+        print('   Updates: ${updates.keys.toList()}');
+
+        print('✅ SERVICE: Database updated successfully');
+        print('🔧 SERVICE: Now sending notification...');
       
       // Send notification with the teacher's response/location
       await _sendScheduledAppointmentResponse(studentNumber, accept, teacherResponse);
+
+       print('✅ SERVICE: Notification method called');
+       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        
       
       return true;
     } catch (e) {
+
+       print('✅ SERVICE: Notification method called');
+       print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
       debugPrint('Error responding to scheduled appointment: $e');
       return false;
     }
@@ -934,6 +958,171 @@ Future<AppointmentModel?> _fetchAppointmentDetails(String studentNumber, String 
     }
 }
 
+Future<bool> sendTestNotificationToStudent(String studentNumber) async {
+  try {
+    debugPrint('🧪 TEST: Attempting to send test notification to student $studentNumber');
+    
+    // Get student UID
+    final studentSnapshot = await _database
+        .ref('users')
+        .orderByChild('studentNumber')
+        .equalTo(studentNumber)
+        .limitToFirst(1)
+        .get();
+    
+    if (!studentSnapshot.exists) {
+      debugPrint('❌ TEST: Student not found');
+      return false;
+    }
+    
+    final studentData = Map<String, dynamic>.from(
+      (studentSnapshot.value as Map).values.first
+    );
+    final studentUid = studentData['uid'] as String;
+    debugPrint('✅ TEST: Found student UID: $studentUid');
+    
+    // Get tokens
+    final tokensSnapshot = await _database.ref('fcm_tokens/$studentUid').get();
+    if (!tokensSnapshot.exists) {
+      debugPrint('❌ TEST: No FCM tokens found for student');
+      return false;
+    }
+    
+    final tokensData = Map<String, dynamic>.from(tokensSnapshot.value as Map);
+    debugPrint('✅ TEST: Found ${tokensData.length} device token(s)');
+    
+    // Send test notification to all devices
+    int successCount = 0;
+    for (var tokenEntry in tokensData.entries) {
+      final tokenInfo = Map<String, dynamic>.from(tokenEntry.value as Map);
+      final token = tokenInfo['token'] as String?;
+      
+      if (token != null) {
+        await _database.ref('notification_queue').push().set({
+          'to': token,
+          'notification': {
+            'title': '🧪 Test Notification',
+            'body': 'This is a test notification from KnockSense. If you see this, notifications are working!',
+          },
+          'data': {
+            'type': 'test_notification',
+            'timestamp': DateTime.now().millisecondsSinceEpoch.toString(),
+          },
+          'priority': 'high',
+          'createdAt': ServerValue.timestamp,
+        });
+        successCount++;
+        debugPrint('✅ TEST: Queued notification for device ${tokenEntry.key}');
+      }
+    }
+    
+    debugPrint('✅ TEST: Successfully queued $successCount notification(s)');
+    return successCount > 0;
+    
+  } catch (e) {
+    debugPrint('❌ TEST: Error - $e');
+    return false;
+  }
+}
+
+/// Verify student has valid FCM tokens
+Future<Map<String, dynamic>> checkStudentNotificationStatus(String studentNumber) async {
+  try {
+    final result = {
+      'studentFound': false,
+      'studentUid': null,
+      'hasTokens': false,
+      'tokenCount': 0,
+      'tokenPreviews': <String>[],
+    };
+    
+    // Find student
+    final studentSnapshot = await _database
+        .ref('users')
+        .orderByChild('studentNumber')
+        .equalTo(studentNumber)
+        .limitToFirst(1)
+        .get();
+    
+    if (!studentSnapshot.exists) {
+      debugPrint('❌ Student not found: $studentNumber');
+      return result;
+    }
+    
+    result['studentFound'] = true;
+    final studentData = Map<String, dynamic>.from(
+      (studentSnapshot.value as Map).values.first
+    );
+    final studentUid = studentData['uid'] as String;
+    result['studentUid'] = studentUid;
+    
+    debugPrint('✅ Found student UID: $studentUid');
+    
+    // Check tokens
+    final tokensSnapshot = await _database.ref('fcm_tokens/$studentUid').get();
+    if (!tokensSnapshot.exists) {
+      debugPrint('❌ No FCM tokens found for student');
+      return result;
+    }
+    
+    result['hasTokens'] = true;
+    final tokensData = Map<String, dynamic>.from(tokensSnapshot.value as Map);
+    result['tokenCount'] = tokensData.length;
+    
+    // Extract token strings for debugging (safely)
+    final tokenList = <String>[];
+    for (var entry in tokensData.values) {
+      if (entry is Map) {
+        final tokenInfo = Map<String, dynamic>.from(entry);
+        final token = tokenInfo['token']?.toString() ?? '';
+        if (token.isNotEmpty) {
+          // Safe substring with length check
+          final preview = token.length > 20 
+              ? '${token.substring(0, 20)}...' 
+              : token;
+          tokenList.add(preview);
+        }
+      }
+    }
+    result['tokenPreviews'] = tokenList;
+    
+    debugPrint('✅ Found ${result['tokenCount']} token(s) for student');
+    return result;
+    
+  } catch (e) {
+    debugPrint('❌ Error checking notification status: $e');
+    return {'error': e.toString()};
+  }
+}
+
+/// Check notification queue for pending notifications
+Future<void> inspectNotificationQueue() async {
+  try {
+    final queueSnapshot = await _database.ref('notification_queue').get();
+    
+    if (!queueSnapshot.exists || queueSnapshot.value == null) {
+      debugPrint('📭 Notification queue is empty');
+      return;
+    }
+    
+    final queue = Map<String, dynamic>.from(queueSnapshot.value as Map);
+    debugPrint('📬 Notification queue has ${queue.length} pending item(s)');
+    
+    int index = 0;
+    for (var entry in queue.entries) {
+      index++;
+      final item = Map<String, dynamic>.from(entry.value as Map);
+      debugPrint('  [$index] ID: ${entry.key}');
+      debugPrint('      Type: ${item['data']?['type'] ?? 'unknown'}');
+      debugPrint('      To: ${item['to']?.toString().substring(0, 20)}...');
+      debugPrint('      Title: ${item['notification']?['title'] ?? item['title'] ?? 'N/A'}');
+    }
+    
+  } catch (e) {
+    debugPrint('❌ Error inspecting queue: $e');
+  }
+}
+
 
   
 
@@ -983,6 +1172,16 @@ Future<AppointmentModel?> _fetchAppointmentDetails(String studentNumber, String 
   bool accepted, 
   String message,
 ) async {
+
+  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  print('📨 NOTIFICATION: _sendScheduledAppointmentResponse');
+  print('   Student Number: $studentNumber');
+  print('   Accepted: $accepted');
+  print('   Message: $message');
+  
+
+
+
   try {
     // Get student UID from student number
     final studentSnapshot = await _database
@@ -1037,6 +1236,7 @@ Future<AppointmentModel?> _fetchAppointmentDetails(String studentNumber, String 
               'createdAt': ServerValue.timestamp,
             });
             debugPrint('✅ Scheduled appointment notification queued for student $studentNumber (${accepted ? "Accepted" : "Declined"})');
+            
           }
         }
       } else {

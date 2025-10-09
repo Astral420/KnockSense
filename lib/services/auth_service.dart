@@ -145,97 +145,101 @@ class AuthService {
 
   // Create or update user in Realtime Database
   Future<UserModel> _createOrUpdateUser({
-    required User firebaseUser,
-    String? principalName,
-    String? photoUrl,
-    bool isAdmin = false,
-  }) async {
-    final String uid = firebaseUser.uid;
-    final String email = firebaseUser.email ?? '';
+  required User firebaseUser,
+  String? principalName,
+  String? photoUrl,
+  bool isAdmin = false,
+}) async {
+  final String uid = firebaseUser.uid;
+  final String email = firebaseUser.email ?? '';
 
-    // Prioritize principalName for the displayName, with fallbacks
-    final String displayName =
-        principalName ?? firebaseUser.displayName ?? email.split('@')[0];
+  // Prioritize principalName for the displayName, with fallbacks
+  final String displayName =
+      principalName ?? firebaseUser.displayName ?? email.split('@')[0];
 
-    // Determine role
-    UserRole role;
-    String? studentNumber;
-    String? teacherID;
+  // Determine role
+  UserRole role;
+  String? studentNumber;
+  String? teacherID;
 
-    if (isAdmin) {
-      role = UserRole.admin;
-    } else {
-      final roleData = _determineRole(email);
-      role = roleData['role'];
-      studentNumber = roleData['studentNumber'];
+  if (isAdmin) {
+    role = UserRole.admin;
+  } else {
+    final roleData = _determineRole(email);
+    role = roleData['role'];
+    studentNumber = roleData['studentNumber'];
+  }
+
+  // Check if user exists
+  final userRef = _database.ref('users/$uid');
+  final snapshot = await userRef.get();
+
+  UserModel user;
+  if (snapshot.exists) {
+    // User exists: update their data
+    final existingUser =
+        UserModel.fromJson(Map<String, dynamic>.from(snapshot.value as Map));
+
+    // Preserve existing teacherID for teachers
+    if (role == UserRole.teacher) {
+      teacherID = existingUser.teacherID;
     }
 
-    // Check if user exists
-    final userRef = _database.ref('users/$uid');
-    final snapshot = await userRef.get();
-
-    UserModel user;
-    if (snapshot.exists) {
-      // User exists: update their data
-      final existingUser =
-          UserModel.fromJson(Map<String, dynamic>.from(snapshot.value as Map));
-
-      // Preserve existing teacherID for teachers
-      if (role == UserRole.teacher) {
-        teacherID = existingUser.teacherID;
-        
-      }
-
-      // Only update photoUrl if we have a new one, otherwise keep existing
-      user = existingUser.copyWith(
-        lastLogin: DateTime.now(),
-        displayName: displayName,
-        photoUrl: photoUrl ?? existingUser.photoUrl,
-      );
-    } else {
-
-      if (role == UserRole.teacher) {
+    // Only update photoUrl if we have a new one, otherwise keep existing
+    user = existingUser.copyWith(
+      lastLogin: DateTime.now(),
+      displayName: displayName,
+      photoUrl: photoUrl ?? existingUser.photoUrl,
+    );
+  } else {
+    if (role == UserRole.teacher) {
       teacherID = await _generateTeacherId();
     }
-      // New user: create their data
-      user = UserModel(
-        uid: uid,
-        email: email,
-        displayName: displayName,
-        role: role,
-        studentNumber: studentNumber,
-        teacherID: teacherID,
-        createdAt: DateTime.now(),
-        lastLogin: DateTime.now(),
-        photoUrl: photoUrl,
-      );
-    }
-
-    // Save the complete user object to the database
-    await userRef.set(user.toJson());
-
-    // Update role index
-    final Map<String, dynamic> roleIndexData = {
-      'email': email,
-      'displayName': displayName,
-    };
-
-    if (role == UserRole.teacher) {
-      roleIndexData['rfid_uid'] = null;
-      roleIndexData['active_status'] = "offline";
-      roleIndexData['teacher_msg'] = null;
-      roleIndexData['teacherID'] = teacherID;
-    } else if (role == UserRole.student) {
-      roleIndexData['studentNumber'] = studentNumber;
-    } 
-
-    // Write the index data to the database
-    if (role != UserRole.admin) {
-      await _database.ref('roles/${role.name}/$uid').set(roleIndexData);
-    }
-
-    return user;
+    
+    // New user: create their data
+    user = UserModel(
+      uid: uid,
+      email: email,
+      displayName: displayName,
+      role: role,
+      studentNumber: studentNumber,
+      teacherID: teacherID,
+      createdAt: DateTime.now(),
+      lastLogin: DateTime.now(),
+      photoUrl: photoUrl,
+    );
   }
+
+  // Save the complete user object to the database
+  await userRef.set(user.toJson());
+
+  // Update role index - CRITICAL FIX: Use update() instead of set()
+  final Map<String, dynamic> roleIndexData = {
+    'email': email,
+    'displayName': displayName,
+  };
+
+  if (role == UserRole.teacher) {
+    // For teachers, only update these specific fields
+    // Do NOT include rfid_uid, active_status, etc. - let ESP32 manage those
+    roleIndexData['teacherID'] = teacherID;
+    
+    // IMPORTANT: Use update() to merge with existing data
+    // This preserves ESP32-managed fields like:
+    // - daily_first_entry, daily_last_exit
+    // - last_entry_time, last_exit_time
+    // - rfid_uid, active_status, status_changed_at
+    await _database.ref('roles/${role.name}/$uid').update(roleIndexData);
+    
+  } else if (role == UserRole.student) {
+    roleIndexData['studentNumber'] = studentNumber;
+    
+    // For students, we can use set() since there's no ESP32 data
+    await _database.ref('roles/${role.name}/$uid').set(roleIndexData);
+  }
+
+  return user;
+}
 
   // Update user's photo URL in the database
   Future<void> _updateUserPhotoUrl({

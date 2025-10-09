@@ -162,13 +162,20 @@ class NotificationService {
     Map<String, dynamic>? payload,
   }) async {
     if (!_isPlatformSupported) return;
-    const androidDetails = AndroidNotificationDetails(
-      'appointments',
-      'Appointment Notifications',
-      channelDescription: 'Notifications for appointment updates',
-      importance: Importance.high,
-      priority: Priority.high,
-    );
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('🔔 SHOWING LOCAL NOTIFICATION');
+      debugPrint('   Title: $title');
+      debugPrint('   Body: $body');
+      debugPrint('   Payload: $payload');
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      
+      const androidDetails = AndroidNotificationDetails(
+        'appointments',
+        'Appointment Notifications',
+        channelDescription: 'Notifications for appointment updates',
+        importance: Importance.high,
+        priority: Priority.high,
+      );
     
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
@@ -195,7 +202,14 @@ class NotificationService {
   if (!_isPlatformSupported) return; 
   try {
     final token = await _messaging.getToken();
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('💾 SAVING FCM TOKEN');
+      debugPrint('   UID: $uid');
+      debugPrint('   Role: $role');
+      debugPrint('   Token: ${token?.substring(0, 30)}...');
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     if (token != null) {
+
       // FIXED: Use a simpler structure with token as value, not key
       final deviceId = DateTime.now().millisecondsSinceEpoch.toString();
       await _database.ref('fcm_tokens/$uid/$deviceId').set({
@@ -244,16 +258,23 @@ Future<void> clearUserToken(String uid) async {
   void _handleForegroundMessage(RemoteMessage message) {
     if (!_isPlatformSupported) return;
     debugPrint('Foreground message: ${message.notification?.title}');
-    
-    // Show local notification
-    if (message.notification != null) {
-      showAppointmentNotification(
-        title: message.notification!.title ?? 'KnockSense',
-        body: message.notification!.body ?? '',
-        payload: message.data,
-      );
-    }
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('📨 FOREGROUND MESSAGE RECEIVED');
+    debugPrint('   Message ID: ${message.messageId}');
+    debugPrint('   Title: ${message.notification?.title ?? "none"}');
+    debugPrint('   Body: ${message.notification?.body ?? "none"}');
+    debugPrint('   Data: ${message.data}');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  
+  // Show local notification
+  if (message.notification != null) {
+    showAppointmentNotification(
+      title: message.notification!.title ?? 'KnockSense',
+      body: message.notification!.body ?? '',
+      payload: message.data,
+    );
   }
+}
 
   // Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
