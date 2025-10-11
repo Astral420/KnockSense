@@ -1,62 +1,32 @@
+// admin_activity_logs_screen.dart
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-// Providers for date filtering
-final startDateProvider = StateProvider<DateTime?>((ref) => null);
-final endDateProvider = StateProvider<DateTime?>((ref) => null);
+import 'package:knocksense/provider/activity_logs_provider.dart';
+import 'package:knocksense/widgets/common/loading_widget.dart';
 
 class AdminActivityLogsScreen extends ConsumerWidget {
   const AdminActivityLogsScreen({Key? key}) : super(key: key);
+
+  // Design system colors
+  static const Color kBg = Color(0xFFF7F8FB);
+  static const Color kSurface = Color(0xFFFFFFFF);
+  static const Color kText = Color(0xFF111827);
+  static const Color kMuted = Color(0xFF888888);
+  static const Color kYellow = Color(0xFFFACC15);
+  static const Color kGreen = Color(0xFF16A34A);
+  static const Color kRed = Color(0xFFDC2626);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final startDate = ref.watch(startDateProvider);
     final endDate = ref.watch(endDateProvider);
-
-    // Mock activity logs data - replace with real data from Firebase
-    final allLogs = [
-      ActivityLogItem(
-        isEntry: true,
-        name: "Prof. Santos",
-        rfid: "22:0C:10:01",
-        time: const TimeOfDay(hour: 10, minute: 5),
-        date: DateTime(2025, 1, 22),
-      ),
-      ActivityLogItem(
-        isEntry: false,
-        name: "Prof. Kim",
-        rfid: "10:00:03:1D",
-        time: const TimeOfDay(hour: 10, minute: 5),
-        date: DateTime(2025, 1, 22),
-      ),
-      ActivityLogItem(
-        isEntry: true,
-        name: "Prof. Kim",
-        rfid: "10:00:03:1D",
-        time: const TimeOfDay(hour: 10, minute: 0),
-        date: DateTime(2025, 1, 22),
-      ),
-      ActivityLogItem(
-        isEntry: false,
-        name: "Prof. Gonzales",
-        rfid: "A2:7A:B5:AB",
-        time: const TimeOfDay(hour: 9, minute: 58),
-        date: DateTime(2025, 1, 22),
-      ),
-      ActivityLogItem(
-        isEntry: true,
-        name: "Prof. Gonzales",
-        rfid: "A2:7A:B5:AB",
-        time: const TimeOfDay(hour: 9, minute: 55),
-        date: DateTime(2025, 1, 22),
-      ),
-    ];
-
-    final filteredLogs = _filterLogsByDateRange(allLogs, startDate, endDate);
+    final filteredLogs = ref.watch(filteredActivityLogsProvider);
 
     return Scaffold(
+      backgroundColor: kBg,
       appBar: AppBar(
         title: Text(
           "Activity Logs",
@@ -67,6 +37,17 @@ class AdminActivityLogsScreen extends ConsumerWidget {
         ),
         backgroundColor: Colors.white,
         elevation: 0.5,
+        actions: [
+          // Refresh button
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              // Force refresh by invalidating the provider
+              ref.invalidate(activityLogsStreamProvider);
+            },
+            tooltip: 'Refresh logs',
+          ),
+        ],
       ),
       body: Center(
         child: ConstrainedBox(
@@ -79,10 +60,86 @@ class AdminActivityLogsScreen extends ConsumerWidget {
               const SizedBox(height: 12),
 
               // Activity Logs
-              if (filteredLogs.isEmpty)
-                _buildEmptyState()
-              else
-                ...filteredLogs.map((log) => _buildLogItem(log)),
+              filteredLogs.when(
+                data: (logs) {
+                  if (logs.isEmpty) {
+                    return _buildEmptyState();
+                  }
+                  
+                  // Group logs by date for better organization
+                  final groupedLogs = _groupLogsByDate(logs);
+                  
+                  return Column(
+                    children: groupedLogs.entries.map((entry) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Date header
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Text(
+                              _formatDateHeader(entry.key),
+                              style: GoogleFonts.roboto(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: kMuted,
+                              ),
+                            ),
+                          ),
+                          // Logs for this date
+                          ...entry.value.map((log) => _buildLogItem(log)),
+                          const SizedBox(height: 12),
+                        ],
+                      );
+                    }).toList(),
+                  );
+                },
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: LoadingWidget(message: 'Loading activity logs...'),
+                  ),
+                ),
+                error: (err, stack) => Center(
+                  child: Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.error_outline, size: 64, color: Colors.red.shade400),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Error loading activity logs',
+                            style: GoogleFonts.roboto(
+                              color: Colors.red.shade600,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            err.toString(),
+                            style: GoogleFonts.roboto(
+                              color: kMuted,
+                              fontSize: 12,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: () => ref.invalidate(activityLogsStreamProvider),
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -126,12 +183,13 @@ class AdminActivityLogsScreen extends ConsumerWidget {
             ),
             if (startDate != null || endDate != null) ...[
               const SizedBox(height: 12),
-              TextButton(
+              TextButton.icon(
                 onPressed: () {
                   ref.read(startDateProvider.notifier).state = null;
                   ref.read(endDateProvider.notifier).state = null;
                 },
-                child: const Text("Clear Filters"),
+                icon: const Icon(Icons.clear),
+                label: const Text("Clear Filters"),
               ),
             ],
           ],
@@ -196,13 +254,22 @@ class AdminActivityLogsScreen extends ConsumerWidget {
                 fontWeight: FontWeight.w500,
               ),
             ),
+            const SizedBox(height: 8),
+            Text(
+              'Activity logs will appear here when teachers enter or exit',
+              style: GoogleFonts.roboto(
+                color: kMuted,
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildLogItem(ActivityLogItem log) {
+  Widget _buildLogItem(ActivityLog log) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -221,37 +288,60 @@ class AdminActivityLogsScreen extends ConsumerWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Entry/Exit icon
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.transparent,
-              child: SvgPicture.asset(
-                log.isEntry ? 'assets/icons/entry.svg' : 'assets/icons/exit.svg',
-                width: 35,
-                height: 35,
-                fit: BoxFit.contain,
-              ),
-            ),
+            // Entry/Exit icon or Avatar
+            _buildLogAvatar(log),
             const SizedBox(width: 10),
 
-            // Name + RFID
+            // Name + RFID + Teacher ID
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    log.name,
-                    style: GoogleFonts.roboto(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          log.teacherName,
+                          style: GoogleFonts.roboto(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      // Status badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: log.isEntry ? kGreen.withOpacity(0.1) : kRed.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          log.isEntry ? 'IN' : 'OUT',
+                          style: GoogleFonts.roboto(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: log.isEntry ? kGreen : kRed,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    "RFID: ${log.rfid}",
+                    "RFID: ${log.rfidUid ?? 'Not assigned'}",
                     style: GoogleFonts.roboto(
                       color: Colors.grey,
                       fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  Text(
+                    "ID: ${log.teacherID}",
+                    style: GoogleFonts.roboto(
+                      color: Colors.grey,
+                      fontSize: 11,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
@@ -264,15 +354,15 @@ class AdminActivityLogsScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  _formatTime(log.time),
+                  log.formattedTime,
                   style: GoogleFonts.roboto(
-                    fontWeight: FontWeight.w300,
-                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _formatDate(log.date),
+                  log.formattedDate,
                   style: GoogleFonts.roboto(
                     color: Colors.grey,
                     fontSize: 12,
@@ -287,25 +377,96 @@ class AdminActivityLogsScreen extends ConsumerWidget {
     );
   }
 
-  List<ActivityLogItem> _filterLogsByDateRange(List<ActivityLogItem> logs, 
-      DateTime? start, DateTime? end) {
-    if (start == null && end == null) return logs;
+  Widget _buildLogAvatar(ActivityLog log) {
+    // If there's a photo URL, use it; otherwise use the entry/exit icon
+    if (log.photoUrl != null && log.photoUrl!.isNotEmpty) {
+      return Stack(
+        children: [
+          CachedNetworkImage(
+            imageUrl: log.photoUrl!,
+            imageBuilder: (context, imageProvider) => CircleAvatar(
+              radius: 18,
+              backgroundImage: imageProvider,
+              backgroundColor: kYellow,
+            ),
+            placeholder: (context, url) => CircleAvatar(
+              radius: 18,
+              backgroundColor: kYellow.withOpacity(0.5),
+              child: const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.0,
+                  color: kText,
+                ),
+              ),
+            ),
+            errorWidget: (context, url, error) => _buildIconAvatar(log),
+          ),
+          // Small indicator for entry/exit
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                color: log.isEntry ? kGreen : kRed,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 1.5),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    
+    return _buildIconAvatar(log);
+  }
 
-    return logs.where((log) {
-      final logDate = DateTime(log.date.year, log.date.month, log.date.day);
-      
-      if (start != null) {
-        final startDate = DateTime(start.year, start.month, start.day);
-        if (logDate.isBefore(startDate)) return false;
+  Widget _buildIconAvatar(ActivityLog log) {
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: Colors.transparent,
+      child: SvgPicture.asset(
+        log.isEntry ? 'assets/icons/entry.svg' : 'assets/icons/exit.svg',
+        width: 35,
+        height: 35,
+        fit: BoxFit.contain,
+      ),
+    );
+  }
+
+  Map<DateTime, List<ActivityLog>> _groupLogsByDate(List<ActivityLog> logs) {
+    final Map<DateTime, List<ActivityLog>> grouped = {};
+    
+    for (final log in logs) {
+      final date = DateTime(log.timestamp.year, log.timestamp.month, log.timestamp.day);
+      if (!grouped.containsKey(date)) {
+        grouped[date] = [];
       }
-      
-      if (end != null) {
-        final endDate = DateTime(end.year, end.month, end.day);
-        if (logDate.isAfter(endDate)) return false;
-      }
-      
-      return true;
-    }).toList();
+      grouped[date]!.add(log);
+    }
+    
+    return grouped;
+  }
+
+  String _formatDateHeader(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    
+    if (date == today) {
+      return 'Today';
+    } else if (date == yesterday) {
+      return 'Yesterday';
+    } else {
+      final months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+      return '${months[date.month - 1]} ${date.day}, ${date.year}';
+    }
   }
 
   Future<void> _selectStartDate(BuildContext context, WidgetRef ref) async {
@@ -335,32 +496,9 @@ class AdminActivityLogsScreen extends ConsumerWidget {
     }
   }
 
-  String _formatTime(TimeOfDay time) {
-    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
-    final minute = time.minute.toString().padLeft(2, '0');
-    final ampm = time.period == DayPeriod.am ? "AM" : "PM";
-    return "$hour:$minute $ampm";
-  }
-
   String _formatDate(DateTime date) {
     return "${date.month.toString().padLeft(2, '0')}/"
            "${date.day.toString().padLeft(2, '0')}/"
-           "${date.year.toString().substring(2)}";
+           "${date.year}";
   }
-}
-
-class ActivityLogItem {
-  final bool isEntry;
-  final String name;
-  final String rfid;
-  final TimeOfDay time;
-  final DateTime date;
-
-  ActivityLogItem({
-    required this.isEntry,
-    required this.name,
-    required this.rfid,
-    required this.time,
-    required this.date,
-  });
 }
