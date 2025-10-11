@@ -17,30 +17,61 @@ final authStateProvider = StreamProvider<User?>((ref) {
   return ref.read(firebaseAuthProvider).authStateChanges();
 });
 
+
+
 // Make currentUserProvider a StreamProvider to listen to real-time updates
 final currentUserProvider = StreamProvider<UserModel?>((ref) {
   final authState = ref.watch(authStateProvider);
 
   return authState.when(
     data: (user) {
-      if (user == null) { return Stream.value(null); }
+      if (user == null) {
+        return Stream.value(null);
+      }
 
       final db = ref.read(firebaseDatabaseProvider);
-      return db.ref('users/${user.uid}').onValue.map((event) {
-        if (event.snapshot.exists) {
-          return UserModel.fromJson(
-            Map<String, dynamic>.from(event.snapshot.value as Map),
-          );
-        }
-        return null;
-      });
+      
+      // Add error handling and retry logic
+      return db.ref('users/${user.uid}').onValue
+        .map((event) {
+          if (event.snapshot.exists && event.snapshot.value != null) {
+            try {
+              return UserModel.fromJson(
+                Map<String, dynamic>.from(event.snapshot.value as Map),
+              );
+            } catch (e) {
+              print('Error parsing user model: $e');
+              // Return null instead of throwing to prevent UI crashes
+              return null;
+            }
+          }
+          return null;
+        })
+        .handleError((error) {
+          print('Stream error in currentUserProvider: $error');
+          // Don't throw the error, return null instead
+          return null;
+        });
     },
     loading: () => Stream.value(null),
-    error: (_, __) => Stream.value(null),
+    error: (error, stack) {
+      print('Auth state error: $error');
+      return Stream.value(null);
+    },
   );
 });
 
+// Add a separate provider for user that doesn't fail on errors
+final safeCurrentUserProvider = Provider<UserModel?>((ref) {
+  final userAsync = ref.watch(currentUserProvider);
+  return userAsync.asData?.value;
+});
 
+// Also add this helper provider to check auth status
+final isAuthenticatedProvider = Provider<bool>((ref) {
+  final authState = ref.watch(authStateProvider);
+  return authState.asData?.value != null;
+});
 
 
 // Update authServiceProvider to include GraphService
@@ -51,3 +82,4 @@ final authServiceProvider = Provider<AuthService>((ref) {
     graphService: ref.read(graphServiceProvider),
   );
 });
+

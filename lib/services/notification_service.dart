@@ -175,6 +175,7 @@ class NotificationService {
         channelDescription: 'Notifications for appointment updates',
         importance: Importance.high,
         priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
       );
     
     const iosDetails = DarwinNotificationDetails(
@@ -298,6 +299,7 @@ Future<void> _createNotificationChannel() async {
     importance: Importance.high,
     playSound: true,
     enableVibration: true,
+    
   );
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =

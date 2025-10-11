@@ -72,7 +72,6 @@ class _RejectAllModalState extends ConsumerState<RejectAllModal> {
           '${widget.appointmentsToReject.length} appointment(s) have been rejected.',
           isError: false,
         );
-        // Optionally, pop the recent knocks screen as well
         Navigator.pop(context); 
       } else {
         _showStatusMessage('Failed to reject some appointments. Please check and try again.', isError: true);

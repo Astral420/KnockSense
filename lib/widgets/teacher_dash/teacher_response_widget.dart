@@ -1090,32 +1090,40 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
   // }
 
   Future<void> _handleResponse(TeacherAction action) async {
-    // Validate that Meet Later requires a note
-    if (action == TeacherAction.meetLater && _noteController.text.trim().isEmpty) {
-      setState(() {
-        _hasNoteError = true;
-      });
-      return;
-    }
-    
-    // Validate that rejection (Not Now) requires a note
-    if (action == TeacherAction.reject && _noteController.text.trim().isEmpty) {
-      setState(() {
-        _hasNoteError = true;
-      });
-      return;
-    }
-    
+  // Validate that Meet Later requires a note
+  if (action == TeacherAction.meetLater && _noteController.text.trim().isEmpty) {
     setState(() {
-      _isResponding = true;
+      _hasNoteError = true;
     });
+    return;
+  }
+  
+  // Validate that rejection (Not Now) requires a note
+  if (action == TeacherAction.reject && _noteController.text.trim().isEmpty) {
+    setState(() {
+      _hasNoteError = true;
+    });
+    return;
+  }
+  
+  setState(() {
+    _isResponding = true;
+  });
 
-    try {
+  try {
     final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
     final note = _noteController.text.trim();
     
-    // If action is meetNow, immediately complete the appointment
+    // If action is meetNow, handle completion differently
     if (action == TeacherAction.meetNow) {
+      // First pop the modal to prevent UI issues
+      if (mounted) {
+        Navigator.pop(context);
+      }
+      
+      // Then complete the appointment after a small delay
+      await Future.delayed(const Duration(milliseconds: 100));
+      
       final success = await appointmentNotifier.completeAppointment(
         studentNumber: widget.appointment.studentNumber,
         appointmentId: widget.appointment.appointmentId,
@@ -1123,46 +1131,65 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
       );
       
       if (success && mounted) {
-        Navigator.pop(context);
-        _showSuccessMessage('Meeting completed successfully!');
+        // Show success message in the parent context
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Meeting completed successfully!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
       } else if (mounted) {
-        _showErrorMessage('Failed to complete meeting. Please try again.');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to complete meeting. Please try again.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
       }
       return; // Exit early
     }
-      
-      DateTime? scheduledTime;
-      if (action == TeacherAction.meetLater) {
-        scheduledTime = DateTime.now().add(const Duration(hours: 1));
-      }
-      
-      final success = await appointmentNotifier.respondToAppointment(
-        studentNumber: widget.appointment.studentNumber,
-        appointmentId: widget.appointment.appointmentId,
-        teacherUid: widget.currentUser.uid,
-        action: action,
-        teacherResponse: note.isNotEmpty ? note : null,
-        scheduledTime: scheduledTime,
-      );
-      
-      if (success && mounted) {
-        Navigator.pop(context); // Always close the modal
-        _showSuccessMessage(_getSuccessMessage(action));
-      } else if (mounted) {
-        _showErrorMessage('Failed to respond to appointment. Please try again.');
-      }
-    } catch (e) {
-      if (mounted) {
-        _showErrorMessage('An error occurred: ${e.toString()}');
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isResponding = false;
-        });
-      }
+    
+    // Handle other actions normally
+    DateTime? scheduledTime;
+    if (action == TeacherAction.meetLater) {
+      scheduledTime = DateTime.now().add(const Duration(hours: 1));
+    }
+    
+    final success = await appointmentNotifier.respondToAppointment(
+      studentNumber: widget.appointment.studentNumber,
+      appointmentId: widget.appointment.appointmentId,
+      teacherUid: widget.currentUser.uid,
+      action: action,
+      teacherResponse: note.isNotEmpty ? note : null,
+      scheduledTime: scheduledTime,
+    );
+    
+    if (success && mounted) {
+      Navigator.pop(context);
+      _showSuccessMessage(_getSuccessMessage(action));
+    } else if (mounted) {
+      _showErrorMessage('Failed to respond to appointment. Please try again.');
+    }
+  } catch (e) {
+    if (mounted) {
+      _showErrorMessage('An error occurred: ${e.toString()}');
+    }
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isResponding = false;
+      });
     }
   }
+}
 
   Future<void> _handleMeetNowFromWaiting() async {
   setState(() {
@@ -1399,7 +1426,7 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
     } catch (e) {
 
       print('❌ TEACHER: Error accepting appointment: $e');
-      
+
       if (mounted) {
         _showErrorMessage('An error occurred: ${e.toString()}');
       }
