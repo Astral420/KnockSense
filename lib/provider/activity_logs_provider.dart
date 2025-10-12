@@ -1,6 +1,6 @@
 // provider/activity_logs_provider.dart
 
-import 'package:firebase_database/firebase_database.dart';
+//import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 

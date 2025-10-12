@@ -652,34 +652,40 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
   }
 
   Widget _buildDateTimeSelection() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.purple.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.purple.withOpacity(0.3),
-        ),
+  return Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.purple.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
+        color: Colors.purple.withOpacity(0.3),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Schedule Appointment',
-            style: TextStyle(
-              color: Colors.purple[800],
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Schedule Appointment',
+          style: TextStyle(
+            color: Colors.purple[800],
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
           ),
-          const SizedBox(height: 16),
-          
-          // Date selection
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _selectDate(context),
+        ),
+        const SizedBox(height: 16),
+        
+        // Date selection
+        Row(
+          children: [
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    debugPrint('📅 Date button tapped');
+                    _selectDate(context);
+                  },
+                  borderRadius: BorderRadius.circular(8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                     decoration: BoxDecoration(
@@ -705,12 +711,19 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              
-              // Time selection
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _selectTime(context),
+            ),
+            const SizedBox(width: 12),
+            
+            // Time selection
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    debugPrint('⏰ Time button tapped');
+                    _selectTime(context);
+                  },
+                  borderRadius: BorderRadius.circular(8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                     decoration: BoxDecoration(
@@ -736,12 +749,13 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                   ),
                 ),
               ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildActionButtons(TeacherModel teacher, UserModel? currentUser, bool hasPendingAppointment) {
     final bool canSchedule = !_isScheduling && 
@@ -951,21 +965,24 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
   }
 
 bool _validateScheduledTime(DateTime scheduledDateTime, AsyncValue statusWithDuration) {
-  // Get the status change time if available
+  final now = DateTime.now();
+  
+  // Check if in the past
+  if (scheduledDateTime.isBefore(now)) {
+    debugPrint('❌ Validation failed: Time is in the past');
+    return false;
+  }
+  
+  // Check against status change time
   final statusData = statusWithDuration.valueOrNull;
-  if (statusData != null && statusData.changedAt != null) {
-    // Ensure scheduled time is after the status change
-    if (scheduledDateTime.isBefore(statusData.changedAt!) || 
-        scheduledDateTime.isAtSameMomentAs(statusData.changedAt!)) {
+  if (statusData?.changedAt != null) {
+    if (scheduledDateTime.isBefore(statusData!.changedAt!)) {
+      debugPrint('❌ Validation failed: Before status change time');
       return false;
     }
   }
   
-  // Also ensure it's in the future
-  if (scheduledDateTime.isBefore(DateTime.now())) {
-    return false;
-  }
-  
+  debugPrint('✅ Validation passed');
   return true;
 }
 
@@ -974,75 +991,90 @@ Future<void> _selectDate(BuildContext context) async {
   final now = DateTime.now();
   final weekFromNow = now.add(const Duration(days: 7));
   
-  // Get the status data to check when status was last changed
+  // Get the status data
   final statusWithDuration = ref.read(
     teacherStatusWithDurationProvider(widget.teacher.uid)
   );
   
   final statusData = statusWithDuration.valueOrNull;
+  
+  // Determine the first selectable date
   DateTime firstSelectableDate = now;
   
-  // If we have status change data, ensure date is after status change
   if (statusData != null && statusData.changedAt != null) {
-    // If status changed today but in the future from now, use that time
     if (statusData.changedAt!.isAfter(now)) {
       firstSelectableDate = statusData.changedAt!;
     }
   }
   
-  final picked = await showDatePicker(
-    context: context,
-    initialDate: _selectedDate ?? 
-        (firstSelectableDate.isAfter(now) ? firstSelectableDate : now),
-    firstDate: firstSelectableDate,
-    lastDate: weekFromNow,
-    selectableDayPredicate: (DateTime day) {
-      // Exclude Sundays
-      if (day.weekday == DateTime.sunday) {
-        return false;
-      }
-      
-      // Exclude dates before status change if on the same day
-      if (statusData != null && statusData.changedAt != null) {
-        final statusChangeDate = DateTime(
-          statusData.changedAt!.year,
-          statusData.changedAt!.month,
-          statusData.changedAt!.day,
-        );
-        final checkDate = DateTime(day.year, day.month, day.day);
-        
-        // If the date is before the status change date, disable it
-        if (checkDate.isBefore(statusChangeDate)) {
+  // CRITICAL FIX: Find the next valid date (skip Sundays)
+  DateTime getNextSelectableDate(DateTime date) {
+    DateTime candidate = date;
+    while (candidate.weekday == DateTime.sunday) {
+      candidate = candidate.add(const Duration(days: 1));
+    }
+    return candidate;
+  }
+  
+  // Ensure initialDate is not a Sunday
+  final initialDate = _selectedDate ?? getNextSelectableDate(firstSelectableDate);
+  
+  debugPrint('📅 Opening date picker - First selectable: $firstSelectableDate');
+  debugPrint('📅 Initial date: $initialDate');
+  
+  try {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: firstSelectableDate,
+      lastDate: weekFromNow,
+      selectableDayPredicate: (DateTime day) {
+        // Exclude Sundays
+        if (day.weekday == DateTime.sunday) {
           return false;
         }
-      }
-      
-      return true;
-    },
-    builder: (context, child) {
-      return Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: Color(0xFF9C27B0),
-            onPrimary: Colors.white,
-            onSurface: Colors.black,
+        
+        // Create date without time for comparison
+        final checkDate = DateTime(day.year, day.month, day.day);
+        final todayDate = DateTime(now.year, now.month, now.day);
+        
+        // Allow today and future dates
+        return checkDate.isAtSameMomentAs(todayDate) || checkDate.isAfter(todayDate);
+      },
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF9C27B0),
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
           ),
-        ),
-        child: child!,
-      );
-    },
-  );
+          child: child!,
+        );
+      },
+    );
 
-  if (picked != null) {
-    setState(() {
-      _selectedDate = picked;
-      // Reset time selection if date changes
-      _selectedTime = null;
-    });
+    if (picked != null && mounted) {
+      debugPrint('✅ Date selected: $picked');
+      setState(() {
+        _selectedDate = picked;
+        _selectedTime = null;
+        _errorMessage = null;
+      });
+    }
+  } catch (e, stackTrace) {
+    debugPrint('❌ Error showing date picker: $e');
+    if (mounted) {
+      setState(() {
+        _errorMessage = 'Failed to open date picker. Please try again.';
+      });
+      _clearMessagesAfterDelay();
+    }
   }
 }
 
-// Updated _selectTime method with better validation
+// FIXED: Simplified _selectTime method
 Future<void> _selectTime(BuildContext context) async {
   if (_selectedDate == null) {
     setState(() {
@@ -1052,81 +1084,97 @@ Future<void> _selectTime(BuildContext context) async {
     return;
   }
   
-  // Get current status data
-  final statusWithDuration = ref.read(
-    teacherStatusWithDurationProvider(widget.teacher.uid)
-  );
+  debugPrint('⏰ Opening time picker');
   
-  final picked = await showTimePicker(
-    context: context,
-    initialTime: _selectedTime ?? TimeOfDay.now(),
-    builder: (context, child) {
-      return Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: Color(0xFF9C27B0),
-            onPrimary: Colors.white,
-            onSurface: Colors.black,
+  try {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime ?? TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF9C27B0),
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
           ),
-        ),
-        child: MediaQuery(
-          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
-          child: child!,
-        ),
-      );
-    },
-  );
-
-  if (picked != null) {
-
-    // NEW: Validate time is not before 6:30 AM
-    if (picked.hour < 6 || (picked.hour == 6 && picked.minute < 30)) {
-      setState(() {
-        _errorMessage = 'Appointments cannot be scheduled before 6:30 AM (reset time). Please select a later time.';
-      });
-      _clearMessagesAfterDelay();
-      return;
-    }
-    
-    // Validate time is before or at 6:00 PM
-    if (picked.hour > 18 || (picked.hour == 18 && picked.minute > 0)) {
-      setState(() {
-        _errorMessage = 'Appointments can only be scheduled until 6:00 PM. Please select an earlier time.';
-      });
-      _clearMessagesAfterDelay();
-      return;
-    }
-    
-    // Create the full scheduled DateTime
-    final scheduledDateTime = DateTime(
-      _selectedDate!.year,
-      _selectedDate!.month,
-      _selectedDate!.day,
-      picked.hour,
-      picked.minute,
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+            child: child!,
+          ),
+        );
+      },
     );
-    
-    // Validate against status change time and current time
-    if (!_validateScheduledTime(scheduledDateTime, statusWithDuration)) {
-      final statusData = statusWithDuration.valueOrNull;
-      if (statusData?.changedAt != null && scheduledDateTime.isBefore(statusData!.changedAt!)) {
+
+    if (picked != null) {
+      debugPrint('⏰ Time selected: ${picked.format(context)}');
+      
+      // Validate time constraints
+      if (picked.hour < 6 || (picked.hour == 6 && picked.minute < 30)) {
         setState(() {
-          _errorMessage = 'Cannot schedule before teacher\'s last status update. '
-              'Teacher status was last changed at ${_formatTimeForDisplay(statusData.changedAt!)}.';
+          _errorMessage = 'Appointments cannot be scheduled before 6:30 AM. Please select a later time.';
         });
-      } else {
+        _clearMessagesAfterDelay();
+        return;
+      }
+      
+      if (picked.hour > 18 || (picked.hour == 18 && picked.minute > 0)) {
+        setState(() {
+          _errorMessage = 'Appointments can only be scheduled until 6:00 PM. Please select an earlier time.';
+        });
+        _clearMessagesAfterDelay();
+        return;
+      }
+      
+      // Create the full scheduled DateTime
+      final scheduledDateTime = DateTime(
+        _selectedDate!.year,
+        _selectedDate!.month,
+        _selectedDate!.day,
+        picked.hour,
+        picked.minute,
+      );
+      
+      // Validate against current time
+      final now = DateTime.now();
+      if (scheduledDateTime.isBefore(now)) {
         setState(() {
           _errorMessage = 'Cannot schedule appointments in the past. Please select a future time.';
         });
+        _clearMessagesAfterDelay();
+        return;
       }
-      _clearMessagesAfterDelay();
-      return;
+      
+      // Get status data for additional validation
+      final statusWithDuration = ref.read(
+        teacherStatusWithDurationProvider(widget.teacher.uid)
+      );
+      
+      final statusData = statusWithDuration.valueOrNull;
+      if (statusData?.changedAt != null && scheduledDateTime.isBefore(statusData!.changedAt!)) {
+        setState(() {
+          _errorMessage = 'Cannot schedule before teacher\'s last status update at ${_formatTimeForDisplay(statusData.changedAt!)}.';
+        });
+        _clearMessagesAfterDelay();
+        return;
+      }
+      
+      // All validations passed
+      setState(() {
+        _selectedTime = picked;
+        _errorMessage = null;
+      });
+      debugPrint('✅ Time validated and set: ${picked.format(context)}');
+    } else {
+      debugPrint('❌ Time picker cancelled');
     }
-    
+  } catch (e) {
+    debugPrint('❌ Error showing time picker: $e');
     setState(() {
-      _selectedTime = picked;
-      _errorMessage = null; // Clear error if time selection is valid
+      _errorMessage = 'Failed to open time picker. Please try again.';
     });
+    _clearMessagesAfterDelay();
   }
 }
 
