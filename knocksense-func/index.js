@@ -26,7 +26,10 @@ function buildFcmMessageFromQueueItem(item) {
 
 	const android = {
 		priority: 'high',
-		notification: {channelId: 'appointments'},
+		notification: {
+			channelId: 'appointments'
+			
+		},
 	};
 
 	return {notification, data, android};
@@ -95,7 +98,12 @@ exports.processNotificationQueue = onValueCreated({
 	}
 });
 
-exports.deliverScheduledNotifications = onSchedule('every 1 minutes', async () => {
+exports.deliverScheduledNotifications = onSchedule({
+    schedule: 'every 1 minutes',
+    region: 'asia-southeast1'
+  },
+  	
+ 	async () => {
 	const now = Date.now();
 	const snap = await db.ref('scheduled_notifications')
 		.orderByChild('scheduledFor')

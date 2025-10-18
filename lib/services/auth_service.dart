@@ -20,101 +20,109 @@ class AuthService {
 
   // Microsoft Sign In (for teachers and students)
   Future<UserModel?> signInWithMicrosoft() async {
-    try {
-      final microsoftProvider = MicrosoftAuthProvider();
-      microsoftProvider.setCustomParameters({
-        'tenant': '3663e35d-c7bc-4b90-90e0-a67a1d53bb77',
-        'prompt': 'select_account',
-      });
+  try {
+    final microsoftProvider = MicrosoftAuthProvider();
+    microsoftProvider.setCustomParameters({
+      'tenant': '3663e35d-c7bc-4b90-90e0-a67a1d53bb77',
+      'prompt': 'select_account',
+    });
 
-      final userCredential = await _auth.signInWithProvider(microsoftProvider);
+    final userCredential = await _auth.signInWithProvider(microsoftProvider);
 
-      if (userCredential.user != null) {
-       String? accessToken;
-         if (userCredential.credential != null) {
-         
-          final oauthCredential = userCredential.credential as dynamic;
-          accessToken = oauthCredential.accessToken;
+    if (userCredential.user != null) {
+      String? accessToken;
+      if (userCredential.credential != null) {
+        final oauthCredential = userCredential.credential as dynamic;
+        accessToken = oauthCredential.accessToken;
+      } else {
+        debugPrint("Usercredential is null");
+      }
 
-          
+     
+     
 
-        } else {
-          debugPrint("Usercredential is null");
-        }
+      // 1. Create user immediately without the photo URL
+      final user = await _createOrUpdateUser(
+        firebaseUser: userCredential.user!,
+        principalName: userCredential.additionalUserInfo?.profile?['upn'] as String?,
+      );
+      
+      final notificationService = NotificationService();
 
-        // 1. Create user immediately without the photo URL. This is fast.
+      // 2. Save new token for this user
+      await notificationService.saveUserToken(user.uid, user.role.name);
+
+      // 3. Load subscriptions only if student
+      if (user.role == UserRole.student) {
+        debugPrint('📥 Loading student subscriptions');
+        await notificationService.loadSubscriptions(user.uid);
+      } else {
+        debugPrint('⏭️ Skipping subscription load (not a student)');
+      }
+
+      // 4. Fetch photo in background
+      if (accessToken != null) {
+        print('📸 AuthService: Preparing to pass access token: $accessToken');
+        _graphService.getProfilePhotoUrl(
+          accessToken: accessToken,
+          userId: userCredential.user!.uid,
+        ).then((photoUrl) {
+          if (photoUrl != null) {
+            _updateUserPhotoUrl(uid: userCredential.user!.uid, photoUrl: photoUrl);
+          }
+        }).catchError((e){
+          print('Failed to fetch and update profile photo in background: $e');
+        });
+      }
+      
+      return user;
+    }
+    return null;
+  } on FirebaseAuthException catch (e) {
+    if (e.code == 'web-context-cancelled') {
+      print('Microsoft sign in cancelled by user.');
+      return null;
+    }
+    rethrow;
+  } catch (e) {
+    throw Exception('Microsoft sign in failed: $e');
+  }
+}
+
+// ✅ FIX: Enhanced signInWithEmailPassword for admin
+Future<UserModel?> signInWithEmailPassword(
+  String email,
+  String password,
+) async {
+  try {
+    final userCredential = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+
+    if (userCredential.user != null) {
+      if (!_isSchoolEmail(email)) {
         final user = await _createOrUpdateUser(
           firebaseUser: userCredential.user!,
-          principalName: userCredential.additionalUserInfo?.profile?['upn'] as String?,
+          isAdmin: true,
         );
 
         final notificationService = NotificationService();
-        await notificationService.saveUserToken(user.uid, user.role.name);
-
-        // 2. Fetch the photo in the background. Don't await it.
-        if (accessToken != null) {
-          print('🔑 AuthService: Preparing to pass access token: $accessToken');
-          _graphService.getProfilePhotoUrl(
-            accessToken: accessToken,
-            userId: userCredential.user!.uid,
-          ).then((photoUrl) {
-            if (photoUrl != null) {
-              // 3. Once fetched, update the user's profile in the database.
-              _updateUserPhotoUrl(uid: userCredential.user!.uid, photoUrl: photoUrl);
-            }
-          }).catchError((e){
-             print('Failed to fetch and update profile photo in background: $e');
-          });
-        }
         
-        return user; // Return the user immediately.
+        // Save token for admin (no subscriptions needed)
+        await notificationService.saveUserToken(user.uid, user.role.name);
+        
+        return user;
+      } else {
+        await _auth.signOut();
+        throw Exception('Invalid admin credentials');
       }
-      return null;
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'web-context-cancelled') {
-        print('Microsoft sign in cancelled by user.');
-        return null;
-      }
-      rethrow;
-    } catch (e) {
-      throw Exception('Microsoft sign in failed: $e');
     }
+    return null;
+  } catch (e) {
+    throw Exception('Email sign in failed: $e');
   }
-
-
-  // Email/Password Sign In (for admin only)
-  Future<UserModel?> signInWithEmailPassword(
-    String email,
-    String password,
-  ) async {
-    try {
-      final userCredential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      if (userCredential.user != null) {
-        // Check if admin (non-domain email)
-        if (!_isSchoolEmail(email)) {
-          return await _createOrUpdateUser(
-            firebaseUser: userCredential.user!,
-            isAdmin: true,
-          );
-
-          
-
-          
-        } else {
-          // Not admin, sign out
-          await _auth.signOut();
-          throw Exception('Invalid admin credentials');
-        }
-      }
-      return null;
-    } catch (e) {
-      throw Exception('Email sign in failed: $e');
-    }
-  }
+}
 
   Future<String> _generateTeacherId() async {
   try {
@@ -283,14 +291,18 @@ class AuthService {
 
   // Sign out
   Future<void> signOut() async {
-
-    if (currentUser != null) {
+  if (currentUser != null) {
+    debugPrint('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+    debugPrint('👋 SIGNING OUT user: ${currentUser!.uid}');
+    
     final notificationService = NotificationService();
+    
+    // Clear all tokens and subscriptions for this user
     await notificationService.clearUserToken(currentUser!.uid);
   }
 
-    await _auth.signOut();
-  }
+  await _auth.signOut();
+}
 
   // Get current user
   User? get currentUser => _auth.currentUser;

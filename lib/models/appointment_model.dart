@@ -26,22 +26,60 @@ class AppointmentModel {
   }
 
   // Check if appointment is today
-  bool get isToday {
+   bool get isToday {
     final now = DateTime.now();
     final appointmentDate = scheduledTime ?? createdAt;
-    return appointmentDate.year == now.year &&
-           appointmentDate.month == now.month &&
-           appointmentDate.day == now.day;
+    
+    // Calculate today's reset (6:30 AM)
+    final todayReset = DateTime(now.year, now.month, now.day, 6, 30);
+    
+    // Determine the start of the current "appointment day"
+    final DateTime appointmentDayStart;
+    if (now.isBefore(todayReset)) {
+      // Before 6:30 AM - appointment day started yesterday at 6:30 AM
+      appointmentDayStart = todayReset.subtract(const Duration(days: 1));
+    } else {
+      // After 6:30 AM - appointment day started today at 6:30 AM
+      appointmentDayStart = todayReset;
+    }
+    
+    // Calculate end of appointment day
+    final appointmentDayEnd = appointmentDayStart.add(const Duration(days: 1));
+    
+    // Check if appointment falls within the current appointment day window
+    return (appointmentDate.isAtSameMomentAs(appointmentDayStart) ||
+            appointmentDate.isAfter(appointmentDayStart)) &&
+           appointmentDate.isBefore(appointmentDayEnd);
   }
 
-  // Check if appointment is in the future
+  // ✅ FIX: Updated isFuture to respect 6:30 AM boundary
   bool get isFuture {
     if (scheduledTime == null) return false;
+    
     final now = DateTime.now();
-    return scheduledTime!.isAfter(now) && !isToday;
+    
+    // Calculate today's reset (6:30 AM)
+    final todayReset = DateTime(now.year, now.month, now.day, 6, 30);
+    
+    // Determine the start of the current "appointment day"
+    final DateTime appointmentDayStart;
+    if (now.isBefore(todayReset)) {
+      // Before 6:30 AM - appointment day started yesterday at 6:30 AM
+      appointmentDayStart = todayReset.subtract(const Duration(days: 1));
+    } else {
+      // After 6:30 AM - appointment day started today at 6:30 AM
+      appointmentDayStart = todayReset;
+    }
+    
+    // Calculate end of current appointment day (next day at 6:30 AM)
+    final appointmentDayEnd = appointmentDayStart.add(const Duration(days: 1));
+    
+    // Appointment is "future" if it's scheduled for after the current appointment day
+    return scheduledTime!.isAtSameMomentAs(appointmentDayEnd) ||
+           scheduledTime!.isAfter(appointmentDayEnd);
   }
 
-  // Check if appointment is near (within 15 minutes)
+  // Check if appointment is near (within 10 minutes, at least 5 minutes away)
   bool get isNear {
     if (scheduledTime == null) return false;
     final now = DateTime.now();

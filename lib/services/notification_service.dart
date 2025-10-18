@@ -8,11 +8,8 @@ import 'package:flutter/foundation.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Initialize Firebase if needed
   await Firebase.initializeApp();
   debugPrint('Background message received: ${message.notification?.title}');
-  
-  
 }
 
 class NotificationService {
@@ -26,41 +23,26 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   final FirebaseDatabase _database = FirebaseDatabase.instance;
 
-  // Store subscribed teacher UIDs locally
+  // Store subscribed teacher UIDs locally (for this session)
   final Set<String> _subscribedTeachers = {};
 
   Future<void> initialize() async {
-
     if (!Platform.isAndroid) {
-    debugPrint('Notification service is only available on Android');
-    return;
-  }
+      debugPrint('Notification service is only available on Android');
+      return;
+    }
 
-    // Request permission
     await _requestPermission();
-    
-    // Initialize local notifications
     await _initializeLocalNotifications();
-    
-    // CREATE ANDROID NOTIFICATION CHANNEL (ADD THIS!)
     await _createNotificationChannel();
     
-    // Get FCM token
     final token = await _messaging.getToken();
     debugPrint('FCM Token: $token');
-    // Handle foreground messages
+    
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-    
-    // Handle background messages
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-    
-    // Handle notification taps
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
-
-    // Channel is created in _createNotificationChannel(); no need to redefine here
   }
-
-  
 
   Future<void> _requestPermission() async {
     final settings = await _messaging.requestPermission(
@@ -69,7 +51,6 @@ class NotificationService {
       sound: true,
       provisional: false,
     );
-    
     debugPrint('Notification permission status: ${settings.authorizationStatus}');
   }
 
@@ -96,11 +77,12 @@ class NotificationService {
   Future<void> subscribeToTeacher(String teacherUid, String studentUid) async {
     if (!_isPlatformSupported) return;
     try {
-      // Subscribe to FCM topic
+      // Subscribe the FCM token to this teacher's topic
       await _messaging.subscribeToTopic('teacher_$teacherUid');
       _subscribedTeachers.add(teacherUid);
       
-      // Store subscription in database
+      // Store subscription preference in database (per user, not per token)
+      // This is just a record of what the user wants to subscribe to
       await _database
           .ref('notifications/subscriptions/$studentUid/$teacherUid')
           .set({
@@ -108,9 +90,9 @@ class NotificationService {
         'subscribedAt': ServerValue.timestamp,
       });
       
-      debugPrint('Subscribed to teacher notifications: $teacherUid');
+      debugPrint('✅ Subscribed to teacher notifications: $teacherUid');
     } catch (e) {
-      debugPrint('Error subscribing to teacher: $e');
+      debugPrint('❌ Error subscribing to teacher: $e');
     }
   }
 
@@ -125,58 +107,69 @@ class NotificationService {
           .ref('notifications/subscriptions/$studentUid/$teacherUid')
           .remove();
       
-      debugPrint('Unsubscribed from teacher notifications: $teacherUid');
+      debugPrint('✅ Unsubscribed from teacher notifications: $teacherUid');
     } catch (e) {
-      debugPrint('Error unsubscribing from teacher: $e');
+      debugPrint('❌ Error unsubscribing from teacher: $e');
     }
   }
 
-  // Check if subscribed to teacher
   bool isSubscribedToTeacher(String teacherUid) {
     return _subscribedTeachers.contains(teacherUid);
   }
 
-  // Load existing subscriptions
+  // Load user's subscription preferences and apply them to current FCM token
   Future<void> loadSubscriptions(String studentUid) async {
+    if (!_isPlatformSupported) return;
     try {
+      debugPrint('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+      debugPrint('📥 LOADING subscriptions for student: $studentUid');
+      
       final snapshot = await _database
           .ref('notifications/subscriptions/$studentUid')
           .get();
       
       if (snapshot.exists) {
         final data = Map<String, dynamic>.from(snapshot.value as Map);
+        
+        // Subscribe the current FCM token to all of this user's preferred topics
         for (String teacherUid in data.keys) {
           _subscribedTeachers.add(teacherUid);
           await _messaging.subscribeToTopic('teacher_$teacherUid');
+          debugPrint('   ✅ Subscribed to teacher_$teacherUid');
         }
+        
+        debugPrint('   📊 Total: ${_subscribedTeachers.length} subscription(s)');
+      } else {
+        debugPrint('   ℹ️ No subscriptions found');
       }
+      
+      debugPrint('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
     } catch (e) {
-      debugPrint('Error loading subscriptions: $e');
+      debugPrint('❌ Error loading subscriptions: $e');
     }
   }
 
-  // Send local notification for appointment updates
   Future<void> showAppointmentNotification({
     required String title,
     required String body,
     Map<String, dynamic>? payload,
   }) async {
     if (!_isPlatformSupported) return;
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      debugPrint('🔔 SHOWING LOCAL NOTIFICATION');
-      debugPrint('   Title: $title');
-      debugPrint('   Body: $body');
-      debugPrint('   Payload: $payload');
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      
-      const androidDetails = AndroidNotificationDetails(
-        'appointments',
-        'Appointment Notifications',
-        channelDescription: 'Notifications for appointment updates',
-        importance: Importance.high,
-        priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
-      );
+    
+    debugPrint('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+    debugPrint('🔔 SHOWING LOCAL NOTIFICATION');
+    debugPrint('   Title: $title');
+    debugPrint('   Body: $body');
+    debugPrint('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+    
+    const androidDetails = AndroidNotificationDetails(
+      'appointments',
+      'Appointment Notifications',
+      channelDescription: 'Notifications for appointment updates',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+    );
     
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
@@ -198,108 +191,149 @@ class NotificationService {
     );
   }
 
-  // Store FCM token for user
+  // Save FCM token for this user (for sending direct notifications)
   Future<void> saveUserToken(String uid, String role) async {
-  if (!_isPlatformSupported) return; 
-  try {
-    final token = await _messaging.getToken();
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    if (!_isPlatformSupported) return; 
+    try {
+      final token = await _messaging.getToken();
+      
+      debugPrint('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
       debugPrint('💾 SAVING FCM TOKEN');
       debugPrint('   UID: $uid');
       debugPrint('   Role: $role');
       debugPrint('   Token: ${token?.substring(0, 30)}...');
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    if (token != null) {
-
-      // FIXED: Use a simpler structure with token as value, not key
-      final deviceId = DateTime.now().millisecondsSinceEpoch.toString();
-      await _database.ref('fcm_tokens/$uid/$deviceId').set({
-        'token': token,
-        'role': role,
-        'updatedAt': ServerValue.timestamp,
-        'platform': 'android',
-      });
-      debugPrint('FCM token saved for user $uid');
+      
+      if (token != null) {
+        final deviceId = DateTime.now().millisecondsSinceEpoch.toString();
+        await _database.ref('fcm_tokens/$uid/$deviceId').set({
+          'token': token,
+          'role': role,
+          'updatedAt': ServerValue.timestamp,
+          'platform': 'android',
+        });
+        
+        debugPrint('   ✅ Token saved successfully');
+      }
+      
+      debugPrint('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+    } catch (e) {
+      debugPrint('❌ Error saving FCM token: $e');
     }
-  } catch (e) {
-    debugPrint('Error saving FCM token: $e');
   }
-}
 
-Future<void> clearUserToken(String uid) async {
-  if (!_isPlatformSupported) return;
-  try {
-    final currentToken = await _messaging.getToken();
-    if (currentToken == null) return;
-
-    // Find and remove the device entry whose stored token matches currentToken
-    final tokensRef = _database.ref('fcm_tokens/$uid');
-    final snapshot = await tokensRef.get();
-    if (snapshot.exists && snapshot.value is Map) {
-      final Map<String, dynamic> devices = Map<String, dynamic>.from(snapshot.value as Map);
-      for (final entry in devices.entries) {
-        final value = entry.value;
-        if (value is Map && value['token'] == currentToken) {
-          await tokensRef.child(entry.key).remove();
+  // ✅ SIMPLIFIED FIX: Just unsubscribe the FCM token from all topics
+  // Keep subscription records in database - they're per-user preferences
+  Future<void> clearUserToken(String uid) async {
+    if (!_isPlatformSupported) return;
+    try {
+      debugPrint('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+      debugPrint('🧹 CLEARING FCM TOKEN SUBSCRIPTIONS');
+      debugPrint('   User UID: $uid');
+      
+      final currentToken = await _messaging.getToken();
+      if (currentToken == null) {
+        debugPrint('   ⚠️ No current token found');
+        debugPrint('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+        return;
+      }
+      
+      debugPrint('   Token: ${currentToken.substring(0, 20)}...');
+      
+      // ✅ KEY FIX: Unsubscribe FCM token from ALL topics this user was subscribed to
+      // Get subscription list from database
+      final subscriptionsSnapshot = await _database
+          .ref('notifications/subscriptions/$uid')
+          .get();
+      
+      if (subscriptionsSnapshot.exists) {
+        final subscriptions = Map<String, dynamic>.from(subscriptionsSnapshot.value as Map);
+        
+        debugPrint('   📋 Found ${subscriptions.length} subscription(s)');
+        
+        // Unsubscribe token from each topic
+        for (var teacherUid in subscriptions.keys) {
+          await _messaging.unsubscribeFromTopic('teacher_$teacherUid');
+          debugPrint('   🔕 Unsubscribed from teacher_$teacherUid');
+        }
+        
+        debugPrint('   ✅ Token unsubscribed from all topics');
+      } else {
+        debugPrint('   ℹ️ No subscriptions found');
+      }
+      
+      // Clear in-memory set
+      _subscribedTeachers.clear();
+      debugPrint('   🧹 Cleared in-memory subscription list');
+      
+      // Remove token from database (so old user won't get direct notifications)
+      final tokensRef = _database.ref('fcm_tokens/$uid');
+      final snapshot = await tokensRef.get();
+      
+      if (snapshot.exists && snapshot.value is Map) {
+        final devices = Map<String, dynamic>.from(snapshot.value as Map);
+        
+        for (final entry in devices.entries) {
+          final value = entry.value;
+          if (value is Map && value['token'] == currentToken) {
+            await tokensRef.child(entry.key).remove();
+            debugPrint('   🗑️ Removed token from database');
+            break;
+          }
         }
       }
+      
+      // ✅ NOTE: We DON'T delete subscription preferences from database
+      // Those stay with the user account - they're just preferences
+      // Next time this user logs in, they'll resubscribe the token to their topics
+      
+      debugPrint('   ✅ Cleanup complete');
+      debugPrint('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error clearing FCM token: $e');
+      debugPrint('Stack trace: $stackTrace');
+      debugPrint('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
     }
-
-    // Unsubscribe from all topics for this runtime
-    for (String teacherUid in _subscribedTeachers) {
-      await _messaging.unsubscribeFromTopic('teacher_$teacherUid');
-    }
-    _subscribedTeachers.clear();
-  } catch (e) {
-    debugPrint('Error clearing FCM token: $e');
   }
-}
 
-  // Handle foreground messages
   void _handleForegroundMessage(RemoteMessage message) {
     if (!_isPlatformSupported) return;
-    debugPrint('Foreground message: ${message.notification?.title}');
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    debugPrint('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
     debugPrint('📨 FOREGROUND MESSAGE RECEIVED');
     debugPrint('   Message ID: ${message.messageId}');
     debugPrint('   Title: ${message.notification?.title ?? "none"}');
     debugPrint('   Body: ${message.notification?.body ?? "none"}');
     debugPrint('   Data: ${message.data}');
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
   
-  // Show local notification
-  if (message.notification != null) {
-    showAppointmentNotification(
-      title: message.notification!.title ?? 'KnockSense',
-      body: message.notification!.body ?? '',
-      payload: message.data,
-    );
+    if (message.notification != null) {
+      showAppointmentNotification(
+        title: message.notification!.title ?? 'KnockSense',
+        body: message.notification!.body ?? '',
+        payload: message.data,
+      );
+    }
   }
-}
 
-  // Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
     if (!_isPlatformSupported) return;
     debugPrint('Notification tapped: ${response.payload}');
-    // Navigate to appropriate screen based on payload
   }
 
   void _handleMessageOpenedApp(RemoteMessage message) {
     if (!_isPlatformSupported) return;
     debugPrint('Message opened app: ${message.data}');
-    // Navigate to appropriate screen based on message data
   }
 }
 
 Future<void> _createNotificationChannel() async {
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'appointments', // id
-    'Appointment Notifications', // title
+    'appointments',
+    'Appointment Notifications',
     description: 'Notifications for appointment updates',
     importance: Importance.high,
     playSound: true,
     enableVibration: true,
-    
   );
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -311,6 +345,3 @@ Future<void> _createNotificationChannel() async {
   
   debugPrint('Android notification channel created');
 }
-
-  
-

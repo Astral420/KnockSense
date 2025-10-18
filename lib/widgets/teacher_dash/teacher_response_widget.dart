@@ -63,13 +63,33 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
 
   // Add this method to check if appointment needs scheduled response
   bool _isScheduledAppointmentRequiringResponse() {
-    // Check if this is a scheduled appointment that's now due
-    if (widget.appointment.isScheduled && widget.appointment.scheduledTime != null) {
+    // Check if this is a scheduled appointment that's pending
+    if (widget.appointment.isScheduled && 
+        widget.appointment.scheduledTime != null &&
+        widget.appointment.status == AppointmentStatus.pending) {
+      
       final now = DateTime.now();
       final scheduledTime = widget.appointment.scheduledTime!;
       
-      // If scheduled time has passed or is within 10 minutes
-      if (scheduledTime.isBefore(now.add(const Duration(minutes: 10)))) {
+      // Calculate today's appointment day boundaries (6:30 AM to 6:30 AM next day)
+      final todayReset = DateTime(now.year, now.month, now.day, 6, 30);
+      
+      final DateTime appointmentDayStart;
+      if (now.isBefore(todayReset)) {
+        // Before 6:30 AM - appointment day started yesterday at 6:30 AM
+        appointmentDayStart = todayReset.subtract(const Duration(days: 1));
+      } else {
+        // After 6:30 AM - appointment day started today at 6:30 AM
+        appointmentDayStart = todayReset;
+      }
+      
+      final appointmentDayEnd = appointmentDayStart.add(const Duration(days: 1));
+      
+      // Show scheduled UI if the appointment is scheduled for today's appointment window
+      // (between 6:30 AM today and 6:30 AM tomorrow)
+      if ((scheduledTime.isAtSameMomentAs(appointmentDayStart) ||
+           scheduledTime.isAfter(appointmentDayStart)) &&
+          scheduledTime.isBefore(appointmentDayEnd)) {
         return true;
       }
     }
