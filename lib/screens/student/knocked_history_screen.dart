@@ -307,7 +307,7 @@ class KnockedHistoryPage extends ConsumerWidget {
     }
   }
 
-    void _updateDateRangeWithDebounce(WidgetRef ref, DateTimeRange dateRange) {
+  void _updateDateRangeWithDebounce(WidgetRef ref, DateTimeRange dateRange) {
     // Cancel existing timer
     _debounceTimer?.cancel();
     
@@ -374,6 +374,13 @@ class _AppointmentHistoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // Generate initials from teacher name
     final teacherInitials = _getInitials(appointment.cleanedTeacherName);
+    
+    // Determine which date to display
+    final displayDate = appointment.isScheduled && appointment.scheduledTime != null
+        ? appointment.scheduledTime!
+        : appointment.createdAt;
+    
+    final isScheduledAppointment = appointment.isScheduled && appointment.scheduledTime != null;
 
     return Card(
       elevation: 0,
@@ -382,33 +389,33 @@ class _AppointmentHistoryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            // Teacher Avatar (placeholder with initials since we don't have photo in appointment model)
+            // Teacher Avatar
             appointment.teacherPhotoUrl != null
               ? CachedNetworkImage(
                   imageUrl: appointment.teacherPhotoUrl!,
                   imageBuilder: (context, imageProvider) => CircleAvatar(
-                    radius: 24,
+                    radius: 28,
                     backgroundImage: imageProvider,
                   ),
                   placeholder: (context, url) => const CircleAvatar(
-                    radius: 24,
+                    radius: 28,
                     backgroundColor: Colors.amber,
                     child: SizedBox(
-                      width: 18,
-                      height: 18,
+                      width: 20,
+                      height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
                   errorWidget: (context, url, error) => CircleAvatar(
-                    radius: 24,
+                    radius: 28,
                     backgroundColor: Colors.amber,
                     child: Text(
                       teacherInitials,
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
                       ),
@@ -416,18 +423,18 @@ class _AppointmentHistoryCard extends StatelessWidget {
                   ),
                 )
               : CircleAvatar(
-                  radius: 24,
+                  radius: 28,
                   backgroundColor: Colors.amber,
                   child: Text(
                     teacherInitials,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
                     ),
                   ),
                 ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             
             // Teacher Info
             Expanded(
@@ -439,49 +446,56 @@ class _AppointmentHistoryCard extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
+                      color: Colors.black87,
                     ),
                   ),
                   const SizedBox(height: 4),
+                  
+                  // Show scheduled time first if it's a scheduled appointment
+                  if (isScheduledAppointment) ...[
+                    Row(
+                      children: [
+                        // Icon(
+                        //   Icons.schedule,
+                        //   size: 11,
+                        //   color: Colors.blue[600],
+                        // ),
+                        const SizedBox(width: 1),
+                        Text(
+                          'Scheduled: ',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.blue[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          DateFormat('M/d/yyyy, h:mm a').format(displayDate),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.blue[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                  ],
+                  
+                  // Show created date
                   Text(
-                    DateFormat('M/d/yyyy, h:mm a').format(appointment.createdAt),
+                    isScheduledAppointment 
+                        ? 'Created: ${DateFormat('M/d/yyyy, h:mm a').format(appointment.createdAt)}'
+                        : DateFormat('M/d/yyyy, h:mm a').format(appointment.createdAt),
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       color: Colors.grey[600],
                     ),
                   ),
-                  // Show student note if available
-                  if (appointment.studentNote != null && appointment.studentNote!.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Note: ${appointment.studentNote}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[700],
-                          fontStyle: FontStyle.italic,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  // Show teacher response if available
-                  if (appointment.teacherResponse != null && appointment.teacherResponse!.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Response: ${appointment.teacherResponse}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.blue[700],
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
                 ],
               ),
             ),
+            
+            const SizedBox(width: 8),
             
             // Status Widget
             _buildStatusWidget(appointment.status, appointment.teacherAction),

@@ -67,11 +67,15 @@ class AuthService {
           accessToken: accessToken,
           userId: userCredential.user!.uid,
         ).then((photoUrl) {
-          if (photoUrl != null) {
-            _updateUserPhotoUrl(uid: userCredential.user!.uid, photoUrl: photoUrl);
-          }
+          // ALWAYS update the photoUrl.
+          // If photoUrl is not null, it sets the new photo.
+          // If photoUrl IS null, this will clear any stale, old photo URL.
+          _updateUserPhotoUrl(uid: userCredential.user!.uid, photoUrl: photoUrl);
+
         }).catchError((e){
           print('Failed to fetch and update profile photo in background: $e');
+          // On error, we should also clear the photoUrl to be safe
+          _updateUserPhotoUrl(uid: userCredential.user!.uid, photoUrl: null);
         });
       }
       
@@ -171,7 +175,24 @@ Future<UserModel?> signInWithEmailPassword(
   String? teacherID;
 
   if (isAdmin) {
-    role = UserRole.admin;
+  // ADDED: Check if the admin is a super_admin
+  final superAdminRef = _database.ref('roles/super_admin/$uid');
+  final superAdminSnap = await superAdminRef.get();
+  
+  if (superAdminSnap.exists) {
+    role = UserRole.super_admin; // Correctly identify super_admin
+  } else {
+    // Check the admin role just in case, or default
+    final adminRef = _database.ref('roles/admin/$uid');
+    final adminSnap = await adminRef.get();
+    if (adminSnap.exists) {
+        role = UserRole.admin;
+    } else {
+        // This case might happen if DB rules are slow
+        // or it's the very first login, default to admin
+        role = UserRole.admin; 
+    }
+  }
   } else {
     final roleData = _determineRole(email);
     role = roleData['role'];
@@ -232,11 +253,7 @@ Future<UserModel?> signInWithEmailPassword(
     // Do NOT include rfid_uid, active_status, etc. - let ESP32 manage those
     roleIndexData['teacherID'] = teacherID;
     
-    // IMPORTANT: Use update() to merge with existing data
-    // This preserves ESP32-managed fields like:
-    // - daily_first_entry, daily_last_exit
-    // - last_entry_time, last_exit_time
-    // - rfid_uid, active_status, status_changed_at
+    
     await _database.ref('roles/${role.name}/$uid').update(roleIndexData);
     
   } else if (role == UserRole.student) {
@@ -244,6 +261,12 @@ Future<UserModel?> signInWithEmailPassword(
     
     // For students, we can use set() since there's no ESP32 data
     await _database.ref('roles/${role.name}/$uid').set(roleIndexData);
+  
+  // ADD THIS BLOCK
+  } else if (role == UserRole.admin || role == UserRole.super_admin) {
+    // This was missing. Update the admin/super_admin role index too.
+    // We use update() to be safe, just like the teacher logic.
+    await _database.ref('roles/${role.name}/$uid').update(roleIndexData);
   }
 
   return user;
@@ -252,13 +275,18 @@ Future<UserModel?> signInWithEmailPassword(
   // Update user's photo URL in the database
   Future<void> _updateUserPhotoUrl({
     required String uid,
-    required String photoUrl,
+    required String? photoUrl, // <-- 1. Change this to String?
   }) async {
     try {
       // Update the user's photoUrl in the database
-      await _database.ref('users/$uid/photoUrl').set(photoUrl);
+      // Setting photoUrl to null here will remove it from Firebase
+      await _database.ref('users/$uid/photoUrl').set(photoUrl); // <-- 2. This now accepts null
       
-      print('Successfully updated user photo URL for $uid');
+      if (photoUrl != null) {
+        print('Successfully updated user photo URL for $uid');
+      } else {
+        print('Successfully cleared stale photo URL for $uid');
+      }
     } catch (e) {
       print('Failed to update user photo URL: $e');
     }

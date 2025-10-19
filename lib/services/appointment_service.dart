@@ -65,7 +65,7 @@ Future<void> _checkAndCancelUntouchedAppointments() async {
         
         if (_shouldAutoCancelAppointment(appointmentData, lastReset, now)) {
           // ✅ FIX: Extract teacher name before auto-rejecting
-          final teacherName = appointmentData['teacherName'] ?? 'Your professor';
+          // final teacherName = appointmentData['teacherName'] ?? 'Your professor';
           
           await _autoRejectAppointment(
             studentNumber: studentNumber,

@@ -147,34 +147,9 @@ final activityLogsStreamProvider = StreamProvider<List<ActivityLog>>((ref) {
           }
         }
         
-        // Also add the last activity as a log entry if available
-        if (teacherData['last_activity'] != null && teacherInfo != null) {
-          final lastTimestamp = _parseTimestamp(teacherData['last_activity']);
-          final currentStatus = teacherData['current_status'] as String?;
-          
-          if (lastTimestamp != null && currentStatus != null) {
-            // Determine action based on current status
-            final action = currentStatus == 'in' ? 'entry' : 'exit';
-            
-            // Check if this log already exists (to avoid duplicates)
-            final exists = logs.any((log) => 
-              log.teacherID == teacherID && 
-              log.timestamp.millisecondsSinceEpoch == lastTimestamp.millisecondsSinceEpoch
-            );
-            
-            if (!exists) {
-              logs.add(ActivityLog(
-                teacherID: teacherID,
-                teacherName: _formatTeacherName(teacherInfo.displayName),
-                rfidUid: teacherInfo.rfidUid,
-                email: teacherInfo.email,
-                timestamp: lastTimestamp,
-                action: action,
-                photoUrl: teacherInfo.photoUrl,
-              ));
-            }
-          }
-        }
+        // REMOVED: Processing of last_activity to prevent duplicates
+        // The logs array/map already contains all activity entries
+        // including the most recent one, so we don't need to add last_activity separately
       }
     }
     

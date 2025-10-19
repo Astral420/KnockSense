@@ -146,7 +146,7 @@ class _SplashAuthWrapperState extends ConsumerState<SplashAuthWrapper>
   Widget _buildAuthenticatedView(UserModel userModel) {
     // Navigate to the correct dashboard based on role
     switch (userModel.role) {
-      case UserRole.admin:
+      case UserRole.admin || UserRole.super_admin:
         return const AdminNavWrapper();
       case UserRole.teacher:
         return const MainNavigationTeacher();

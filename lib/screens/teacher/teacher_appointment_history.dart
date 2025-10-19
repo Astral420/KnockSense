@@ -8,7 +8,6 @@ import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:knocksense/widgets/common/useravatar_widget.dart';
 
-// ======== REFACTORED WIDGET ========
 class TeacherAppointmentHistory extends ConsumerWidget {
   const TeacherAppointmentHistory({Key? key}) : super(key: key);
 
@@ -86,7 +85,7 @@ class TeacherAppointmentHistory extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  // ======== REPLACED DATE RANGE FILTER UI ========
+                  // Date Range Filter UI
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -226,6 +225,13 @@ class TeacherAppointmentHistory extends ConsumerWidget {
     final isWaiting = appointment.status == AppointmentStatus.accepted && 
                       appointment.teacherAction == TeacherAction.wait5Minutes;
     
+    // Determine which date to display
+    final displayDate = appointment.isScheduled && appointment.scheduledTime != null
+        ? appointment.scheduledTime!
+        : appointment.createdAt;
+    
+    final isScheduledAppointment = appointment.isScheduled && appointment.scheduledTime != null;
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -250,12 +256,12 @@ class TeacherAppointmentHistory extends ConsumerWidget {
             UserAvatar.custom(
               photoUrl: appointment.studentPhotoUrl,
               displayName: appointment.cleanedStudentName,
-              radius: 24,
+              radius: 28,
               showBorder: false,
               backgroundColor: const Color(0xFFFFD700),
               textColor: Colors.black,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             
             Expanded(
               child: Column(
@@ -266,19 +272,56 @@ class TeacherAppointmentHistory extends ConsumerWidget {
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
+                      color: Colors.black87,
                     ),
                   ),
                   const SizedBox(height: 4),
+                  
+                  // Show scheduled time first if it's a scheduled appointment
+                  if (isScheduledAppointment) ...[
+                    Row(
+                      children: [
+                        // Icon(
+                        //   Icons.schedule,
+                        //   size: 11,
+                        //   color: Colors.blue[600],
+                        // ),
+                        const SizedBox(width: 1),
+                        Text(
+                          'Scheduled: ',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.blue[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          DateFormat('M/d/yyyy, h:mm a').format(displayDate),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.blue[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                  ],
+                  
+                  // Show created date
                   Text(
-                    DateFormat('M/d/yyyy, h:mm a').format(appointment.createdAt),
+                    isScheduledAppointment 
+                        ? 'Created: ${DateFormat('M/d/yyyy, h:mm a').format(appointment.createdAt)}'
+                        : DateFormat('M/d/yyyy, h:mm a').format(appointment.createdAt),
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 11,
                       color: Colors.grey[600],
                     ),
                   ),
                 ],
               ),
             ),
+            
+            const SizedBox(width: 8),
             
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -342,7 +385,6 @@ class TeacherAppointmentHistory extends ConsumerWidget {
   }
 }
 
-// ======== COPIED WIDGET FOR CONSISTENT UI ========
 class _DatePickerField extends StatelessWidget {
   final String label;
   final DateTime? date;

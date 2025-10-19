@@ -7,7 +7,7 @@ class UserModel {
   final String? teacherID;
   final String? photoUrl;
   final DateTime createdAt;
-  final DateTime lastLogin;
+  final DateTime? lastLogin;
   
   UserModel({
     required this.uid,
@@ -18,7 +18,7 @@ class UserModel {
     this.teacherID, 
     this.photoUrl,
     required this.createdAt,
-    required this.lastLogin,
+    this.lastLogin,
   });
 
    UserModel copyWith({
@@ -56,7 +56,7 @@ class UserModel {
     'teacherID': teacherID,
     'photoUrl' : photoUrl,
     'createdAt': createdAt.toIso8601String(),
-    'lastLogin': lastLogin.toIso8601String(),
+    'lastLogin': lastLogin?.toIso8601String(),
     
   };
 
@@ -69,8 +69,10 @@ class UserModel {
     teacherID: json['teacherID'],
     photoUrl: json['photoUrl'],
     createdAt: DateTime.parse(json['createdAt']),
-    lastLogin: DateTime.parse(json['lastLogin']),
+    lastLogin: json['lastLogin'] == null 
+               ? null 
+               : DateTime.parse(json['lastLogin']),
   );
 }
 
-enum UserRole { admin, teacher, student }
+enum UserRole { admin, teacher, student, super_admin }

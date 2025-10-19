@@ -471,26 +471,42 @@ class AdminActivityLogsScreen extends ConsumerWidget {
 
   Future<void> _selectStartDate(BuildContext context, WidgetRef ref) async {
     final now = DateTime.now();
+    final endDate = ref.read(endDateProvider);
+    
     final picked = await showDatePicker(
       context: context,
       firstDate: DateTime(now.year - 3),
-      lastDate: DateTime(now.year + 3),
+      lastDate: endDate ?? DateTime(now.year + 3),
       initialDate: ref.read(startDateProvider) ?? now,
     );
+    
     if (picked != null) {
       ref.read(startDateProvider.notifier).state = picked;
+      
+      // If end date is now before start date, clear it
+      if (endDate != null && picked.isAfter(endDate)) {
+        ref.read(endDateProvider.notifier).state = null;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('End date cleared as it was before the new start date'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 
   Future<void> _selectEndDate(BuildContext context, WidgetRef ref) async {
     final now = DateTime.now();
-    final start = ref.read(startDateProvider);
+    final startDate = ref.read(startDateProvider);
+    
     final picked = await showDatePicker(
       context: context,
-      firstDate: DateTime(now.year - 3),
+      firstDate: startDate ?? DateTime(now.year - 3),
       lastDate: DateTime(now.year + 3),
-      initialDate: ref.read(endDateProvider) ?? start ?? now,
+      initialDate: ref.read(endDateProvider) ?? startDate ?? now,
     );
+    
     if (picked != null) {
       ref.read(endDateProvider.notifier).state = picked;
     }
