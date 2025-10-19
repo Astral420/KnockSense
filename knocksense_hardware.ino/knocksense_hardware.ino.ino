@@ -7,6 +7,10 @@
 #include <LittleFS.h>
 #include <HTTPClient.h>
 
+#include <Wire.h>
+#include <Adafruit_INA219.h>
+
+
 #include "addons/TokenHelper.h"
 #include "addons/RTDBHelper.h"
 
@@ -22,8 +26,14 @@
 #define NR_OF_READERS 2
 #define SS_1  5
 #define SS_2  17
-#define RST_1 21
-#define RST_2 22
+#define RST_1 16
+#define RST_2 4
+
+
+#define BATTERY_MAX_VOLTAGE 12.6 
+#define BATTERY_MIN_VOLTAGE 9.6  
+
+
 
 byte ssPins[] = {SS_1, SS_2};
 byte rstPins[] = {RST_1, RST_2};
@@ -33,6 +43,8 @@ long DOOR_OPEN_DURATION;
 
 // ---------- Global Instances ----------
 MFRC522 mfrc522[NR_OF_READERS];
+
+Adafruit_INA219 ina219;
 
 // Firebase instances  
 FirebaseData fbdo;
@@ -44,6 +56,13 @@ const unsigned long MANUAL_UNLOCK_CHECK_INTERVAL = 1000; // Check every second
 bool isManualUnlock = false;
 String currentManualUnlockTeacherID = "";
 unsigned long manualUnlockDuration = 4000;
+
+float currentBatteryVoltage = 0.0;
+float current_mA = 0.0;
+float shunt_mV = 0.0;
+int currentBatteryPercentage = 0;
+unsigned long lastBatteryCheck = 0;
+const unsigned long BATTERY_CHECK_INTERVAL = 10000;
 
 
 
@@ -82,6 +101,9 @@ void initReader();
 void checkManualDoorUnlock();
 void executeManualUnlock(String teacherID, String teacherName, String teacherUid, int duration);
 void logManualUnlockEvent(String teacherID, String teacherName, String teacherUid, int duration);
+void checkBatteryStatus();
+void updateBatteryReadings();
+int calculateBatteryPercentage(float voltage);
 
 
 
@@ -118,6 +140,18 @@ void setup() {
 
   // Initialize hardware
   Serial.println("\n🔧 Initializing Hardware...");
+
+  if (!ina219.begin()) {
+    Serial.println("❌ Failed to find INA219 chip");
+  } else {
+    Serial.println("✅ INA219 sensor found");
+  }
+  ina219.setCalibration_32V_2A();
+  // + GET INITIAL BATTERY READING
+  updateBatteryReadings(); 
+  Serial.printf("   Initial Battery: %.2fV (%d%%)\n", currentBatteryVoltage, currentBatteryPercentage);
+
+
   SPI.begin();
   initReader();
   
@@ -178,6 +212,8 @@ void loop() {
   checkRFID();
   manageDoorLock();
   checkManualDoorUnlock(); 
+
+  checkBatteryStatus();
  
   
 
@@ -233,6 +269,47 @@ void loadConfigurationValues() {
   Serial.println("   Relay Pin: " + String(RELAY_PIN));
   Serial.println("   Door Duration: " + String(DOOR_OPEN_DURATION) + "ms");
   Serial.println("   Firebase DB: " + DATABASE_URL.substring(0, 30) + "...");
+}
+
+void checkBatteryStatus() {
+  if (millis() - lastBatteryCheck > BATTERY_CHECK_INTERVAL) {
+    lastBatteryCheck = millis();
+    updateBatteryReadings();
+    
+    
+    Serial.printf("🔋 Battery Update: %.2fV (%d%%)\n", currentBatteryVoltage, currentBatteryPercentage);
+
+    const float CHARGE_THRESHOLD_mA = 50.0; 
+
+    Serial.println("  Current (mA): "); Serial.print(current_mA);
+    if (current_mA > CHARGE_THRESHOLD_mA) {
+      Serial.println("STATUS: Charging");
+    } else if (current_mA < -CHARGE_THRESHOLD_mA) {
+      Serial.println("STATUS: Discharging");
+    } else {
+      Serial.println("STATUS: Idle / very small current");
+    }
+
+    shunt_mV = ina219.getShuntVoltage_mV();
+    Serial.println("  Shunt V: "); Serial.print(shunt_mV);
+  }
+
+
+  
+}
+
+
+void updateBatteryReadings() {
+    currentBatteryVoltage = ina219.getBusVoltage_V();
+    currentBatteryPercentage = calculateBatteryPercentage(currentBatteryVoltage);
+
+    current_mA = ina219.getCurrent_mA();    
+
+}
+
+int calculateBatteryPercentage(float voltage) {
+  float percentage = ((voltage - BATTERY_MIN_VOLTAGE) / (BATTERY_MAX_VOLTAGE - BATTERY_MIN_VOLTAGE)) * 100.0;
+  return constrain((int)percentage, 0, 100);
 }
 
 // ---------- Network Update Handler ----------

@@ -3,6 +3,9 @@
 #include "WebSocketHandler.h"
 #include "LittleFSConfig.h"
 
+extern float currentBatteryVoltage;
+extern int currentBatteryPercentage;
+
 WebSocketHandler::WebSocketHandler(LittleFSConfig* cfg) 
     : ws("/ws"), scanModeActive(false), config(cfg), 
       wifiConfigUpdated(false), wifiReconnectRequested(false) {}
@@ -77,6 +80,9 @@ void WebSocketHandler::sendSystemStatus() {
     doc["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
     doc["heap_free"] = ESP.getFreeHeap();
     doc["uptime"] = millis();
+
+    doc["battery_voltage"] = currentBatteryVoltage;
+    doc["battery_percent"] = currentBatteryPercentage;
     
     if (WiFi.status() == WL_CONNECTED) {
         doc["ssid"] = WiFi.SSID();

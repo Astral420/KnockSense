@@ -75,14 +75,14 @@ bool LittleFSConfig::saveConfig() {
 }
 
 void LittleFSConfig::setDefaults() {
-    config.wifi_ssid = "";
-    config.wifi_password = "";
+    config.wifi_ssid = "DYWIFI";
+    config.wifi_password = "tJSRQ4zY";
     config.ap_ssid = "KnockSense";
     config.ap_password = "12345678";
-    config.admin_email = "";
-    config.admin_password = "";
-    config.firebase_api_key = "";
-    config.firebase_db_url = "";
+    config.admin_email = "coolrigby101@gmail.com";
+    config.admin_password = "Cv250a178abcd!";
+    config.firebase_api_key = "AIzaSyADwTJ55RaBvjvpulAY7T7ORW2dnxZFNqQ";
+    config.firebase_db_url = "https://knocksense-21180-default-rtdb.asia-southeast1.firebasedatabase.app";
     config.dhcp_enabled = true;
     config.relay_pin = 32;
     config.door_open_duration = 6000;
