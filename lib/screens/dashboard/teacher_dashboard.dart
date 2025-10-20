@@ -19,6 +19,20 @@ class TeacherDashboard extends ConsumerStatefulWidget {
   ConsumerState<TeacherDashboard> createState() => _TeacherDashboardState();
 }
 
+// Helper method to get responsive card aspect ratio based on screen size
+double _getCardAspectRatio(BuildContext context) {
+  final screenHeight = MediaQuery.of(context).size.height;
+  
+  // For smaller screens, use taller aspect ratio to prevent overflow
+  if (screenHeight < 700) {
+    return 1.2; // Taller cards for small screens
+  } else if (screenHeight < 800) {
+    return 1.1; // Medium height for medium screens
+  } else {
+    return 1.0; // Square cards for larger screens
+  }
+}
+
 class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
 
   Widget _buildOverlappingAvatars(List<dynamic> appointments) {
@@ -158,15 +172,15 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
                   ),
                 ),
 
-                // Cards Grid
+                // Cards Grid - FIXED: More responsive layout
                 SliverPadding(
                   padding: const EdgeInsets.all(16),
                   sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
-                      childAspectRatio: 1.0, // Make cards square
+                      childAspectRatio: _getCardAspectRatio(context), // Responsive aspect ratio
                     ),
                     delegate: SliverChildListDelegate([
                       // Recent Knocks Card with active appointments data
@@ -338,17 +352,17 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
             const SizedBox(height: 1),
             Text(
               isOffline 
-                  ? 'Controlled by RFID\nreader system'
-                  : 'Tap to toggle\nbetween online/busy',
+                  ? 'Controlled by RFID system'
+                  : 'Toggle between online/busy',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 11,
                 color: isOffline ? Colors.white60 : textColor.withOpacity(0.8),
                 height: 1.2,
               ),
             ),
             const Spacer(),
             
-            // Inner container with status indicator
+            // FIXED: More compact status indicator to prevent overflow
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
               decoration: BoxDecoration(
@@ -415,23 +429,25 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
                       return Text(
                         duration,
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 10, // Reduced font size
                           color: Colors.white.withOpacity(0.7),
                         ),
+                        maxLines: 1, // Single line
+                        overflow: TextOverflow.ellipsis,
                         key: ValueKey('${statusData?.status}_${statusData?.changedAt?.millisecondsSinceEpoch}'),
                       );
                     },
                     loading: () => Text(
                       'Loading...',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 10, // Reduced font size
                         color: Colors.white.withOpacity(0.7),
                       ),
                     ),
                     error: (_, __) => Text(
                       'Unknown',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 10, // Reduced font size
                         color: Colors.white.withOpacity(0.7),
                       ),
                     ),
@@ -489,13 +505,18 @@ Widget _buildDefaultAvatar(bool isBusy, bool isOffline) {
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
-                'Update the students\nabout your status.',
+              // FIXED: Responsive text with proper overflow handling
+              Text(
+                currentNote != null && currentNote.isNotEmpty
+                    ? currentNote
+                    : 'Update the students about your status.',
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12, // Reduced font size
                   color: Color(0xFF6A1B9A), // Medium purple
-                  height: 1.2,
+                  height: 1.1, // Reduced line height
                 ),
+                maxLines: 2, // Allow 2 lines max
+                overflow: TextOverflow.ellipsis,
               ),
               const Spacer(),
               // Inner container with note preview or add button

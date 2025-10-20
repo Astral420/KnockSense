@@ -250,7 +250,7 @@ Widget build(BuildContext context, WidgetRef ref) {
             ),
             const SizedBox(width: 16),
             
-            // Student info
+            // Student info - FIXED: Better responsive layout
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,20 +262,33 @@ Widget build(BuildContext context, WidgetRef ref) {
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   
-                  // Show scheduled time if it's a scheduled appointment
+                  // Show scheduled time if it's a scheduled appointment - FIXED: Smart wrapping
                   if (appointment.isScheduled && appointment.scheduledTime != null) ...[
-                    Text(
-                      'Scheduled: ${DateFormat('h:mm a').format(appointment.scheduledTime!)}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.brown[700],
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Scheduled: ${DateFormat('h:mm a').format(appointment.scheduledTime!)}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.brown[700],
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 2, // Allow wrapping to next line
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8), // Small gap before status badge
+                        // Status badge on the same line, but will wrap if needed
+                        if (_getStatusBadge(appointment) != null) 
+                          _getStatusBadge(appointment)!,
+                      ],
                     ),
-                    const SizedBox(height: 2),
                   ],
                   
                   if (appointment.studentNote != null && appointment.studentNote!.isNotEmpty) ...[
@@ -293,24 +306,25 @@ Widget build(BuildContext context, WidgetRef ref) {
               ),
             ),
             
-            // Time and status info
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  _getTimeAgo(appointment.createdAt),
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.brown[500],
+            // Time info - FIXED: Only show time when no scheduled appointment
+            if (!(appointment.isScheduled && appointment.scheduledTime != null))
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    _getTimeAgo(appointment.createdAt),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.brown[500],
+                    ),
                   ),
-                ),
-                // Status badge if needed
-                if (_getStatusBadge(appointment) != null) ...[
-                  const SizedBox(height: 4),
-                  _getStatusBadge(appointment)!,
+                  // Status badge if needed (only for non-scheduled appointments)
+                  if (_getStatusBadge(appointment) != null) ...[
+                    const SizedBox(height: 4),
+                    _getStatusBadge(appointment)!,
+                  ],
                 ],
-              ],
-            ),
+              ),
           ],
         ),
       ),

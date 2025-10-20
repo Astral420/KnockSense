@@ -114,6 +114,10 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
           top: Radius.circular(20),
         ),
       ),
+      // FIXED: Use Flexible height with proper constraints
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9, // Max 90% of screen height
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -128,52 +132,54 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
             ),
           ),
           
-          // Content with better spacing
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Teacher profile section with duration
-                _buildTeacherProfileSection(teacher, statusWithDuration),
-                
-                const SizedBox(height: 24),
-                
-                // Status notifications
-                ..._buildStatusNotifications(teacher, hasPendingAppointment),
-                
-                // NEW: Error and Info Messages Display
-                if (_errorMessage != null) ...[
-                  _buildErrorMessage(_errorMessage!),
-                  const SizedBox(height: 16),
+          // FIXED: Scrollable content for overflow prevention
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Teacher profile section with duration
+                  _buildTeacherProfileSection(teacher, statusWithDuration),
+                  
+                  const SizedBox(height: 20), // Reduced spacing
+                  
+                  // Status notifications
+                  ..._buildStatusNotifications(teacher, hasPendingAppointment),
+                  
+                  // NEW: Error and Info Messages Display
+                  if (_errorMessage != null) ...[
+                    _buildErrorMessage(_errorMessage!),
+                    const SizedBox(height: 12), // Reduced spacing
+                  ],
+                  if (_infoMessage != null) ...[
+                    _buildInfoMessage(_infoMessage!),
+                    const SizedBox(height: 12), // Reduced spacing
+                  ],
+                  
+                  // Teacher message if available
+                  if (teacher.teacherMsg != null && teacher.teacherMsg!.isNotEmpty) ...[
+                    _buildTeacherMessage(teacher.teacherMsg!),
+                    const SizedBox(height: 16), // Reduced spacing
+                  ],
+                  
+                  // Note input field
+                  _buildNoteInputField(),
+                  
+                  // Date/Time selection (show when scheduling)
+                  if (_showSchedulingOptions) ...[
+                    const SizedBox(height: 16), // Reduced spacing
+                    _buildDateTimeSelection(),
+                  ],
+                  
+                  const SizedBox(height: 20), // Reduced spacing
+                  
+                  // Action buttons
+                  _buildActionButtons(teacher, currentUser, hasPendingAppointment),
+                  
+                  const SizedBox(height: 8),
                 ],
-                if (_infoMessage != null) ...[
-                  _buildInfoMessage(_infoMessage!),
-                  const SizedBox(height: 16),
-                ],
-                
-                // Teacher message if available
-                if (teacher.teacherMsg != null && teacher.teacherMsg!.isNotEmpty) ...[
-                  _buildTeacherMessage(teacher.teacherMsg!),
-                  const SizedBox(height: 20),
-                ],
-                
-                // Note input field
-                _buildNoteInputField(),
-                
-                // Date/Time selection (show when scheduling)
-                if (_showSchedulingOptions) ...[
-                  const SizedBox(height: 20),
-                  _buildDateTimeSelection(),
-                ],
-                
-                const SizedBox(height: 24),
-                
-                // Action buttons
-                _buildActionButtons(teacher, currentUser, hasPendingAppointment),
-                
-                const SizedBox(height: 8),
-              ],
+              ),
             ),
           ),
         ],
@@ -766,41 +772,85 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
 
     return Column(
       children: [
-        // FIXED: Separate Schedule Appointment button (full width)
+        // FIXED: Schedule and Notify Me side by side for offline/busy teachers
         if (!isOnline && !_showSchedulingOptions) ...[
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: canSchedule
-                  ? () {
-                      setState(() {
-                        _showSchedulingOptions = true;
-                        _errorMessage = null; // Clear any existing errors
-                        _infoMessage = null;
-                      });
-                    }
-                  : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF9C27B0),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+          Row(
+            children: [
+              // Schedule button
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: canSchedule
+                      ? () {
+                          setState(() {
+                            _showSchedulingOptions = true;
+                            _errorMessage = null; // Clear any existing errors
+                            _infoMessage = null;
+                          });
+                        }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9C27B0),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    disabledBackgroundColor: Colors.grey[300],
+                    disabledForegroundColor: Colors.grey[500],
+                  ),
+                  icon: const Icon(Icons.schedule),
+                  label: const Text(
+                    'Schedule',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-                disabledBackgroundColor: Colors.grey[300],
-                disabledForegroundColor: Colors.grey[500],
               ),
-              icon: const Icon(Icons.schedule),
-              label: const Text(
-                'Schedule Appointment',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+              const SizedBox(width: 12), // Space between buttons
+              // Notify Me button
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _handleNotifyMe(teacher),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _notifiedTeachers.contains(teacher.uid) 
+                        ? Colors.orange 
+                        : Colors.blue,
+                    side: BorderSide(
+                      color: _notifiedTeachers.contains(teacher.uid) 
+                          ? Colors.orange 
+                          : Colors.blue,
+                      width: 1.5,
+                    ),
+                    backgroundColor: _notifiedTeachers.contains(teacher.uid)
+                        ? Colors.orange.withOpacity(0.1)
+                        : Colors.transparent,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: Icon(
+                    _notifiedTeachers.contains(teacher.uid)
+                        ? Icons.notifications_active
+                        : Icons.notifications_outlined,
+                    size: 20,
+                  ),
+                  label: Text(
+                    _notifiedTeachers.contains(teacher.uid) 
+                        ? 'Notifying' 
+                        : 'Notify Me',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-          const SizedBox(height: 12), // Space between schedule and notify buttons
+          const SizedBox(height: 12), // Space before other buttons
         ],
         
         // Confirm/Cancel buttons when scheduling
@@ -810,7 +860,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: (_selectedDate != null && _selectedTime != null && canSchedule)
-                      ? () => _handleScheduleAppointment(teacher, currentUser!)
+                      ? () => _handleScheduleAppointment(teacher, currentUser)
                       : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF9C27B0),
@@ -873,7 +923,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
           const SizedBox(height: 12),
         ],
         
-        // FIXED: Bottom section with Knock Now (if online) and separate Notify Me
+        // FIXED: Bottom section with Knock Now (if online) and Notify Me (if online)
         Row(
           children: [
             // Knock Now button (only for online teachers)
@@ -881,7 +931,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: canSchedule
-                      ? () => _handleKnock(teacher, currentUser!)
+                      ? () => _handleKnock(teacher, currentUser)
                       : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1E293B),
@@ -919,45 +969,47 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
               const SizedBox(width: 12),
             ],
             
-            // Notify Me button (always show, full width if no Knock Now)
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _handleNotifyMe(teacher),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _notifiedTeachers.contains(teacher.uid) 
-                      ? Colors.orange 
-                      : Colors.blue,
-                  side: BorderSide(
-                    color: _notifiedTeachers.contains(teacher.uid) 
+            // Notify Me button (only show for online teachers)
+            if (isOnline) ...[
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _handleNotifyMe(teacher),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _notifiedTeachers.contains(teacher.uid) 
                         ? Colors.orange 
                         : Colors.blue,
-                    width: 1.5,
+                    side: BorderSide(
+                      color: _notifiedTeachers.contains(teacher.uid) 
+                          ? Colors.orange 
+                          : Colors.blue,
+                      width: 1.5,
+                    ),
+                    backgroundColor: _notifiedTeachers.contains(teacher.uid)
+                        ? Colors.orange.withOpacity(0.1)
+                        : Colors.transparent,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  backgroundColor: _notifiedTeachers.contains(teacher.uid)
-                      ? Colors.orange.withOpacity(0.1)
-                      : Colors.transparent,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  icon: Icon(
+                    _notifiedTeachers.contains(teacher.uid)
+                        ? Icons.notifications_active
+                        : Icons.notifications_outlined,
+                    size: 20,
                   ),
-                ),
-                icon: Icon(
-                  _notifiedTeachers.contains(teacher.uid)
-                      ? Icons.notifications_active
-                      : Icons.notifications_outlined,
-                  size: 20,
-                ),
-                label: Text(
-                  _notifiedTeachers.contains(teacher.uid) 
-                      ? 'Notifying' 
-                      : 'Notify Me',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                  label: Text(
+                    _notifiedTeachers.contains(teacher.uid) 
+                        ? 'Notifying' 
+                        : 'Notify Me',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ],
@@ -1063,7 +1115,7 @@ Future<void> _selectDate(BuildContext context) async {
         _errorMessage = null;
       });
     }
-  } catch (e, stackTrace) {
+  } catch (e) {
     debugPrint('❌ Error showing date picker: $e');
     if (mounted) {
       setState(() {
@@ -1412,38 +1464,6 @@ void _loadNotificationSubscriptions() async {
     }
   }
 
-  void _showErrorMessage(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          margin: const EdgeInsets.all(16),
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    }
-  }
-
-  void _showInfoMessage(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.blue,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
-    }
-  }
 }
 
 // Extension to show the modal easily from anywhere
