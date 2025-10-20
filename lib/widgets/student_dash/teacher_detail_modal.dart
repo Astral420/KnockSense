@@ -1163,21 +1163,21 @@ Future<void> _selectTime(BuildContext context) async {
       debugPrint('⏰ Time selected: ${picked.format(context)}');
       
       // Validate time constraints
-      if (picked.hour < 6 || (picked.hour == 6 && picked.minute < 30)) {
-        setState(() {
-          _errorMessage = 'Appointments cannot be scheduled before 6:30 AM. Please select a later time.';
-        });
-        _clearMessagesAfterDelay();
-        return;
-      }
+      // if (picked.hour < 6 || (picked.hour == 6 && picked.minute < 30)) {
+      //   setState(() {
+      //     _errorMessage = 'Appointments cannot be scheduled before 6:30 AM. Please select a later time.';
+      //   });
+      //   _clearMessagesAfterDelay();
+      //   return;
+      // }
       
-      if (picked.hour > 18 || (picked.hour == 18 && picked.minute > 0)) {
-        setState(() {
-          _errorMessage = 'Appointments can only be scheduled until 6:00 PM. Please select an earlier time.';
-        });
-        _clearMessagesAfterDelay();
-        return;
-      }
+      // if (picked.hour > 18 || (picked.hour == 18 && picked.minute > 0)) {
+      //   setState(() {
+      //     _errorMessage = 'Appointments can only be scheduled until 6:00 PM. Please select an earlier time.';
+      //   });
+      //   _clearMessagesAfterDelay();
+      //   return;
+      // }
       
       // Create the full scheduled DateTime
       final scheduledDateTime = DateTime(
@@ -1288,15 +1288,15 @@ Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentU
     }
     
     // Additional validation: Check if appointment is after 6 PM (defensive check)
-    if (scheduledDateTime.hour > 18 || 
-        (scheduledDateTime.hour == 18 && scheduledDateTime.minute > 0)) {
-      setState(() {
-        _errorMessage = 'Appointments cannot be scheduled after 6:00 PM.';
-        _isScheduling = false;
-      });
-      _clearMessagesAfterDelay();
-      return;
-    }
+    // if (scheduledDateTime.hour > 18 || 
+    //     (scheduledDateTime.hour == 18 && scheduledDateTime.minute > 0)) {
+    //   setState(() {
+    //     _errorMessage = 'Appointments cannot be scheduled after 6:00 PM.';
+    //     _isScheduling = false;
+    //   });
+    //   _clearMessagesAfterDelay();
+    //   return;
+    // }
     
     final appointmentService = ref.read(appointmentServiceProvider);
     final note = _noteController.text.trim();

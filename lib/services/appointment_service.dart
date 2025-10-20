@@ -709,17 +709,20 @@ Future<void> _sendWaitAutoRejectionNotification(String studentNumber) async {
       debugPrint('Could not fetch teacher name: $e');
     }
     
+    final String notificationBody = '$teacherName did not respond within the decision window after your wait period.';
+
     await _database.ref('notification_queue').push().set({
       'studentUid': studentUid,
       'notification': {
         'title': '⏰ Appointment Cancelled',
-        'body': '$teacherName did not respond within the decision window after your wait period.',
+        'body': notificationBody,
       },
       'data': {
         'type': 'wait_appointment_auto_cancelled',
         'studentNumber': studentNumber,
         'teacherName': teacherName,
         'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+        'bigText': notificationBody,
       },
       'priority': 'high',
       'createdAt': ServerValue.timestamp,
@@ -1700,20 +1703,23 @@ Future<void> _sendImmediateAppointmentNotificationToTeacher(
         body = 'Your scheduled appointment was not accepted.\n\nReason: $message';
       }
 
-      await _database.ref('notification_queue').push().set({
-        'studentUid': studentUid,
-        'notification': {
-          'title': title,
-          'body': body,
-        },
-        'data': {
+      final Map<String, dynamic> dataPayload = {
           'type': 'scheduled_appointment_response',
           'accepted': accepted.toString(),
           'studentNumber': studentNumber,
           'teacherName': teacherName,
           'message': message,
           'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+          'bigText': message,
+      };
+
+      await _database.ref('notification_queue').push().set({
+        'studentUid': studentUid,
+        'notification': {
+          'title': title,
+          'body': body,
         },
+        'data': dataPayload,
         'priority': 'high',
         'createdAt': ServerValue.timestamp,
       });
@@ -1788,6 +1794,7 @@ Future<void> _sendImmediateAppointmentNotificationToTeacher(
             'studentNumber': studentNumber,
             'teacherName': cleanTeacherName,
             'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+            'bigText': message,
           },
           'priority': 'high',
           'createdAt': ServerValue.timestamp,
@@ -1853,19 +1860,25 @@ Future<void> _sendImmediateAppointmentNotificationToTeacher(
       String title = _getNotificationTitle(action, teacherName);
       String body = _getNotificationBody(action, message, teacherName);
 
+      final Map<String, dynamic> dataPayload = {
+          'type': 'appointment_response',
+          'action': action.name,
+          'studentNumber': studentNumber,
+          'teacherName': teacherName,
+          'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+      };
+
+      if (message != null && message.isNotEmpty) {
+        dataPayload['bigText'] = message;
+      }
+
       await _database.ref('notification_queue').push().set({
         'studentUid': studentUid,
         'notification': {
           'title': title,
           'body': body,
         },
-        'data': {
-          'type': 'appointment_response',
-          'action': action.name,
-          'studentNumber': studentNumber,
-          'teacherName': teacherName,
-          'click_action': 'FLUTTER_NOTIFICATION_CLICK',
-        },
+        'data': dataPayload,
         'priority': 'high',
         'createdAt': ServerValue.timestamp,
       });
@@ -1949,19 +1962,25 @@ Future<void> _sendCancellationNotification(
         body += '\n\nReason: $reason';
       }
 
+      final Map<String, dynamic> dataPayload = {
+          'type': 'appointment_cancelled',
+          'studentNumber': studentNumber,
+          'teacherName': cleanTeacherName,
+          'reason': reason,
+          'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+      };
+
+      if (reason.isNotEmpty) {
+        dataPayload['bigText'] = reason;
+      }
+
       await _database.ref('notification_queue').push().set({
         'studentUid': studentUid,
         'notification': {
           'title': title,
           'body': body,
         },
-        'data': {
-          'type': 'appointment_cancelled',
-          'studentNumber': studentNumber,
-          'teacherName': cleanTeacherName,
-          'reason': reason,
-          'click_action': 'FLUTTER_NOTIFICATION_CLICK',
-        },
+        'data': dataPayload,
         'priority': 'high',
         'createdAt': ServerValue.timestamp,
       });
@@ -2045,6 +2064,7 @@ Future<void> _sendCancellationNotification(
           'appointmentId': appointmentId,
           'studentNumber': studentNumber,
         },
+        
         'createdAt': ServerValue.timestamp,
       });
       

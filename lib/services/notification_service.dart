@@ -44,6 +44,7 @@ class NotificationService {
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
   }
 
+
   Future<void> _requestPermission() async {
     final settings = await _messaging.requestPermission(
       alert: true,
@@ -152,6 +153,7 @@ class NotificationService {
   Future<void> showAppointmentNotification({
     required String title,
     required String body,
+    String? bigText,
     Map<String, dynamic>? payload,
   }) async {
     if (!_isPlatformSupported) return;
@@ -160,15 +162,30 @@ class NotificationService {
     debugPrint('🔔 SHOWING LOCAL NOTIFICATION');
     debugPrint('   Title: $title');
     debugPrint('   Body: $body');
+    if (bigText != null) {
+      debugPrint('   BigText: $bigText');
+    }
     debugPrint('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
     
-    const androidDetails = AndroidNotificationDetails(
+    final BigTextStyleInformation? bigTextStyleInformation = bigText != null
+        ? BigTextStyleInformation(
+            bigText,
+            htmlFormatBigText: true,
+            contentTitle: title,
+            htmlFormatContentTitle: true,
+            summaryText: body,
+            htmlFormatSummaryText: true,
+          )
+        : null;
+
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'appointments',
       'Appointment Notifications',
       channelDescription: 'Notifications for appointment updates',
       importance: Importance.high,
       priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
+      icon: '@mipmap/launcher_icon',
+      styleInformation: bigTextStyleInformation,
     );
     
     const iosDetails = DarwinNotificationDetails(
@@ -177,7 +194,7 @@ class NotificationService {
       presentSound: true,
     );
     
-    const details = NotificationDetails(
+    final details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
@@ -307,9 +324,13 @@ class NotificationService {
     debugPrint('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
   
     if (message.notification != null) {
+      // Extract bigText from the data payload
+      final String? bigText = message.data['bigText'] as String?;
+
       showAppointmentNotification(
         title: message.notification!.title ?? 'KnockSense',
         body: message.notification!.body ?? '',
+        bigText: bigText,
         payload: message.data,
       );
     }
