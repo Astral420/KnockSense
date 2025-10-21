@@ -295,11 +295,13 @@ class TeacherAppointmentHistory extends ConsumerWidget {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        Text(
-                          DateFormat('M/d/yyyy, h:mm a').format(displayDate),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.blue[700],
+                        Flexible(
+                          child: Text(
+                            DateFormat('M/d/yyyy, h:mm a').format(displayDate),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.blue[700],
+                            ),
                           ),
                         ),
                       ],

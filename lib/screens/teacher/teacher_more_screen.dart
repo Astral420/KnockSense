@@ -58,25 +58,9 @@ class TeacherMoreScreen extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(width: 16),
-                          Stack(
-                            children: [
-                              const Icon(
-                                Icons.notifications_outlined,
-                                size: 24,
-                              ),
-                              Positioned(
-                                right: 0,
-                                top: 0,
-                                child: Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                            ],
+                          const Icon(
+                            Icons.notifications_outlined,
+                            size: 24,
                           ),
                         ],
                       ),

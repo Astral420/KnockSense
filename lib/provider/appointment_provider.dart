@@ -19,6 +19,8 @@ final appointmentRefreshProvider = StreamProvider.autoDispose<DateTime>((ref) as
   }
 });
 
+
+
 // Appointment service provider
 final appointmentServiceProvider = Provider<AppointmentService>((ref) {
   final database = ref.watch(firebaseDatabaseProvider);
@@ -174,7 +176,7 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
       return null;
     }
   }
-  
+
   Future<bool> respondToAppointment({
     required String studentNumber,
     required String appointmentId,
@@ -238,6 +240,32 @@ class AppointmentNotifier extends StateNotifier<AsyncValue<void>> {
     } catch (e, stack) {
 
       print('❌ NOTIFIER: Error - $e');
+      state = AsyncValue.error(e, stack);
+      return false;
+    }
+  }
+
+  Future<bool> respondToSpecialAppointment({
+    required String studentNumber,
+    required String appointmentId,
+    required String teacherUid,
+    required bool accept,
+    String? teacherResponse,
+  }) async {
+    state = const AsyncValue.loading();
+
+    try {
+      final success = await _service.respondToSpecialAppointment(
+        studentNumber: studentNumber,
+        appointmentId: appointmentId,
+        teacherUid: teacherUid,
+        accept: accept,
+        teacherResponse: teacherResponse,
+      );
+
+      state = const AsyncValue.data(null);
+      return success;
+    } catch (e, stack) {
       state = AsyncValue.error(e, stack);
       return false;
     }

@@ -48,6 +48,7 @@ Widget build(BuildContext context, WidgetRef ref) {
   final todayAppointments = todayAppointmentsAsync.asData?.value ?? <AppointmentModel>[];
 
   return Scaffold(
+    resizeToAvoidBottomInset: false,
     backgroundColor: const Color(0xFFFDF6E3),
     body: SafeArea(
       child: currentUserAsync.when(
@@ -219,14 +220,9 @@ Widget build(BuildContext context, WidgetRef ref) {
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
-          builder: (context) => Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-            ),
-            child: TeacherResponseWidget(
-              appointment: appointment,
-              currentUser: user,
-            ),
+          builder: (context) => TeacherResponseWidget(
+            appointment: appointment,
+            currentUser: user,
           ),
         );
       },

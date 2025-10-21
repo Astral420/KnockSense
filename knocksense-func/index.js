@@ -98,53 +98,75 @@ exports.processNotificationQueue = onValueCreated({
 	}
 });
 
-exports.deliverScheduledNotifications = onSchedule({
-    schedule: 'every 1 minutes',
-    region: 'asia-southeast1'
-  },
-  	
- 	async () => {
-	const now = Date.now();
-	const snap = await db.ref('scheduled_notifications')
-		.orderByChild('scheduledFor')
-		.endAt(now)
-		.get();
-
-	if (!snap.exists()) return;
-
-	const updates = {};
-	const removals = [];
-	const entries = snap.val();
-
-	for (const [id, item] of Object.entries(entries)) {
-		try {
-			const base = buildFcmMessageFromQueueItem(item);
-			const sends = [];
-
-			if (item.to) sends.push(sendToToken(String(item.to), base));
-			if (item.topic) sends.push(sendToTopic(String(item.topic), base));
-			if (item.studentUid) {
-				const tokens = await getUserTokens(String(item.studentUid));
-				if (tokens.length > 0) sends.push(admin.messaging().sendEachForMulticast({tokens, ...base}));
-			}
-			if (item.teacherUid) {
-				const tokens = await getUserTokens(String(item.teacherUid));
-				if (tokens.length > 0) sends.push(admin.messaging().sendEachForMulticast({tokens, ...base}));
-			}
-
-			await Promise.allSettled(sends);
-			removals.push(id);
-		} catch (e) {
-			console.error('Failed to send scheduled notification:', id, e);
-			updates[`${id}/lastError`] = String(e.message || e);
-		}
-	}
-
-	const ref = db.ref('scheduled_notifications');
-	if (Object.keys(updates).length > 0) await ref.update(updates);
-	for (const id of removals) {
-		await ref.child(id).remove();
-	}
+// ✅ CORRECT: Create user notification ONCE, then send to all tokens
+exports.processScheduledNotifications = onValueCreated({
+	ref: '/scheduled_notifications/{notificationId}',
+	region: 'asia-southeast1',
+	instance: 'knocksense-21180-default-rtdb',
+}, async (event) => {
+    const data = event.data.val();
+    
+    // ✅ STEP 1: Create ONE user notification (outside token loop)
+    if (data.teacherUid && data.appointmentId && data.studentNumber) {
+      try {
+        // Determine notification type
+        let notificationType = 'appointmentDue';
+        let title = data.title || '⏰ Appointment Ready';
+        let body = data.body || 'Appointment notification';
+        
+        if (data.type === 'scheduled_appointment_reminder') {
+          notificationType = 'scheduledAppointmentReminder';
+          title = data.title || '📅 Upcoming Appointment';
+        } else if (data.type === 'scheduled_appointment_due') {
+          notificationType = 'appointmentDue';
+          title = data.title || '⏰ Appointment Ready';
+        }
+        
+        // Create ONE user notification
+        const notificationRef = db.ref(`user_notifications/${data.teacherUid}`).push();
+        await notificationRef.set({
+          userId: data.teacherUid,
+          title: title,
+          body: body,
+          type: notificationType,
+          createdAt: admin.database.ServerValue.TIMESTAMP,
+          isRead: false,
+          data: {
+            appointmentId: data.appointmentId,
+            studentNumber: data.studentNumber,
+            studentName: data.data?.studentName || 'Student',
+            urgency: data.type === 'scheduled_appointment_due' ? 'high' : 'medium',
+          },
+        });
+        console.log(`✅ Created ONE user notification (${notificationType}): ${data.appointmentId}`);
+      } catch (e) {
+        console.error('❌ Error creating user notification:', e);
+      }
+    }
+    
+    // ✅ STEP 2: Send FCM to ALL tokens (separate from user notification)
+    const tokensSnapshot = await db.ref(`fcm_tokens/${data.teacherUid}`).get();
+    
+    if (tokensSnapshot.exists()) {
+      const tokens = tokensSnapshot.val();
+      
+      // Send FCM notification to each device
+      for (const tokenEntry of Object.values(tokens)) {
+        try {
+          // Your existing FCM sending code
+          await sendToToken(tokenEntry.token, {
+            notification: {
+              title: data.title,
+              body: data.body,
+            },
+            data: data.data || {},
+          });
+          console.log(`✅ Sent FCM to token`);
+        } catch (e) {
+          console.error('❌ Error sending FCM:', e);
+        }
+      }
+    }
 });
 
 // Notify subscribers when teacher active_status changes
@@ -173,6 +195,48 @@ exports.onTeacherStatusChange = onValueWritten({
 	} catch (e) {
 		console.error('Failed to send teacher status notification:', e);
 	}
+	try {
+		// Get all students subscribed to this teacher (topic: teacher_{teacherUid})
+		const subscriptionsSnapshot = await db.ref('notifications/subscriptions').get();
+  
+		if (subscriptionsSnapshot.exists()) {
+		  const allSubscriptions = subscriptionsSnapshot.val();
+		  const statusEmoji = after === 'online' ? '✅' : after === 'busy' ? '🟡' : '⚫';
+		  const statusText = after === 'online' ? 'now online' : after === 'busy' ? 'now busy' : 'now offline';
+		  
+		  // Find all students subscribed to this teacher
+		  const notificationPromises = [];
+		  for (const [studentUid, studentSubscriptions] of Object.entries(allSubscriptions)) {
+			// Check if this student is subscribed to the teacher
+			if (studentSubscriptions[teacherUid] && studentSubscriptions[teacherUid].subscribed === true) {
+			  const notificationRef = db.ref(`user_notifications/${studentUid}`).push();
+			  
+			  const notification = {
+				userId: studentUid,
+				title: `${statusEmoji} ${displayName} is ${statusText}`,
+				body: 'Tap to view details',
+				type: 'teacherStatusChange',
+				createdAt: admin.database.ServerValue.TIMESTAMP,
+				isRead: false,
+				data: {
+				  teacherUid: teacherUid,
+				  teacherName: displayName,
+				  status: String(after),
+				},
+			  };
+			  
+			  notificationPromises.push(notificationRef.set(notification));
+			}
+		  }
+		  
+		  await Promise.all(notificationPromises);
+		  console.log(`✅ Created ${notificationPromises.length} user notifications for teacher status change`);
+		} else {
+		  console.log('ℹ️ No subscriptions found');
+		}
+	  } catch (e) {
+		console.error('❌ Error creating user notifications for teacher status:', e);
+	  }
 });
 
 // Notify subscribers when teacher_msg changes
@@ -203,6 +267,46 @@ exports.onTeacherMessageChange = onValueWritten({
 	} catch (e) {
 		console.error('Failed to send teacher message notification:', e);
 	}
+	try {
+		// Get all students subscribed to this teacher
+		const subscriptionsSnapshot = await db.ref('notifications/subscriptions').get();
+  
+		if (subscriptionsSnapshot.exists()) {
+		  const allSubscriptions = subscriptionsSnapshot.val();
+		  
+		  // Find all students subscribed to this teacher
+		  const notificationPromises = [];
+		  for (const [studentUid, studentSubscriptions] of Object.entries(allSubscriptions)) {
+			// Check if this student is subscribed to the teacher
+			if (studentSubscriptions[teacherUid] && studentSubscriptions[teacherUid].subscribed === true) {
+			  const notificationRef = db.ref(`user_notifications/${studentUid}`).push();
+			  
+			  const notification = {
+				userId: studentUid,
+				title: `📝 ${displayName} posted an update`,
+				body: body,
+				type: 'teacherStatusChange',
+				createdAt: admin.database.ServerValue.TIMESTAMP,
+				isRead: false,
+				data: {
+				  teacherUid: teacherUid,
+				  teacherName: displayName,
+				  message: messageText,
+				},
+			  };
+			  
+			  notificationPromises.push(notificationRef.set(notification));
+			}
+		  }
+		  
+		  await Promise.all(notificationPromises);
+		  console.log(`✅ Created ${notificationPromises.length} user notifications for teacher message`);
+		} else {
+		  console.log('ℹ️ No subscriptions found');
+		}
+	  } catch (e) {
+		console.error('❌ Error creating user notifications for teacher message:', e);
+	  }
 });
 
 async function pruneInvalidTokens(uid, tokens, multicastResponse) {

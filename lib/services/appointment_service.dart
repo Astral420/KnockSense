@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:knocksense/models/appointment_model.dart';
 import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/models/teacher_model.dart';
+import 'package:knocksense/services/appointment_notification_extension.dart';
 
 class AppointmentService {
   final FirebaseDatabase _database;
@@ -85,6 +86,14 @@ Future<void> _checkAndCancelUntouchedAppointments() async {
 
 Future<void> _cleanupScheduledNotifications(String appointmentId) async {
   try {
+    // Remove the new, idempotent scheduled jobs by their deterministic keys
+    final dueNotificationKey = 'due_$appointmentId';
+    await _database.ref('scheduled_notifications/$dueNotificationKey').remove();
+
+    final rejectionNotificationKey = 'rejection_$appointmentId';
+    await _database.ref('scheduled_notifications/$rejectionNotificationKey').remove();
+
+    // Also clean up any old notifications that might have been created with .push()
     final snapshot = await _database
         .ref('scheduled_notifications')
         .orderByChild('appointmentId')
@@ -94,15 +103,14 @@ Future<void> _cleanupScheduledNotifications(String appointmentId) async {
     if (snapshot.exists && snapshot.value != null) {
       final notifications = Map<String, dynamic>.from(snapshot.value as Map);
       
-      // Remove all scheduled notifications for this appointment
       for (var notificationId in notifications.keys) {
         await _database
             .ref('scheduled_notifications/$notificationId')
             .remove();
       }
-      
-      debugPrint('✅ Cleaned up scheduled notifications for appointment $appointmentId');
     }
+    
+    debugPrint('✅ Cleaned up scheduled notifications for appointment $appointmentId');
   } catch (e) {
     debugPrint('❌ Error cleaning up scheduled notifications: $e');
   }
@@ -289,6 +297,7 @@ bool _shouldAutoCancelAppointment(
     String? studentNote,
     DateTime? scheduledTime,
     bool isScheduled = false,
+    bool isSpecial = false,
   }) async {
     try {
       if (student.studentNumber == null) {
@@ -368,6 +377,7 @@ bool _shouldAutoCancelAppointment(
         'studentNote': studentNote,
         'scheduledTime': effectiveScheduledTime?.millisecondsSinceEpoch,
         'isScheduled': isScheduled,
+        'isSpecial': isSpecial,
         'notificationSent': false,
       };
 
@@ -382,6 +392,7 @@ bool _shouldAutoCancelAppointment(
         'createdAt': ServerValue.timestamp,
         'scheduledTime': effectiveScheduledTime?.millisecondsSinceEpoch,
         'isScheduled': isScheduled,
+        'isSpecial': isSpecial,
       });
 
 
@@ -394,11 +405,34 @@ bool _shouldAutoCancelAppointment(
       if (isScheduled && scheduledTime != null) {
       // Professor was offline/busy - send scheduled notification
       await _sendScheduledNotificationToTeacher(teacher.uid, student.displayName, scheduledTime);
-      await _sendScheduledAppointmentReminder(teacher.uid, student.displayName, scheduledTime);
+      await _sendScheduledAppointmentReminder(
+        teacher.uid, 
+        student.displayName, 
+        scheduledTime,
+        appointmentRef.key!,
+        student.studentNumber!,
+      );
+      
+      // Create user notification for scheduled appointment
+      await _database.notifyTeacherOfScheduledAppointment(
+        teacherUid: teacher.uid,
+        studentName: student.displayName,
+        appointmentId: appointmentRef.key!,
+        studentNumber: student.studentNumber!,
+        scheduledTime: scheduledTime,
+      );
     } else {
       // 🔧 FIX: Professor is online - send immediate notification
       debugPrint('📢 Sending immediate appointment notification to online professor ${teacher.uid}');
       await _sendImmediateAppointmentNotificationToTeacher(teacher.uid, student.displayName);
+      
+      // Create user notification for immediate appointment
+      await _database.notifyTeacherOfImmediateAppointment(
+        teacherUid: teacher.uid,
+        studentName: student.displayName,
+        appointmentId: appointmentRef.key!,
+        studentNumber: student.studentNumber!,
+      );
     }
 
       return {
@@ -484,32 +518,32 @@ Future<void> _handleAppointmentChanges(DatabaseEvent event) async {
         
         _monitoredAppointments.add(uniqueKey); // ✅ Add with full unique key
         
-        // Schedule notification at scheduled time
-        if (!notificationDelay.isNegative && notificationDelay.inSeconds > 0) {
-          Timer(notificationDelay, () async {
-            final snapshot = await _database
-                .ref('teacher_appointments/$teacherUid/$appointmentId')
-                .get();
-            
-            if (snapshot.exists) {
-              final data = Map<String, dynamic>.from(snapshot.value as Map);
-              if (data['status'] == AppointmentStatus.pending.name) {
-                await _sendScheduledAppointmentDueNotification(
-                  teacherUid,
-                  studentName,
-                  appointmentId,
-                );
-                debugPrint('🔔 Sent due notification for appointment $appointmentId');
-              }
-            }
-          });
-        } else if (notificationDelay.isNegative && !autoRejectDelay.isNegative) {
-          await _sendScheduledAppointmentDueNotification(
-            teacherUid,
-            studentName,
-            appointmentId,
-          );
-        }
+        // 1. Schedule the "DUE" notification using the backend scheduler.
+        // This is more reliable than a client-side Timer and idempotent.
+        final String dueNotificationBody = '$studentName\'s appointment time has arrived. You have 2 minutes to respond or it will be auto-cancelled.';
+        final dueNotificationKey = 'due_$appointmentId';
+        await _database.ref('scheduled_notifications/$dueNotificationKey').set({
+          'teacherUid': teacherUid,
+          'appointmentId': appointmentId,
+          'type': 'scheduled_appointment_due',
+          'scheduledFor': scheduledTime.millisecondsSinceEpoch,
+          'title': '⏰ Scheduled Appointment Ready',
+          'body': dueNotificationBody,
+          'studentNumber': studentNumber, // Add studentNumber for user notification creation
+          'data': {
+            'type': 'scheduled_appointment_due',
+            'studentName': studentName,
+            'appointmentId': appointmentId,
+            'urgency': 'high',
+            'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+            'bigText': dueNotificationBody,
+          },
+          'createdAt': ServerValue.timestamp,
+        });
+        
+        // NOTE: User notification creation moved to cloud function that processes scheduled_notifications
+        // This prevents duplicate notifications. The cloud function will create both FCM and user notifications
+        // when the scheduled time arrives. See: scheduled_notifications cloud function processor.
         
         // Schedule auto-rejection
         if (autoRejectDelay.isNegative) {
@@ -784,6 +818,16 @@ Future<void> _sendWaitAutoRejectionNotification(String studentNumber) async {
     
     // ✅ FIX: Pass the correct teacher name to notification
     await _sendAutoRejectionNotification(studentNumber, reason, teacherName);
+    
+    // Create user notification for auto-rejected appointment
+    final studentUid = currentData['studentUid'] as String?;
+    if (studentUid != null) {
+      await _database.notifyStudentAppointmentAutoRejected(
+        studentUid: studentUid,
+        teacherName: teacherName,
+        message: reason,
+      );
+    }
     
     await _cleanupScheduledNotifications(appointmentId);
     
@@ -1098,6 +1142,9 @@ Future<AppointmentModel?> _fetchAppointmentDetails(String studentNumber, String 
       
       await _database.ref().update(updates);
 
+      // After making a decision, clear any pending scheduled notifications for this appointment
+      await _cleanupScheduledNotifications(appointmentId);
+
         print('🔧 SERVICE: Updating database...');
         print('   Updates: ${updates.keys.toList()}');
 
@@ -1106,6 +1153,34 @@ Future<AppointmentModel?> _fetchAppointmentDetails(String studentNumber, String 
       
       // Send notification with the teacher's response/location
       await _sendScheduledAppointmentResponse(studentNumber, accept, teacherResponse);
+      
+      // Create user notification for student
+      final appointmentSnapshot = await _database
+          .ref('appointments/$studentNumber/$appointmentId')
+          .get();
+      
+      if (appointmentSnapshot.exists) {
+        final appointmentData = Map<String, dynamic>.from(appointmentSnapshot.value as Map);
+        final studentUid = appointmentData['studentUid'] as String?;
+        final teacherName = appointmentData['teacherName'] as String? ?? 'Your professor';
+        
+        if (studentUid != null) {
+          if (accept) {
+            await _database.notifyStudentAppointmentAccepted(
+              studentUid: studentUid,
+              teacherName: teacherName,
+              action: TeacherAction.meetNow,
+              teacherResponse: teacherResponse,
+            );
+          } else {
+            await _database.notifyStudentAppointmentRejected(
+              studentUid: studentUid,
+              teacherName: teacherName,
+              teacherResponse: teacherResponse,
+            );
+          }
+        }
+      }
 
        print('✅ SERVICE: Notification method called');
        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -1118,6 +1193,89 @@ Future<AppointmentModel?> _fetchAppointmentDetails(String studentNumber, String 
        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
       debugPrint('Error responding to scheduled appointment: $e');
+      return false;
+    }
+  }
+
+  Future<bool> respondToSpecialAppointment({
+    required String studentNumber,
+    required String appointmentId,
+    required String teacherUid,
+    required bool accept,
+    String? teacherResponse,
+  }) async {
+    try {
+      final appointmentSnapshot = await _database
+          .ref('appointments/$studentNumber/$appointmentId')
+          .get();
+
+      if (!appointmentSnapshot.exists) {
+        debugPrint('Special appointment not found');
+        return false;
+      }
+
+      final appointmentData = Map<String, dynamic>.from(appointmentSnapshot.value as Map);
+
+      if (appointmentData['status'] != AppointmentStatus.pending.name) {
+        debugPrint('Special appointment already processed');
+        return false;
+      }
+
+      final updates = <String, dynamic>{};
+      
+      // For special appointments: accept = completed, reject = denied
+      final action = accept ? TeacherAction.meetNow : TeacherAction.reject;
+      final newStatus = accept ? AppointmentStatus.completed : AppointmentStatus.denied;
+
+      updates['appointments/$studentNumber/$appointmentId/status'] = newStatus.name;
+      updates['appointments/$studentNumber/$appointmentId/respondedAt'] = ServerValue.timestamp;
+      updates['appointments/$studentNumber/$appointmentId/teacherAction'] = action.name;
+
+      if (teacherResponse != null && teacherResponse.isNotEmpty) {
+        updates['appointments/$studentNumber/$appointmentId/teacherResponse'] = teacherResponse;
+      }
+
+      // Mark as completed on teacher side when accepted
+      updates['teacher_appointments/$teacherUid/$appointmentId/status'] = newStatus.name;
+      updates['teacher_appointments/$teacherUid/$appointmentId/respondedAt'] = ServerValue.timestamp;
+      updates['teacher_appointments/$teacherUid/$appointmentId/teacherAction'] = action.name;
+      
+      if (accept) {
+        updates['appointments/$studentNumber/$appointmentId/completedAt'] = ServerValue.timestamp;
+        updates['teacher_appointments/$teacherUid/$appointmentId/completedAt'] = ServerValue.timestamp;
+      }
+
+      await _database.ref().update(updates);
+
+      await _sendNotificationToStudent(studentNumber, action, teacherResponse);
+
+      final studentUid = appointmentData['studentUid'] as String?;
+      final teacherName = (appointmentData['teacherName'] as String? ?? 'Your professor')
+          .replaceAll(RegExp(r'\s*\(.*?\)'), '')
+          .trim();
+
+      if (studentUid != null) {
+        if (accept) {
+          await _database.notifyStudentAppointmentAccepted(
+            studentUid: studentUid,
+            teacherName: teacherName,
+            action: action,
+            teacherResponse: teacherResponse,
+          );
+        } else {
+          await _database.notifyStudentAppointmentRejected(
+            studentUid: studentUid,
+            teacherName: teacherName,
+            teacherResponse: teacherResponse,
+          );
+        }
+      }
+
+      await _cleanupScheduledNotifications(appointmentId);
+
+      return true;
+    } catch (e) {
+      debugPrint('Error responding to special appointment: $e');
       return false;
     }
   }
@@ -1176,6 +1334,28 @@ Future<AppointmentModel?> _fetchAppointmentDetails(String studentNumber, String 
       await _database.ref().update(updates);
 
       await _sendNotificationToStudent(studentNumber, action, teacherResponse);
+      
+      // Create user notification for student
+      final appointmentData = Map<String, dynamic>.from(appointmentSnapshot.value as Map);
+      final studentUid = appointmentData['studentUid'] as String?;
+      final teacherName = appointmentData['teacherName'] as String? ?? 'Your professor';
+      
+      if (studentUid != null) {
+        if (action == TeacherAction.reject) {
+          await _database.notifyStudentAppointmentRejected(
+            studentUid: studentUid,
+            teacherName: teacherName,
+            teacherResponse: teacherResponse,
+          );
+        } else {
+          await _database.notifyStudentAppointmentAccepted(
+            studentUid: studentUid,
+            teacherName: teacherName,
+            action: action,
+            teacherResponse: teacherResponse,
+          );
+        }
+      }
 
       if (action == TeacherAction.wait5Minutes) {
         await _scheduleWaitReminder(studentNumber, appointmentId, 5, teacherUid);
@@ -1318,6 +1498,20 @@ Future<AppointmentModel?> _fetchAppointmentDetails(String studentNumber, String 
       teacherName,
       reason ?? 'No reason provided.',
     );
+    
+    // Create user notification for cancelled appointment
+    if (appointmentSnapshot.exists) {
+      final appointmentData = Map<String, dynamic>.from(appointmentSnapshot.value as Map);
+      final studentUid = appointmentData['studentUid'] as String?;
+      
+      if (studentUid != null) {
+        await _database.notifyStudentAppointmentCancelled(
+          studentUid: studentUid,
+          teacherName: teacherName,
+          reason: reason ?? 'No reason provided.',
+        );
+      }
+    }
 
     return true;
   } catch (e) {
@@ -1555,40 +1749,30 @@ Future<void> inspectNotificationQueue() async {
   DateTime scheduledTime,
 ) async {
   try {
-    final tokensSnapshot = await _database.ref('fcm_tokens/$teacherUid').get();
-    if (tokensSnapshot.exists) {
-      final tokensData = Map<String, dynamic>.from(tokensSnapshot.value as Map);
-      
-      final timeString = '${scheduledTime.hour.toString().padLeft(2, '0')}:${scheduledTime.minute.toString().padLeft(2, '0')}';
-      final dateString = '${scheduledTime.month}/${scheduledTime.day}/${scheduledTime.year}';
-      
-      // Clean student name
-      final cleanStudentName = studentName.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
-      
-      for (var tokenEntry in tokensData.values) {
-        final tokenData = Map<String, dynamic>.from(tokenEntry as Map);
-        final token = tokenData['token'] as String?;
-        
-        if (token != null) {
-          await _database.ref('notification_queue').push().set({
-            'to': token,
-            'notification': {
-              'title': '📅 New Scheduled Appointment',
-              'body': '$cleanStudentName scheduled an appointment for $timeString on $dateString',
-            },
-            'data': {
-              'type': 'scheduled_appointment_request',
-              'teacherUid': teacherUid,
-              'studentName': cleanStudentName,
-              'scheduledTime': scheduledTime.millisecondsSinceEpoch.toString(),
-            },
-            'priority': 'high',
-            'createdAt': ServerValue.timestamp,
-          });
-        }
-      }
-      debugPrint('Scheduled appointment notification sent to teacher $teacherUid');
-    }
+    final timeString = '${scheduledTime.hour.toString().padLeft(2, '0')}:${scheduledTime.minute.toString().padLeft(2, '0')}';
+    final dateString = '${scheduledTime.month}/${scheduledTime.day}/${scheduledTime.year}';
+    final cleanStudentName = studentName.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
+
+    final String body = '$cleanStudentName scheduled an appointment for $timeString on $dateString';
+
+    await _database.ref('notification_queue').push().set({
+      'teacherUid': teacherUid,
+      'notification': {
+        'title': '📅 New Scheduled Appointment',
+        'body': body,
+      },
+      'data': {
+        'type': 'scheduled_appointment_request',
+        'teacherUid': teacherUid,
+        'studentName': cleanStudentName,
+        'scheduledTime': scheduledTime.millisecondsSinceEpoch.toString(),
+        'bigText': body,
+      },
+      'priority': 'high',
+      'createdAt': ServerValue.timestamp,
+    });
+
+    debugPrint('Scheduled appointment notification sent to teacher $teacherUid');
   } catch (e) {
     debugPrint('Error sending scheduled notification to teacher: $e');
   }
@@ -1666,11 +1850,9 @@ Future<void> _sendImmediateAppointmentNotificationToTeacher(
         .limitToFirst(1)
         .get();
 
-    if (studentSnapshot.exists) {
-      final studentData = Map<String, dynamic>.from(
-        (studentSnapshot.value as Map).values.first
-      );
-      final studentUid = studentData['uid'] as String;
+    if (studentSnapshot.exists && studentSnapshot.value != null) {
+      final studentMap = studentSnapshot.value as Map;
+      final studentUid = studentMap.keys.first;
 
       // Get teacher name from recent appointment
       String teacherName = 'Your professor';
@@ -1693,14 +1875,17 @@ Future<void> _sendImmediateAppointmentNotificationToTeacher(
       }
 
       String title;
-      String body;
+      String shortBody;
+      String longBody;
 
       if (accepted) {
         title = '✅ $teacherName Accepted Your Appointment';
-        body = 'Your professor is ready to meet!\n\nLocation: $message';
+        shortBody = 'Appointment Accepted';
+        longBody = 'Your professor is ready to meet!\n\nYour Professor Location: $message';
       } else {
         title = '❌ $teacherName Declined Your Appointment';
-        body = 'Your scheduled appointment was not accepted.\n\nReason: $message';
+        shortBody = 'Appointment Declined';
+        longBody = 'Your scheduled appointment was not accepted.\n\nReason: $message';
       }
 
       final Map<String, dynamic> dataPayload = {
@@ -1710,14 +1895,14 @@ Future<void> _sendImmediateAppointmentNotificationToTeacher(
           'teacherName': teacherName,
           'message': message,
           'click_action': 'FLUTTER_NOTIFICATION_CLICK',
-          'bigText': message,
+          'bigText': longBody,
       };
 
       await _database.ref('notification_queue').push().set({
         'studentUid': studentUid,
         'notification': {
           'title': title,
-          'body': body,
+          'body': shortBody,
         },
         'data': dataPayload,
         'priority': 'high',
@@ -1762,49 +1947,29 @@ Future<void> _sendImmediateAppointmentNotificationToTeacher(
     
     debugPrint('✅ Found student UID: $studentUid');
     
-    // ✅ FIX: No longer fetching teacher name from last appointment
-    // Teacher name is already provided as parameter
     final cleanTeacherName = teacherName.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
+
+    final String shortBody = 'Appointment Expired';
+    final String longBody = '$cleanTeacherName did not respond to your scheduled appointment.\n\n$message';
     
-    final tokensSnapshot = await _database.ref('fcm_tokens/$studentUid').get();
-    
-    if (!tokensSnapshot.exists) {
-      debugPrint('⚠️ No FCM tokens found for student $studentUid');
-      debugPrint('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
-      return;
-    }
-    
-    final tokensData = Map<String, dynamic>.from(tokensSnapshot.value as Map);
-    debugPrint('✅ Found ${tokensData.length} FCM token(s) for student');
-    
-    int sentCount = 0;
-    for (var tokenEntry in tokensData.values) {
-      final tokenData = Map<String, dynamic>.from(tokenEntry as Map);
-      final token = tokenData['token'] as String?;
-      
-      if (token != null) {
-        await _database.ref('notification_queue').push().set({
-          'to': token,
-          'notification': {
-            'title': '⏰ Scheduled Appointment Expired',
-            'body': '$cleanTeacherName did not respond to your scheduled appointment.\n\n$message',
-          },
-          'data': {
-            'type': 'appointment_auto_rejected',
-            'studentNumber': studentNumber,
-            'teacherName': cleanTeacherName,
-            'click_action': 'FLUTTER_NOTIFICATION_CLICK',
-            'bigText': message,
-          },
-          'priority': 'high',
-          'createdAt': ServerValue.timestamp,
-        });
-        sentCount++;
-        debugPrint('   ✅ Queued notification for device token ${token.substring(0, 20)}...');
-      }
-    }
-    
-    debugPrint('✅ Auto-rejection notification queued for $sentCount device(s)');
+    await _database.ref('notification_queue').push().set({
+      'studentUid': studentUid,
+      'notification': {
+        'title': '⏰ Scheduled Appointment Expired',
+        'body': shortBody,
+      },
+      'data': {
+        'type': 'appointment_auto_rejected',
+        'studentNumber': studentNumber,
+        'teacherName': cleanTeacherName,
+        'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+        'bigText': longBody,
+      },
+      'priority': 'high',
+      'createdAt': ServerValue.timestamp,
+    });
+
+    debugPrint('✅ Auto-rejection notification queued for student $studentUid');
     debugPrint('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
   } catch (e, stackTrace) {
     debugPrint('❌ Error sending auto-rejection notification: $e');
@@ -1858,7 +2023,8 @@ Future<void> _sendImmediateAppointmentNotificationToTeacher(
       }
 
       String title = _getNotificationTitle(action, teacherName);
-      String body = _getNotificationBody(action, message, teacherName);
+      String shortBody = _getNotificationBody(action, null, teacherName); // Get base message without note
+      String longBody = _getNotificationBody(action, message, teacherName); // Get full message with note
 
       final Map<String, dynamic> dataPayload = {
           'type': 'appointment_response',
@@ -1869,14 +2035,14 @@ Future<void> _sendImmediateAppointmentNotificationToTeacher(
       };
 
       if (message != null && message.isNotEmpty) {
-        dataPayload['bigText'] = message;
+        dataPayload['bigText'] = longBody;
       }
 
       await _database.ref('notification_queue').push().set({
         'studentUid': studentUid,
         'notification': {
           'title': title,
-          'body': body,
+          'body': shortBody,
         },
         'data': dataPayload,
         'priority': 'high',
@@ -1935,6 +2101,8 @@ String _getNotificationBody(TeacherAction action, String? message, String teache
   return baseMessage;
 }
 
+
+
 Future<void> _sendCancellationNotification(
   String studentNumber,
   String teacherName,
@@ -1956,10 +2124,11 @@ Future<void> _sendCancellationNotification(
       final cleanTeacherName = teacherName.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
 
       String title = '🚫 Meeting Cancelled';
-      String body = '$cleanTeacherName has cancelled your appointment.';
+      String shortBody = 'Appointment Cancelled';
+      String longBody = '$cleanTeacherName has cancelled your appointment.';
       
       if (reason.isNotEmpty) {
-        body += '\n\nReason: $reason';
+        longBody += '\n\nReason: $reason';
       }
 
       final Map<String, dynamic> dataPayload = {
@@ -1971,14 +2140,14 @@ Future<void> _sendCancellationNotification(
       };
 
       if (reason.isNotEmpty) {
-        dataPayload['bigText'] = reason;
+        dataPayload['bigText'] = longBody;
       }
 
       await _database.ref('notification_queue').push().set({
         'studentUid': studentUid,
         'notification': {
           'title': title,
-          'body': body,
+          'body': shortBody,
         },
         'data': dataPayload,
         'priority': 'high',
@@ -2016,6 +2185,7 @@ Future<void> _sendCancellationNotification(
       // =============================================================
       // STUDENT: Notification at 5 minutes (wait is over)
       // =============================================================
+      final String studentWaitOverBody = 'Your $minutes minute wait is over. You can now proceed to your appointment.';
       await _database.ref('scheduled_notifications').push().set({
         'studentUid': studentUid,
         'studentNumber': studentNumber,
@@ -2023,10 +2193,11 @@ Future<void> _sendCancellationNotification(
         'type': 'wait_reminder',
         'scheduledFor': waitEndTime.millisecondsSinceEpoch,
         'title': '✅ Wait Period Over',
-        'body': 'Your $minutes minute wait is over. You can now proceed to your appointment.',
+        'body': studentWaitOverBody,
         'data': {
           'type': 'wait_reminder',
           'appointmentId': appointmentId,
+          'bigText': studentWaitOverBody,
         },
         'createdAt': ServerValue.timestamp,
       });
@@ -2034,17 +2205,19 @@ Future<void> _sendCancellationNotification(
       // =============================================================
       // TEACHER: Notification at 5 minutes (decision window starts)
       // =============================================================
+      final String teacherDecisionBody = '$studentName\'s $minutes minute wait has ended. You have 2 minutes to accept or cancel the meeting.';
       await _database.ref('scheduled_notifications').push().set({
         'teacherUid': teacherUid,
         'appointmentId': appointmentId,
         'type': 'wait_decision_window',
         'scheduledFor': waitEndTime.millisecondsSinceEpoch,
         'title': '⏰ Decision Required',
-        'body': '$studentName\'s $minutes minute wait has ended. You have 2 minutes to accept or cancel the meeting.',
+        'body': teacherDecisionBody,
         'data': {
           'type': 'wait_decision_window',
           'appointmentId': appointmentId,
           'studentNumber': studentNumber,
+          'bigText': teacherDecisionBody,
         },
         'createdAt': ServerValue.timestamp,
       });
@@ -2052,86 +2225,46 @@ Future<void> _sendCancellationNotification(
       // =============================================================
       // TEACHER: Warning notification at 6 minutes (1 minute left)
       // =============================================================
+      final String teacherWarningBody = 'You have 1 minute left to respond to $studentName\'s appointment or it will be auto-cancelled.';
       await _database.ref('scheduled_notifications').push().set({
         'teacherUid': teacherUid,
         'appointmentId': appointmentId,
         'type': 'wait_decision_warning',
         'scheduledFor': waitEndTime.add(const Duration(minutes: 1)).millisecondsSinceEpoch,
         'title': '⚠️ 1 Minute Remaining',
-        'body': 'You have 1 minute left to respond to $studentName\'s appointment or it will be auto-cancelled.',
+        'body': teacherWarningBody,
         'data': {
           'type': 'wait_decision_warning',
           'appointmentId': appointmentId,
           'studentNumber': studentNumber,
+          'bigText': teacherWarningBody,
         },
         
         'createdAt': ServerValue.timestamp,
       });
       
       // =============================================================
-      // NEW: Send immediate confirmation notification to STUDENT
-      // =============================================================
-      final studentTokensSnapshot = await _database.ref('fcm_tokens/$studentUid').get();
-      if (studentTokensSnapshot.exists) {
-        final studentTokensData = Map<String, dynamic>.from(studentTokensSnapshot.value as Map);
-        
-        for (var tokenEntry in studentTokensData.values) {
-          final tokenData = Map<String, dynamic>.from(tokenEntry as Map);
-          final token = tokenData['token'] as String?;
-          
-          if (token != null) {
-            await _database.ref('notification_queue').push().set({
-              'to': token,
-              'notification': {
-                'title': '⏳ Please Wait 5 Minutes',
-                'body': 'Your professor has asked you to wait $minutes minutes before proceeding.',
-              },
-              'data': {
-                'type': 'wait_5_minutes_confirmation',
-                'appointmentId': appointmentId,
-                'waitMinutes': minutes.toString(),
-                'click_action': 'FLUTTER_NOTIFICATION_CLICK',
-              },
-              'priority': 'high',
-              'createdAt': ServerValue.timestamp,
-            });
-          }
-        }
-        debugPrint('📱 Immediate wait confirmation sent to student $studentUid');
-      }
-      
-      // =============================================================
       // NEW: Send immediate confirmation notification to TEACHER
       // =============================================================
-      final teacherTokensSnapshot = await _database.ref('fcm_tokens/$teacherUid').get();
-      if (teacherTokensSnapshot.exists) {
-        final teacherTokensData = Map<String, dynamic>.from(teacherTokensSnapshot.value as Map);
-        
-        for (var tokenEntry in teacherTokensData.values) {
-          final tokenData = Map<String, dynamic>.from(tokenEntry as Map);
-          final token = tokenData['token'] as String?;
-          
-          if (token != null) {
-            await _database.ref('notification_queue').push().set({
-              'to': token,
-              'notification': {
-                'title': '✅ Student Asked to Wait',
-                'body': '$studentName has been asked to wait $minutes minutes. You\'ll be reminded when the wait period ends.',
-              },
-              'data': {
-                'type': 'wait_5_minutes_teacher_confirmation',
-                'appointmentId': appointmentId,
-                'studentNumber': studentNumber,
-                'waitMinutes': minutes.toString(),
-                'click_action': 'FLUTTER_NOTIFICATION_CLICK',
-              },
-              'priority': 'high',
-              'createdAt': ServerValue.timestamp,
-            });
-          }
-        }
-        debugPrint('📱 Immediate wait confirmation sent to teacher $teacherUid');
-      }
+      final String teacherConfirmationBody = '$studentName has been asked to wait $minutes minutes. You\'ll be reminded when the wait period ends.';
+      await _database.ref('notification_queue').push().set({
+        'teacherUid': teacherUid,
+        'notification': {
+          'title': '✅ Student Asked to Wait',
+          'body': teacherConfirmationBody,
+        },
+        'data': {
+          'type': 'wait_5_minutes_teacher_confirmation',
+          'appointmentId': appointmentId,
+          'studentNumber': studentNumber,
+          'waitMinutes': minutes.toString(),
+          'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+          'bigText': teacherConfirmationBody,
+        },
+        'priority': 'high',
+        'createdAt': ServerValue.timestamp,
+      });
+      debugPrint('📱 Immediate wait confirmation sent to teacher $teacherUid');
       
       debugPrint('⏰ Wait reminders scheduled for student $studentNumber in $minutes minutes');
     } else {
@@ -2153,50 +2286,28 @@ Future<void> _sendScheduledAppointmentDueNotification(
     debugPrint('   Teacher UID: $teacherUid');
     debugPrint('   Student Name: $studentName');
     debugPrint('   Appointment ID: $appointmentId');
-    
-    // Get teacher's FCM tokens
-    final tokensSnapshot = await _database.ref('fcm_tokens/$teacherUid').get();
-    
-    if (!tokensSnapshot.exists) {
-      debugPrint('❌ No FCM tokens found for teacher $teacherUid');
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      return;
-    }
-    
-    final tokensData = Map<String, dynamic>.from(tokensSnapshot.value as Map);
-    debugPrint('✅ Found ${tokensData.length} FCM token(s) for teacher');
-    
-    // Clean student name
+
     final cleanStudentName = studentName.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
-    debugPrint('   Cleaned Student Name: $cleanStudentName');
-    
-    // Send notification to each device token
-   
-    for (var tokenEntry in tokensData.values) {
-      final tokenData = Map<String, dynamic>.from(tokenEntry as Map);
-      final token = tokenData['token'] as String?;
-      
-      if (token != null) {
-        await _database.ref('notification_queue').push().set({
-          'to': token,
-          'notification': {
-            'title': '⏰ Scheduled Appointment Ready',
-            'body': '$cleanStudentName\'s appointment time has arrived. You have 2 minutes to respond or it will be auto-cancelled.',
-          },
-          'data': {
-            'type': 'scheduled_appointment_due',
-            'studentName': cleanStudentName,
-            'appointmentId': appointmentId,
-            'urgency': 'high',
-            'click_action': 'FLUTTER_NOTIFICATION_CLICK',
-          },
-          'priority': 'high',
-          'createdAt': ServerValue.timestamp,
-        });
-        
-      }
-    }
-  
+
+    await _database.ref('notification_queue').push().set({
+      'teacherUid': teacherUid,
+      'notification': {
+        'title': '⏰ Scheduled Appointment Ready',
+        'body': '$cleanStudentName\'s appointment time has arrived. You have 2 minutes to respond or it will be auto-cancelled.',
+      },
+      'data': {
+        'type': 'scheduled_appointment_due',
+        'studentName': cleanStudentName,
+        'appointmentId': appointmentId,
+        'urgency': 'high',
+        'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+      },
+      'priority': 'high',
+      'createdAt': ServerValue.timestamp,
+    });
+
+    debugPrint('✅ Scheduled due notification queued for teacher $teacherUid');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   } catch (e, stackTrace) {
     debugPrint('❌ Error sending scheduled appointment due notification: $e');
     debugPrint('Stack trace: $stackTrace');
@@ -2208,25 +2319,33 @@ Future<void> _sendScheduledAppointmentReminder(
   String teacherUid,
   String studentName,
   DateTime scheduledTime,
+  String appointmentId,
+  String studentNumber,
 ) async {
   try {
-    // Schedule a reminder 4 minutes before appointment
+    // Schedule a reminder 4 minutes before the appointment.
     final reminderTime = scheduledTime.subtract(const Duration(minutes: 4));
-    
-    if (reminderTime.isAfter(DateTime.now())) {
-      await _database.ref('scheduled_notifications').push().set({
-        'teacherUid': teacherUid,
-        'type': 'scheduled_appointment_reminder',
-        'scheduledFor': reminderTime.millisecondsSinceEpoch,
-        'title': '📅 Upcoming Appointment',
-        'body': 'Appointment with $studentName in 4 minutes',
-        'data': {
-          'type': 'appointment_reminder',
-        },
-        'createdAt': ServerValue.timestamp,
-      });
-      debugPrint('⏰ Scheduled 4-minute reminder for appointment with $studentName');
-    }
+    final timeString = '${scheduledTime.hour.toString().padLeft(2, '0')}:${scheduledTime.minute.toString().padLeft(2, '0')}';
+
+    final String body = 'Reminder: Appointment with $studentName at $timeString';
+
+    await _database.ref('scheduled_notifications').push().set({
+      'teacherUid': teacherUid,
+      'appointmentId': appointmentId,
+      'studentNumber': studentNumber,
+      'type': 'scheduled_appointment_reminder',
+      'scheduledFor': reminderTime.millisecondsSinceEpoch,
+      'title': '📅 Upcoming Appointment',
+      'body': body,
+      'data': {
+        'type': 'appointment_reminder',
+        'studentName': studentName,
+        'bigText': body,
+      },
+      'createdAt': ServerValue.timestamp,
+    });
+    debugPrint('⏰ Scheduled reminder for appointment with $studentName');
+
   } catch (e) {
     debugPrint('Error scheduling appointment reminder: $e');
   }

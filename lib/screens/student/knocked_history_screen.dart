@@ -460,20 +460,22 @@ class _AppointmentHistoryCard extends StatelessWidget {
                         //   size: 11,
                         //   color: Colors.blue[600],
                         // ),
-                        const SizedBox(width: 1),
+                        const SizedBox(width: 0),
                         Text(
                           'Scheduled: ',
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 10,
                             color: Colors.blue[600],
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        Text(
-                          DateFormat('M/d/yyyy, h:mm a').format(displayDate),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.blue[700],
+                        Flexible(
+                          child: Text(
+                            DateFormat('M/d/yyyy, h:mm a').format(displayDate),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.blue[700],
+                            ),
                           ),
                         ),
                       ],
@@ -487,7 +489,7 @@ class _AppointmentHistoryCard extends StatelessWidget {
                         ? 'Created: ${DateFormat('M/d/yyyy, h:mm a').format(appointment.createdAt)}'
                         : DateFormat('M/d/yyyy, h:mm a').format(appointment.createdAt),
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 10,
                       color: Colors.grey[600],
                     ),
                   ),

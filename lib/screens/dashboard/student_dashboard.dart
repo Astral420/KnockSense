@@ -10,6 +10,7 @@ import 'package:knocksense/provider/teacher_service_provider.dart';
 import 'package:knocksense/services/teacher_service.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:knocksense/widgets/student_dash/teacher_detail_modal.dart';
+import 'package:knocksense/widgets/common/notification_icon_widget.dart';
 
 class StudentDashboard extends ConsumerWidget {
   const StudentDashboard({Key? key}) : super(key: key);
@@ -65,10 +66,7 @@ class StudentDashboard extends ConsumerWidget {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.notifications_outlined),
-                              onPressed: () {},
-                            ),
+                            const NotificationIconWidget(),
                           
                           ],
                         ),

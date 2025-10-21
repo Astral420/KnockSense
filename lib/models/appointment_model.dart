@@ -15,6 +15,7 @@ class AppointmentModel {
   final TeacherAction? teacherAction;
   final DateTime? scheduledTime; // This now represents the actual appointment date/time
   final bool isScheduled; // New field to distinguish scheduled vs immediate appointments
+  final bool isSpecial;
   final bool notificationSent; // Track if near-appointment notification was sent
 
   String get cleanedStudentName {
@@ -104,6 +105,7 @@ class AppointmentModel {
     this.teacherAction,
     this.scheduledTime,
     this.isScheduled = false,
+    this.isSpecial = false,
     this.notificationSent = false,
   });
 
@@ -165,6 +167,7 @@ class AppointmentModel {
           : null,
       scheduledTime: parseToDateTime(json['scheduledTime']),
       isScheduled: json['isScheduled'] ?? false,
+      isSpecial: json['isSpecial'] ?? false,
       notificationSent: json['notificationSent'] ?? false,
     );
   }
@@ -185,6 +188,7 @@ class AppointmentModel {
     'teacherAction': teacherAction?.name,
     'scheduledTime': scheduledTime?.millisecondsSinceEpoch,
     'isScheduled': isScheduled,
+    'isSpecial': isSpecial,
     'notificationSent': notificationSent,
   };
 
@@ -205,6 +209,7 @@ class AppointmentModel {
     TeacherAction? teacherAction,
     DateTime? scheduledTime,
     bool? isScheduled,
+    bool? isSpecial,
     bool? notificationSent,
   }) {
     return AppointmentModel(
@@ -224,6 +229,7 @@ class AppointmentModel {
       teacherAction: teacherAction ?? this.teacherAction,
       scheduledTime: scheduledTime ?? this.scheduledTime,
       isScheduled: isScheduled ?? this.isScheduled,
+      isSpecial: isSpecial ?? this.isSpecial,
       notificationSent: notificationSent ?? this.notificationSent,
     );
   }

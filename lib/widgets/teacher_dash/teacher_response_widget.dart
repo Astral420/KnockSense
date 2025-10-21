@@ -8,6 +8,7 @@ import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/provider/appointment_provider.dart';
 import 'package:knocksense/widgets/common/useravatar_widget.dart';
 
+
 class TeacherResponseWidget extends ConsumerStatefulWidget {
   final AppointmentModel appointment;
   final UserModel currentUser;
@@ -31,6 +32,219 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
   void dispose() {
     _noteController.dispose();
     super.dispose();
+  }
+
+  Widget _buildSpecialAppointmentUI() {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE0F2F1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF14B8A6).withOpacity(0.4)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Instant (Web) Appointment',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF0F766E),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "This appointment was created from the web dashboard. Accepting will immediately mark it as completed.",
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        TextField(
+          controller: _noteController,
+          onChanged: (_) => _clearNoteError(),
+          maxLines: 3,
+          decoration: InputDecoration(
+            hintText: 'Optionally add a note for the student...',
+            hintStyle: TextStyle(
+              color: Colors.grey[400],
+              fontSize: 14,
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.grey[200]!,
+                width: _hasNoteError ? 2 : 1,
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.grey[200]!,
+                width: _hasNoteError ? 2 : 1,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : const Color(0xFF14B8A6),
+                width: 2,
+              ),
+            ),
+            contentPadding: const EdgeInsets.all(16),
+          ),
+        ),
+        if (_hasNoteError) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Please provide a reason for rejection',
+            style: TextStyle(
+              color: Colors.red,
+              fontSize: 12,
+            ),
+          ),
+        ],
+        const SizedBox(height: 20),
+        Column(
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isResponding ? null : () => _handleSpecialAccept(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  disabledBackgroundColor: Colors.grey[300],
+                ),
+                child: _isResponding
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text(
+                        'Accept & Complete',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isResponding ? null : () => _handleSpecialReject(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFEF4444),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  disabledBackgroundColor: Colors.grey[300],
+                ),
+                child: const Text(
+                  'Reject Meeting',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: _isResponding ? null : () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.grey[600],
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _handleSpecialAccept() async {
+    await _handleSpecialResponse(accept: true);
+  }
+
+  Future<void> _handleSpecialReject() async {
+    if (_noteController.text.trim().isEmpty) {
+      setState(() {
+        _hasNoteError = true;
+      });
+      return;
+    }
+    await _handleSpecialResponse(accept: false);
+  }
+
+  Future<void> _handleSpecialResponse({required bool accept}) async {
+    setState(() {
+      _isResponding = true;
+    });
+
+    try {
+      final appointmentNotifier = ref.read(appointmentNotifierProvider.notifier);
+      final note = _noteController.text.trim();
+
+      final success = await appointmentNotifier.respondToSpecialAppointment(
+        studentNumber: widget.appointment.studentNumber,
+        appointmentId: widget.appointment.appointmentId,
+        teacherUid: widget.currentUser.uid,
+        accept: accept,
+        teacherResponse: note.isNotEmpty ? note : null,
+      );
+
+      if (success && mounted) {
+        Navigator.pop(context);
+        _showSuccessMessage(
+          accept ? 'Meeting accepted and marked as completed. Student has been notified.' : 'Meeting rejected. Student has been notified.',
+        );
+      } else if (mounted) {
+        _showErrorMessage('Failed to respond to appointment. Please try again.');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorMessage('An error occurred: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isResponding = false;
+        });
+      }
+    }
   }
 
   String _getTimeAgo(DateTime dateTime) {
@@ -101,6 +315,7 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
   Widget build(BuildContext context) {
     // Check appointment type and status
     final isScheduledDue = _isScheduledAppointmentRequiringResponse();
+    final isSpecialInstant = widget.appointment.isSpecial;
     final isWaiting = widget.appointment.status == AppointmentStatus.accepted && 
                       widget.appointment.teacherAction == TeacherAction.wait5Minutes;
     final isMeetNow = widget.appointment.status == AppointmentStatus.accepted && 
@@ -169,6 +384,38 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                  )
+                else if (isSpecialInstant && widget.appointment.status == AppointmentStatus.pending)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF14B8A6),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Text(
+                      'Instant (Web)',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  )
+                else if (widget.appointment.isScheduled && widget.appointment.status == AppointmentStatus.pending)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2563EB),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Text(
+                      'Scheduled',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -221,6 +468,8 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
             if (isScheduledDue && widget.appointment.status == AppointmentStatus.pending) ...[
               // For scheduled appointments when professor was offline/busy
               _buildScheduledAppointmentResponseUI(),
+            ] else if (isSpecialInstant && widget.appointment.status == AppointmentStatus.pending) ...[
+              _buildSpecialAppointmentUI(),
             ] else if (isWaiting) ...[
               _buildWaitingManagementUI(),
             ] else if (isMeetLater) ...[

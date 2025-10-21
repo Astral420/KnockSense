@@ -11,6 +11,7 @@ import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:knocksense/widgets/teacher_dash/add_note_modal.dart';
 import 'package:knocksense/screens/teacher/recent_knocks_screen.dart';
 import 'package:knocksense/widgets/common/useravatar_widget.dart';
+import 'package:knocksense/widgets/common/notification_icon_widget.dart';
 
 class TeacherDashboard extends ConsumerStatefulWidget {
   const TeacherDashboard({Key? key}) : super(key: key);
@@ -127,44 +128,7 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Stack(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.notifications_outlined),
-                                  onPressed: () {
-                                    // Navigate to Recent Knocks when notification icon is pressed
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => const RecentKnocksScreen(),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                // Show red dot if there are active appointments
-                                activeAppointments.when(
-                                  data: (appointments) {
-                                    if (appointments.isNotEmpty) {
-                                      return Positioned(
-                                        right: 8,
-                                        top: 8,
-                                        child: Container(
-                                          width: 8,
-                                          height: 8,
-                                          decoration: const BoxDecoration(
-                                            color: Colors.red,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                    return const SizedBox.shrink();
-                                  },
-                                  loading: () => const SizedBox.shrink(),
-                                  error: (_, __) => const SizedBox.shrink(),
-                                ),
-                              ],
-                            ),
+                            const NotificationIconWidget(),
                           ],
                         ),
                       ],
