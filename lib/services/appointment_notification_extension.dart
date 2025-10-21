@@ -40,6 +40,7 @@ extension AppointmentNotificationExtension on FirebaseDatabase {
     required String studentName,
     required String appointmentId,
     required String studentNumber,
+    bool isSpecial = false,
   }) async {
     final cleanStudentName = studentName.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
     
@@ -52,6 +53,7 @@ extension AppointmentNotificationExtension on FirebaseDatabase {
         'appointmentId': appointmentId,
         'studentNumber': studentNumber,
         'studentName': cleanStudentName,
+        'isSpecial': isSpecial,
       },
     );
   }

@@ -4,12 +4,23 @@
 const admin = require('firebase-admin');
 const {onValueCreated, onValueWritten} = require('firebase-functions/v2/database');
 const {onSchedule} = require('firebase-functions/v2/scheduler');
+const {onRequest} = require('firebase-functions/v2/https');
+const {CloudTasksClient} = require('@google-cloud/tasks');
 
 try {
 	admin.initializeApp();
 } catch (e) {}
 
 const db = admin.database();
+
+const PROJECT_ID = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT;
+const REGION = 'asia-southeast1';
+const QUEUE_ID = process.env.SCHEDULED_NOTIFICATIONS_QUEUE || 'scheduled-notifications-queue';
+const tasksClient = new CloudTasksClient();
+const QUEUE_PATH = PROJECT_ID ? tasksClient.queuePath(PROJECT_ID, REGION, QUEUE_ID) : null;
+const SCHEDULED_HANDLER_URL = process.env.SCHEDULED_NOTIFICATION_HANDLER_URL || (PROJECT_ID
+  ? `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/dispatchScheduledNotification`
+  : null);
 
 function buildFcmMessageFromQueueItem(item) {
 	const hasExplicitNotification = !!item.notification;
@@ -99,75 +110,239 @@ exports.processNotificationQueue = onValueCreated({
 });
 
 // ✅ CORRECT: Create user notification ONCE, then send to all tokens
-exports.processScheduledNotifications = onValueCreated({
-	ref: '/scheduled_notifications/{notificationId}',
-	region: 'asia-southeast1',
-	instance: 'knocksense-21180-default-rtdb',
+exports.queueScheduledNotification = onValueCreated({
+  ref: '/scheduled_notifications/{notificationId}',
+  region: REGION,
+  instance: 'knocksense-21180-default-rtdb',
 }, async (event) => {
-    const data = event.data.val();
-    
-    // ✅ STEP 1: Create ONE user notification (outside token loop)
-    if (data.teacherUid && data.appointmentId && data.studentNumber) {
-      try {
-        // Determine notification type
-        let notificationType = 'appointmentDue';
-        let title = data.title || '⏰ Appointment Ready';
-        let body = data.body || 'Appointment notification';
-        
-        if (data.type === 'scheduled_appointment_reminder') {
-          notificationType = 'scheduledAppointmentReminder';
-          title = data.title || '📅 Upcoming Appointment';
-        } else if (data.type === 'scheduled_appointment_due') {
-          notificationType = 'appointmentDue';
-          title = data.title || '⏰ Appointment Ready';
-        }
-        
-        // Create ONE user notification
-        const notificationRef = db.ref(`user_notifications/${data.teacherUid}`).push();
-        await notificationRef.set({
-          userId: data.teacherUid,
-          title: title,
-          body: body,
-          type: notificationType,
-          createdAt: admin.database.ServerValue.TIMESTAMP,
-          isRead: false,
-          data: {
-            appointmentId: data.appointmentId,
-            studentNumber: data.studentNumber,
-            studentName: data.data?.studentName || 'Student',
-            urgency: data.type === 'scheduled_appointment_due' ? 'high' : 'medium',
-          },
-        });
-        console.log(`✅ Created ONE user notification (${notificationType}): ${data.appointmentId}`);
-      } catch (e) {
-        console.error('❌ Error creating user notification:', e);
-      }
+  const data = event.data.val();
+  const notificationId = event.params.notificationId;
+
+  if (!data) return;
+
+  if (!PROJECT_ID || !QUEUE_PATH || !SCHEDULED_HANDLER_URL) {
+    console.error('❌ Missing project configuration for Cloud Tasks');
+    return;
+  }
+
+  try {
+    const scheduledFor = Number(data.scheduledFor);
+    const nowSeconds = Math.floor(Date.now() / 1000) + 5;
+    const targetSeconds = Number.isFinite(scheduledFor) ? Math.floor(scheduledFor / 1000) : nowSeconds;
+    const scheduleSeconds = Math.max(nowSeconds, targetSeconds);
+
+    const payload = {
+      notificationId,
+      teacherUid: data.teacherUid || null,
+      studentUid: data.studentUid || null,
+    };
+
+    const taskRequest = {
+      parent: QUEUE_PATH,
+      task: {
+        scheduleTime: {seconds: scheduleSeconds},
+        httpRequest: {
+          httpMethod: 'POST',
+          url: SCHEDULED_HANDLER_URL,
+          headers: {'Content-Type': 'application/json'},
+          body: Buffer.from(JSON.stringify(payload)).toString('base64'),
+        },
+      },
+    };
+
+    if (process.env.SCHEDULED_TASK_SERVICE_ACCOUNT) {
+      taskRequest.task.httpRequest.oidcToken = {
+        serviceAccountEmail: process.env.SCHEDULED_TASK_SERVICE_ACCOUNT,
+      };
     }
-    
-    // ✅ STEP 2: Send FCM to ALL tokens (separate from user notification)
-    const tokensSnapshot = await db.ref(`fcm_tokens/${data.teacherUid}`).get();
-    
-    if (tokensSnapshot.exists()) {
-      const tokens = tokensSnapshot.val();
-      
-      // Send FCM notification to each device
-      for (const tokenEntry of Object.values(tokens)) {
-        try {
-          // Your existing FCM sending code
-          await sendToToken(tokenEntry.token, {
-            notification: {
-              title: data.title,
-              body: data.body,
-            },
-            data: data.data || {},
-          });
-          console.log(`✅ Sent FCM to token`);
-        } catch (e) {
-          console.error('❌ Error sending FCM:', e);
-        }
-      }
-    }
+
+    const [response] = await tasksClient.createTask(taskRequest);
+    await event.data.ref.child('taskName').set(response.name);
+    console.log(`✅ Scheduled notification task for ${notificationId} at ${scheduleSeconds}`);
+  } catch (e) {
+    console.error('❌ Failed to create scheduled notification task:', e);
+  }
 });
+
+exports.dispatchScheduledNotification = onRequest({region: REGION}, async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).send('Method Not Allowed');
+    return;
+  }
+
+  const queueNameHeader = req.header('x-cloudtasks-queuename');
+  if (queueNameHeader && !queueNameHeader.endsWith(QUEUE_ID)) {
+    res.status(403).send('Forbidden');
+    return;
+  }
+
+  const {notificationId} = req.body || {};
+  if (!notificationId) {
+    res.status(400).json({error: 'notificationId is required'});
+    return;
+  }
+
+  const snapshot = await db.ref(`scheduled_notifications/${notificationId}`).get();
+  if (!snapshot.exists()) {
+    res.status(204).send();
+    return;
+  }
+
+  const data = snapshot.val();
+  const teacherUid = data.teacherUid;
+  const studentUid = data.studentUid;
+
+  try {
+    await Promise.all([
+      dispatchTeacherNotification({
+        notificationId,
+        teacherUid,
+        data,
+      }),
+      dispatchStudentNotification({
+        notificationId,
+        studentUid,
+        data,
+      }),
+    ]);
+  } finally {
+    await db.ref(`scheduled_notifications/${notificationId}`).remove();
+  }
+
+  res.status(200).json({status: 'processed', notificationId});
+});
+
+async function dispatchTeacherNotification({notificationId, teacherUid, data}) {
+  if (!teacherUid || !data.appointmentId) return;
+
+  let notificationType = 'appointmentDue';
+  let title = data.title || '⏰ Appointment Ready';
+  let body = data.body || 'Appointment notification';
+
+  if (data.type === 'scheduled_appointment_reminder') {
+    notificationType = 'scheduledAppointmentReminder';
+    title = data.title || '📅 Upcoming Appointment';
+  } else if (data.type === 'scheduled_appointment_due') {
+    notificationType = 'appointmentDue';
+    title = data.title || '⏰ Appointment Ready';
+  } else if (data.type === 'wait_decision_window') {
+    notificationType = 'appointmentDue';
+    title = data.title || '⏰ Decision Required';
+  } else if (data.type === 'wait_decision_warning') {
+    notificationType = 'appointmentDue';
+    title = data.title || '⚠️ 1 Minute Remaining';
+  }
+
+  try {
+    const notificationRef = db.ref(`user_notifications/${teacherUid}`).push();
+    const notificationData = {
+      userId: teacherUid,
+      title,
+      body,
+      type: notificationType,
+      createdAt: admin.database.ServerValue.TIMESTAMP,
+      isRead: false,
+      data: {
+        type: data.type,
+      },
+    };
+
+    if (data.appointmentId) {
+      notificationData.data.appointmentId = data.appointmentId;
+    }
+    if (data.studentNumber) {
+      notificationData.data.studentNumber = data.studentNumber;
+    }
+    if (data.data?.studentName) {
+      notificationData.data.studentName = data.data.studentName;
+    }
+
+    await notificationRef.set(notificationData);
+    console.log(`✅ [${notificationId}] Teacher notification logged for ${teacherUid}`);
+  } catch (err) {
+    console.error('❌ Error creating teacher notification during dispatch:', err);
+  }
+
+  try {
+    const tokens = await getUserTokens(String(teacherUid));
+    if (tokens.length > 0) {
+      const messageBase = buildFcmMessageFromQueueItem({
+        notification: {
+          title,
+          body,
+        },
+        data: data.data || {},
+      });
+
+      await Promise.allSettled(tokens.map((token) => sendToToken(token, messageBase)));
+      console.log(`✅ [${notificationId}] Sent teacher FCM notifications`);
+    } else {
+      console.log(`ℹ️ [${notificationId}] No FCM tokens found for teacher ${teacherUid}`);
+    }
+  } catch (err) {
+    console.error('❌ Error sending teacher FCM notifications during dispatch:', err);
+  }
+}
+
+async function dispatchStudentNotification({notificationId, studentUid, data}) {
+  if (!studentUid) return;
+
+  let notificationType = 'general';
+  let title = data.title || 'Notification';
+  let body = data.body || '';
+
+  if (data.type === 'wait_reminder') {
+    notificationType = 'scheduledAppointmentReminder';
+    title = data.title || '✅ Wait Period Over';
+  }
+
+  try {
+    const notificationRef = db.ref(`user_notifications/${studentUid}`).push();
+    const notificationData = {
+      userId: studentUid,
+      title,
+      body,
+      type: notificationType,
+      createdAt: admin.database.ServerValue.TIMESTAMP,
+      isRead: false,
+      data: {
+        type: data.type,
+      },
+    };
+
+    if (data.appointmentId) {
+      notificationData.data.appointmentId = data.appointmentId;
+    }
+    if (data.studentNumber) {
+      notificationData.data.studentNumber = data.studentNumber;
+    }
+
+    await notificationRef.set(notificationData);
+    console.log(`✅ [${notificationId}] Student notification logged for ${studentUid}`);
+  } catch (err) {
+    console.error('❌ Error creating student notification during dispatch:', err);
+  }
+
+  try {
+    const tokens = await getUserTokens(String(studentUid));
+    if (tokens.length > 0) {
+      const messageBase = buildFcmMessageFromQueueItem({
+        notification: {
+          title,
+          body,
+        },
+        data: data.data || {},
+      });
+
+      await Promise.allSettled(tokens.map((token) => sendToToken(token, messageBase)));
+      console.log(`✅ [${notificationId}] Sent student FCM notifications`);
+    } else {
+      console.log(`ℹ️ [${notificationId}] No FCM tokens found for student ${studentUid}`);
+    }
+  } catch (err) {
+    console.error('❌ Error sending student FCM notifications during dispatch:', err);
+  }
+}
 
 // Notify subscribers when teacher active_status changes
 exports.onTeacherStatusChange = onValueWritten({

@@ -757,36 +757,36 @@ String _formatTime(DateTime date) {
   return DateFormat('h:mm a').format(date);
 }
 
-// Alternative more detailed version if you want relative time for today:
-String _formatAppointmentDateDetailed(DateTime date) {
-  final now = DateTime.now();
-  final difference = now.difference(date);
+// // Alternative more detailed version if you want relative time for today:
+// String _formatAppointmentDateDetailed(DateTime date) {
+//   final now = DateTime.now();
+//   final difference = now.difference(date);
   
-  // Get the start of today (midnight)
-  final todayStart = DateTime(now.year, now.month, now.day);
-  final dateStart = DateTime(date.year, date.month, date.day);
-  final dayDifference = todayStart.difference(dateStart).inDays;
+//   // Get the start of today (midnight)
+//   final todayStart = DateTime(now.year, now.month, now.day);
+//   final dateStart = DateTime(date.year, date.month, date.day);
+//   final dayDifference = todayStart.difference(dateStart).inDays;
   
-  if (dayDifference == 0) {
-    // Same calendar day - show relative time
-    if (difference.inMinutes < 60) {
-      return '${difference.inMinutes} min${difference.inMinutes != 1 ? 's' : ''} ago';
-    } else if (difference.inHours < 12) {
-      return '${difference.inHours} hour${difference.inHours != 1 ? 's' : ''} ago';
-    } else {
-      return 'Today ${_formatTime(date)}';
-    }
-  } else if (dayDifference == 1) {
-    return 'Yesterday ${_formatTime(date)}';
-  } else if (dayDifference < 7) {
-    return '$dayDifference days ago';
-  } else if (dayDifference < 30) {
-    final weeks = (dayDifference / 7).floor();
-    return weeks == 1 ? '1 week ago' : '$weeks weeks ago';
-  } else {
-    return DateFormat('MMM d, yyyy').format(date);
-  }
-}
+//   if (dayDifference == 0) {
+//     // Same calendar day - show relative time
+//     if (difference.inMinutes < 60) {
+//       return '${difference.inMinutes} min${difference.inMinutes != 1 ? 's' : ''} ago';
+//     } else if (difference.inHours < 12) {
+//       return '${difference.inHours} hour${difference.inHours != 1 ? 's' : ''} ago';
+//     } else {
+//       return 'Today ${_formatTime(date)}';
+//     }
+//   } else if (dayDifference == 1) {
+//     return 'Yesterday ${_formatTime(date)}';
+//   } else if (dayDifference < 7) {
+//     return '$dayDifference days ago';
+//   } else if (dayDifference < 30) {
+//     final weeks = (dayDifference / 7).floor();
+//     return weeks == 1 ? '1 week ago' : '$weeks weeks ago';
+//   } else {
+//     return DateFormat('MMM d, yyyy').format(date);
+//   }
+// }
 
 Color _getAppointmentStatusColor(AppointmentStatus status) {
   switch (status) {
