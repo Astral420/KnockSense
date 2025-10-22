@@ -10,13 +10,15 @@ class NotificationIconWidget extends ConsumerWidget {
   final double iconSize;
   final Color? badgeColor;
   final Color? badgeTextColor;
+  final IconData iconData;
 
   const NotificationIconWidget({
     Key? key,
     this.iconColor,
-    this.iconSize = 28,
+    this.iconSize = 26,
     this.badgeColor,
     this.badgeTextColor,
+    this.iconData = Icons.notifications_off_outlined,
   }) : super(key: key);
 
   @override
@@ -28,7 +30,7 @@ class NotificationIconWidget extends ConsumerWidget {
         clipBehavior: Clip.none,
         children: [
           Icon(
-            Icons.notifications_outlined,
+            iconData,
             size: iconSize,
             color: iconColor ?? const Color(0xFF6B4423),
           ),

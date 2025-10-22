@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/provider/auth_provider.dart';
+import 'package:knocksense/widgets/common/notification_icon_widget.dart';
 import 'package:knocksense/widgets/common/useravatar_widget.dart';
 
 class TeacherMoreScreen extends ConsumerWidget {
@@ -58,9 +59,8 @@ class TeacherMoreScreen extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(width: 16),
-                          const Icon(
-                            Icons.notifications_outlined,
-                            size: 24,
+                          const NotificationIconWidget(
+                            iconColor: Colors.black,
                           ),
                         ],
                       ),

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:knocksense/models/appointment_model.dart';
 import 'package:knocksense/provider/appointment_provider.dart';
+import 'package:knocksense/widgets/common/notification_icon_widget.dart';
 import 'dart:async';
 
 // Debounce timer for date range updates
@@ -103,9 +104,8 @@ class KnockedHistoryPage extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      IconButton(
-                        icon: const Icon(Icons.notifications_outlined),
-                        onPressed: () {},
+                      const NotificationIconWidget(
+                        iconColor: Colors.black,
                       ),
                     ],
                   ),
@@ -471,7 +471,7 @@ class _AppointmentHistoryCard extends StatelessWidget {
                         ),
                         Flexible(
                           child: Text(
-                            DateFormat('M/d/yyyy, h:mm a').format(displayDate),
+                            DateFormat('MM/dd/yy, h:mm a').format(displayDate),
                             style: TextStyle(
                               fontSize: 10,
                               color: Colors.blue[700],

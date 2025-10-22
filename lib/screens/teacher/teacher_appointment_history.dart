@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/models/appointment_model.dart';
 import 'package:knocksense/provider/appointment_provider.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
+import 'package:knocksense/widgets/common/notification_icon_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:knocksense/widgets/common/useravatar_widget.dart';
 
@@ -59,26 +60,8 @@ class TeacherAppointmentHistory extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Stack(
-                            children: [
-                              const Icon(
-                                Icons.notifications,
-                                color: Color(0xFFFFD700),
-                                size: 24,
-                              ),
-                              Positioned(
-                                right: 0,
-                                top: 0,
-                                child: Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                            ],
+                          const NotificationIconWidget(
+                            iconColor: Colors.black,
                           ),
                         ],
                       ),
@@ -297,7 +280,7 @@ class TeacherAppointmentHistory extends ConsumerWidget {
                         ),
                         Flexible(
                           child: Text(
-                            DateFormat('M/d/yyyy, h:mm a').format(displayDate),
+                            DateFormat('MM/dd/yy, h:mm a').format(displayDate),
                             style: TextStyle(
                               fontSize: 11,
                               color: Colors.blue[700],

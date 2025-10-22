@@ -338,6 +338,8 @@ Widget build(BuildContext context, WidgetRef ref) {
       return const Color(0xFFFFE0B2); // Light orange for waiting
     } else if (isMeetNow) {
       return const Color(0xFFE8F5E8); // Light green for meeting
+    } else if (appointment.isSpecial) {
+      return const Color(0xFFFFF4D6); // Soft yellow/cream for instant web appointments (Image 2 style)
     } else if (appointment.isScheduled) {
       return const Color(0xFFE3F2FD); // Light blue for scheduled
     } else {
@@ -376,6 +378,22 @@ Widget build(BuildContext context, WidgetRef ref) {
       ),
       child: const Text(
         'Later',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  } else if (appointment.isSpecial) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color:  Color(0xFF0F766E), // Orange for instant web
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Text(
+        'Instant (Web)',
         style: TextStyle(
           color: Colors.white,
           fontSize: 11,

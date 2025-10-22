@@ -109,6 +109,66 @@ exports.processNotificationQueue = onValueCreated({
 	}
 });
 
+exports.onSpecialAppointmentCreated = onValueCreated({
+	ref: '/appointments/{studentNumber}/{appointmentId}',
+	region: 'asia-southeast1',
+	instance: 'knocksense-21180-default-rtdb',
+}, async (event) => {
+	const snapshot = event.data;
+	const appointment = snapshot.val();
+	if (!appointment) return;
+
+	if (appointment.isSpecial !== true) return;
+	if (appointment.status && appointment.status !== 'pending') return;
+
+	const teacherUid = appointment.teacherUid;
+	const studentNumber = appointment.studentNumber;
+	const appointmentId = event.params.appointmentId;
+	if (!teacherUid || !studentNumber || !appointmentId) return;
+
+	const rawStudentName = appointment.studentName || 'A student';
+	const cleanStudentName = String(rawStudentName).replace(/\s*\(.*?\)/g, '').trim();
+
+	const queuePayload = {
+		teacherUid: String(teacherUid),
+		notification: {
+			title: '🔔 New Appointment Request',
+			body: `${cleanStudentName} would like to meet with you now.`,
+		},
+		data: {
+			type: 'immediate_appointment_request',
+			studentName: cleanStudentName,
+			appointmentId: String(appointmentId),
+			studentNumber: String(studentNumber),
+			isSpecial: 'true',
+			click_action: 'FLUTTER_NOTIFICATION_CLICK',
+		},
+		priority: 'high',
+		createdAt: admin.database.ServerValue.TIMESTAMP,
+	};
+
+	try {
+		await db.ref('notification_queue').push(queuePayload);
+		const teacherNotificationRef = db.ref(`user_notifications/${teacherUid}`).push();
+		await teacherNotificationRef.set({
+			userId: String(teacherUid),
+			title: '🔔 New Appointment Request',
+			body: `${cleanStudentName} is requesting an appointment right now.`,
+			type: 'immediateAppointment',
+			createdAt: admin.database.ServerValue.TIMESTAMP,
+			isRead: false,
+			data: {
+				appointmentId: String(appointmentId),
+				studentNumber: String(studentNumber),
+				studentName: cleanStudentName,
+				isSpecial: true,
+			},
+		});
+	} catch (err) {
+		console.error('❌ Error handling special appointment notification:', err);
+	}
+});
+
 // ✅ CORRECT: Create user notification ONCE, then send to all tokens
 exports.queueScheduledNotification = onValueCreated({
   ref: '/scheduled_notifications/{notificationId}',
@@ -360,10 +420,15 @@ exports.onTeacherStatusChange = onValueWritten({
 		const nameSnap = await db.ref(`roles/teacher/${teacherUid}/displayName`).get();
 		if (nameSnap.exists()) displayName = String(nameSnap.val());
 	} catch (e) {}
-	const title = `${displayName} is ${String(after)}`;
+	const cleanDisplayName = displayName.replace(/\s*\(.*?\)\s*$/, '').trim();
+	const status = String(after);
+	const title = `${cleanDisplayName} is ${status}`;
+	const body = status === 'online'
+		? `${cleanDisplayName} is available for appointments.`
+		: `${cleanDisplayName} is unavailable. Schedule an appointment instead.`;
 	const base = buildFcmMessageFromQueueItem({
-		notification: {title, body: 'Tap to view details'},
-		data: {type: 'teacher_status', teacherUid: teacherUid, status: String(after), displayName},
+		notification: {title, body},
+		data: {type: 'teacher_status', teacherUid: teacherUid, status: String(after), displayName: cleanDisplayName},
 	});
 	try {
 		await sendToTopic(topic, base);
@@ -386,16 +451,19 @@ exports.onTeacherStatusChange = onValueWritten({
 			if (studentSubscriptions[teacherUid] && studentSubscriptions[teacherUid].subscribed === true) {
 			  const notificationRef = db.ref(`user_notifications/${studentUid}`).push();
 			  
+			  const notificationBody = status === 'online'
+				? `${cleanDisplayName} is available for appointments.`
+				: `${cleanDisplayName} is unavailable. Schedule an appointment instead.`;
 			  const notification = {
 				userId: studentUid,
-				title: `${statusEmoji} ${displayName} is ${statusText}`,
-				body: 'Tap to view details',
+				title: `${statusEmoji} ${cleanDisplayName} is ${statusText}`,
+				body: notificationBody,
 				type: 'teacherStatusChange',
 				createdAt: admin.database.ServerValue.TIMESTAMP,
 				isRead: false,
 				data: {
 				  teacherUid: teacherUid,
-				  teacherName: displayName,
+				  teacherName: cleanDisplayName,
 				  status: String(after),
 				},
 			  };

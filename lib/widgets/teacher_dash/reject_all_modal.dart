@@ -230,8 +230,8 @@ class _RejectAllModalState extends ConsumerState<RejectAllModal> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
       child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        padding: const EdgeInsets.only(
+          bottom: 16,
           left: 20,
           right: 20,
           top: 16,
