@@ -46,6 +46,7 @@ Adafruit_INA219 ina219;
 
 // Firebase instances  
 FirebaseData fbdo;
+FirebaseData fbStream; // Stream for door unlock commands
 FirebaseAuth auth;
 FirebaseConfig firebaseConfig;
 
@@ -70,6 +71,7 @@ unsigned long sendDataPrevMillis = 0;
 unsigned long doorUnlockTime = 0;
 bool isDoorUnlocked = false;
 bool firebaseConnected = false;
+bool unlockStreamActive = false;
 
 // Firebase credentials (loaded from config)
 String API_KEY;
@@ -91,6 +93,7 @@ void logAttendance(String teacherID, uint8_t reader);
 void doorLogic(String uid, uint8_t reader);
 void initReader();
 void checkManualDoorUnlock();
+void processUnlockStream();
 void executeManualUnlock(String teacherID, String teacherName, String teacherUid, int duration);
 void logManualUnlockEvent(String teacherID, String teacherName, String teacherUid, int duration);
 void checkBatteryStatus();
@@ -193,7 +196,11 @@ void loop() {
   // Core system functions
   checkRFID();
   manageDoorLock();
-  checkManualDoorUnlock(); 
+  processUnlockStream();
+  if (!unlockStreamActive) {
+    // Fallback polling only when stream inactive
+    checkManualDoorUnlock();
+  }
 
  
   
@@ -305,6 +312,15 @@ void connectFirebase() {
     
     
     wsHandler.sendNetworkEvent("firebase_connected", "Database connection established");
+    // Start streaming manual unlock commands
+    Serial.println("📡 Starting stream: /door_unlock_commands ...");
+    if (Firebase.RTDB.beginStream(&fbStream, "/door_unlock_commands")) {
+      unlockStreamActive = true;
+      Serial.println("✅ Stream connected to /door_unlock_commands");
+    } else {
+      unlockStreamActive = false;
+      Serial.println("❌ Failed to begin stream: " + fbStream.errorReason());
+    }
   } else {
     firebaseConnected = false;
     Serial.println("❌ Firebase authentication failed: " + fbdo.errorReason());
@@ -469,7 +485,7 @@ void checkManualDoorUnlock() {
   
   lastManualUnlockCheck = millis();
   
-  String path = "/door_unlock";
+  String path = "/door_unlock_commands";
   
   // Get all door unlock requests
   if (Firebase.RTDB.get(&fbdo, path)) {
@@ -479,7 +495,7 @@ void checkManualDoorUnlock() {
       String key, value;
       int type = 0;
       
-      // Iterate through all teacher unlock requests
+      // Iterate through all teacher unlock commands
       for (size_t i = 0; i < len; i++) {
         json.iteratorGet(i, type, key, value);
         
@@ -503,7 +519,7 @@ void checkManualDoorUnlock() {
             unlockDuration = durationData.intValue;
           }
           
-          Serial.println("\n🚪 MANUAL UNLOCK REQUEST DETECTED");
+          Serial.println("\n🚪 MANUAL UNLOCK COMMAND DETECTED");
           Serial.println("   Teacher ID: " + key);
           Serial.println("   Teacher Name: " + teacherName);
           Serial.println("   Duration: " + String(unlockDuration) + "ms");
@@ -518,15 +534,78 @@ void checkManualDoorUnlock() {
   } else {
     // No unlock requests found or error occurred
     if (fbdo.errorCode() != FIREBASE_ERROR_PATH_NOT_EXIST) {
-      Serial.println("❌ Error checking manual unlock requests: " + fbdo.errorReason());
+      Serial.println("❌ Error checking manual unlock commands: " + fbdo.errorReason());
+    }
+  }
+}
+
+// Stream handler for unlock commands
+void processUnlockStream() {
+  if (!firebaseConnected || !unlockStreamActive) return;
+  // Read any available stream updates
+  if (!Firebase.RTDB.readStream(&fbStream)) {
+    // If stream read fails, mark inactive and retry later
+    static unsigned long lastRetry = 0;
+    if (millis() - lastRetry > 5000) {
+      Serial.println("⚠️ Stream read failed: " + fbStream.errorReason());
+      unlockStreamActive = false;
+      lastRetry = millis();
+    }
+    return;
+  }
+
+  if (!fbStream.streamAvailable()) return;
+
+  String dataPath = fbStream.dataPath(); // e.g., /{teacherID} or /{teacherID}/status
+  String eventType = fbStream.eventType();
+  (void)eventType; // unused for now
+
+  // Case 1: Full node written (JSON with pending status)
+  if (fbStream.dataTypeEnum() == firebase_rtdb_data_type_json) {
+    FirebaseJson *json = fbStream.jsonObjectPtr();
+    FirebaseJsonData statusData, nameData, uidData, durData;
+    if (json->get(statusData, F("/status")) && statusData.stringValue == "pending") {
+      String teacherID = dataPath.startsWith("/") ? dataPath.substring(1) : dataPath;
+      String teacherName = json->get(nameData, F("/teacherName")) ? nameData.stringValue : String("");
+      String teacherUid = json->get(uidData, F("/teacherUid")) ? uidData.stringValue : String("");
+      int unlockDuration = json->get(durData, F("/unlockDuration")) ? durData.intValue : 4000;
+      Serial.println("\n📡 Stream detected pending command for: " + teacherID);
+      executeManualUnlock(teacherID, teacherName, teacherUid, unlockDuration);
+    }
+    return;
+  }
+
+  // Case 2: Only status updated to pending
+  if (fbStream.dataTypeEnum() == firebase_rtdb_data_type_string) {
+    String leaf = dataPath;
+    if (leaf.endsWith("/status")) {
+      String teacherID = leaf.substring(1, leaf.length() - 7); // trim leading '/' and '/status'
+      String status = fbStream.stringData();
+      if (status == "pending") {
+        // Fetch full command node to get details
+        String nodePath = String("/door_unlock_commands/") + teacherID;
+        if (Firebase.RTDB.get(&fbdo, nodePath)) {
+          if (fbdo.dataType() == "json") {
+            FirebaseJson &json = fbdo.jsonObject();
+            FirebaseJsonData nameData, uidData, durData;
+            String teacherName = json.get(nameData, "/teacherName") ? nameData.stringValue : String("");
+            String teacherUid = json.get(uidData, "/teacherUid") ? uidData.stringValue : String("");
+            int unlockDuration = json.get(durData, "/unlockDuration") ? durData.intValue : 4000;
+            Serial.println("\n📡 Stream (status) detected pending command for: " + teacherID);
+            executeManualUnlock(teacherID, teacherName, teacherUid, unlockDuration);
+          }
+        } else {
+          Serial.println("❌ Failed to fetch command node: " + fbdo.errorReason());
+        }
+      }
     }
   }
 }
 
 void executeManualUnlock(String teacherID, String teacherName, String teacherUid, int duration) {
-  // Update status to 'unlocked' in Firebase
-  String statusPath = "/door_unlock/" + teacherID + "/status";
-  String unlockedAtPath = "/door_unlock/" + teacherID + "/unlockedAt";
+  // Update status to 'unlocked' in Firebase (commands path)
+  String statusPath = "/door_unlock_commands/" + teacherID + "/status";
+  String unlockedAtPath = "/door_unlock_commands/" + teacherID + "/unlockedAt";
   
   if (Firebase.RTDB.setString(&fbdo, statusPath, "unlocked") && 
       Firebase.RTDB.setTimestamp(&fbdo, unlockedAtPath)) {
@@ -598,9 +677,9 @@ void manageDoorLock() {
         // Handle manual unlock completion
         Serial.println("🔒 Manual unlock timeout reached (" + String(manualUnlockDuration) + "ms) - locking door");
         
-        // Update Firebase status to 'completed'
-        String statusPath = "/door_unlock/" + currentManualUnlockTeacherID + "/status";
-        String completedAtPath = "/door_unlock/" + currentManualUnlockTeacherID + "/completedAt";
+        // Update Firebase status to 'completed' (commands path)
+        String statusPath = "/door_unlock_commands/" + currentManualUnlockTeacherID + "/status";
+        String completedAtPath = "/door_unlock_commands/" + currentManualUnlockTeacherID + "/completedAt";
         
         Firebase.RTDB.setString(&fbdo, statusPath, "completed");
         Firebase.RTDB.setTimestamp(&fbdo, completedAtPath);
