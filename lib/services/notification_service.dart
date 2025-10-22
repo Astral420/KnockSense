@@ -184,6 +184,8 @@ class NotificationService {
       channelDescription: 'Notifications for appointment updates',
       importance: Importance.high,
       priority: Priority.high,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('notification_sound'),
       icon: '@mipmap/launcher_icon',
       styleInformation: bigTextStyleInformation,
     );

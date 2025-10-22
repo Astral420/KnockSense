@@ -20,6 +20,11 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   bool _showOnlyUnread = false;
 
+  String _formatRoleLabel(UserRole role) {
+    final name = role.name.replaceAll('_', ' ');
+    return name[0].toUpperCase() + name.substring(1);
+  }
+
   void _showClearAllConfirmation(BuildContext context, UserModel user) {
     showDialog(
       context: context,
@@ -174,13 +179,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           const Expanded(
             child: Center(
               child: Text(
-                'Notifications',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF6B4423),
+                  'Notifications',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF6B4423),
+                  ),
                 ),
-              ),
             ),
           ),
           if (hasNotifications)

@@ -22,15 +22,19 @@ class TeacherDashboard extends ConsumerStatefulWidget {
 
 // Helper method to get responsive card aspect ratio based on screen size
 double _getCardAspectRatio(BuildContext context) {
-  final screenHeight = MediaQuery.of(context).size.height;
-  
-  // For smaller screens, use taller aspect ratio to prevent overflow
-  if (screenHeight < 700) {
-    return 1.2; // Taller cards for small screens
-  } else if (screenHeight < 800) {
-    return 1.1; // Medium height for medium screens
+  final size = MediaQuery.of(context).size;
+  final screenHeight = size.height;
+  final screenWidth = size.width;
+
+  // Provide more vertical space on compact displays to avoid overflow
+  if (screenWidth < 360 || screenHeight < 700) {
+    return 0.72;
+  } else if (screenWidth < 390 || screenHeight < 780) {
+    return 0.8;
+  } else if (screenWidth < 430 || screenHeight < 860) {
+    return 0.88;
   } else {
-    return 1.0; // Square cards for larger screens
+    return 0.95;
   }
 }
 
@@ -107,30 +111,7 @@ class _TeacherDashboardState extends ConsumerState<TeacherDashboard> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: const Text(
-                                'Teacher',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const NotificationIconWidget(),
-                          ],
-                        ),
+                        const NotificationIconWidget(),
                       ],
                     ),
                   ),

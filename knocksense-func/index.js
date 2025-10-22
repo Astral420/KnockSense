@@ -38,8 +38,10 @@ function buildFcmMessageFromQueueItem(item) {
 	const android = {
 		priority: 'high',
 		notification: {
-			channelId: 'appointments'
-			
+			channelId: 'appointments',
+			sound: 'default',
+			defaultVibrateTimings: true,
+			defaultSound: true,
 		},
 	};
 

@@ -281,8 +281,8 @@ Future<UserModel?> signInWithEmailPassword(
       // Update the user's photoUrl in the database
       // Setting photoUrl to null here will remove it from Firebase
       await _database.ref('users/$uid/photoUrl').set(photoUrl); // <-- 2. This now accepts null
-      
-      if (photoUrl != null) {
+
+      if (photoUrl != null && photoUrl.isNotEmpty) {
         print('Successfully updated user photo URL for $uid');
       } else {
         print('Successfully cleared stale photo URL for $uid');

@@ -76,22 +76,6 @@ class AdminDashboard extends ConsumerWidget {
             ),
           ),
           const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: kText,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              'Admin',
-              style: GoogleFonts.roboto(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
           IconButton(
             icon: SvgPicture.asset(
               'assets/icons/bell.svg',

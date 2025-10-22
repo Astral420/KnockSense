@@ -36,31 +36,8 @@ class MorePage extends ConsumerWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              'Student',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          const NotificationIconWidget(
-                            iconColor: Colors.black,
-                          ),
-                        ],
+                      const NotificationIconWidget(
+                        iconColor: Colors.black,
                       ),
                     ],
                   ),
