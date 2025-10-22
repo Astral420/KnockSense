@@ -81,9 +81,6 @@ void WebSocketHandler::sendSystemStatus() {
     doc["heap_free"] = ESP.getFreeHeap();
     doc["uptime"] = millis();
 
-    doc["battery_voltage"] = currentBatteryVoltage;
-    doc["battery_percent"] = currentBatteryPercentage;
-    
     if (WiFi.status() == WL_CONNECTED) {
         doc["ssid"] = WiFi.SSID();
         doc["ip"] = WiFi.localIP().toString();

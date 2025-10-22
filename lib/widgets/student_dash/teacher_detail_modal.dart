@@ -30,6 +30,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   bool _showSchedulingOptions = false;
+  bool _hasNoteError = false;
   String? _lastKnownStatus; // Track status changes
   String? _errorMessage; // NEW: Add error message state
   String? _infoMessage; // NEW: Add info message state
@@ -617,7 +618,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Add a note (optional)',
+          'Add a note (required)',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
@@ -627,6 +628,13 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
         const SizedBox(height: 8),
         TextField(
           controller: _noteController,
+          onChanged: (_) {
+            if (_hasNoteError) {
+              setState(() {
+                _hasNoteError = false;
+              });
+            }
+          },
           maxLines: 3,
           maxLength: 200,
           decoration: InputDecoration(
@@ -639,20 +647,39 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
             fillColor: Colors.grey[50],
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[200]!),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.grey[200]!,
+                width: _hasNoteError ? 2 : 1,
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[200]!),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.grey[200]!,
+                width: _hasNoteError ? 2 : 1,
+              ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.blue, width: 2),
+              borderSide: BorderSide(
+                color: _hasNoteError ? Colors.red : Colors.blue,
+                width: 2,
+              ),
             ),
             contentPadding: const EdgeInsets.all(16),
             counterText: '', // Hide character counter
           ),
         ),
+        if (_hasNoteError) ...[
+          const SizedBox(height: 8),
+          const Text(
+            'Please provide a message for your appointment request.',
+            style: TextStyle(
+              color: Colors.red,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -785,6 +812,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                             _showSchedulingOptions = true;
                             _errorMessage = null; // Clear any existing errors
                             _infoMessage = null;
+                            _hasNoteError = false;
                           });
                         }
                       : null,
@@ -899,6 +927,7 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
                       _selectedTime = null;
                       _errorMessage = null; // Clear errors when canceling
                       _infoMessage = null;
+                      _hasNoteError = false;
                     });
                   },
                   style: OutlinedButton.styleFrom(
@@ -1249,6 +1278,16 @@ Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentU
     return;
   }
 
+  final noteText = _noteController.text.trim();
+  if (noteText.isEmpty) {
+    setState(() {
+      _hasNoteError = true;
+      _errorMessage = null;
+      _infoMessage = null;
+    });
+    return;
+  }
+
   if (_selectedDate == null || _selectedTime == null) {
     setState(() {
       _errorMessage = 'Please select both date and time.';
@@ -1299,12 +1338,10 @@ Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentU
     }
     
     final appointmentService = ref.read(appointmentServiceProvider);
-    final note = _noteController.text.trim();
-    
     final result = await appointmentService.createAppointment(
       student: currentUser,
       teacher: teacher,
-      studentNote: note.isNotEmpty ? note : null,
+      studentNote: noteText,
       scheduledTime: scheduledDateTime,
       isScheduled: true,
     );
@@ -1371,11 +1408,21 @@ Future<void> _handleScheduleAppointment(TeacherModel teacher, UserModel currentU
     try {
       final appointmentService = ref.read(appointmentServiceProvider);
       final note = _noteController.text.trim();
+
+      if (note.isEmpty) {
+        setState(() {
+          _hasNoteError = true;
+          _errorMessage = null;
+          _infoMessage = null;
+          _isScheduling = false;
+        });
+        return;
+      }
       
       final result = await appointmentService.createAppointment(
         student: currentUser,
         teacher: teacher,
-        studentNote: note.isNotEmpty ? note : null,
+        studentNote: note,
         isScheduled: false, // Immediate appointment
       );
       

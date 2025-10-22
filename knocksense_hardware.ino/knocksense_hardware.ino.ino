@@ -30,8 +30,6 @@
 #define RST_2 4
 
 
-#define BATTERY_MAX_VOLTAGE 12.6 
-#define BATTERY_MIN_VOLTAGE 9.6  
 
 
 
@@ -57,12 +55,6 @@ bool isManualUnlock = false;
 String currentManualUnlockTeacherID = "";
 unsigned long manualUnlockDuration = 4000;
 
-float currentBatteryVoltage = 0.0;
-float current_mA = 0.0;
-float shunt_mV = 0.0;
-int currentBatteryPercentage = 0;
-unsigned long lastBatteryCheck = 0;
-const unsigned long BATTERY_CHECK_INTERVAL = 10000;
 
 
 
@@ -141,16 +133,6 @@ void setup() {
   // Initialize hardware
   Serial.println("\n🔧 Initializing Hardware...");
 
-  if (!ina219.begin()) {
-    Serial.println("❌ Failed to find INA219 chip");
-  } else {
-    Serial.println("✅ INA219 sensor found");
-  }
-  ina219.setCalibration_32V_2A();
-  // + GET INITIAL BATTERY READING
-  updateBatteryReadings(); 
-  Serial.printf("   Initial Battery: %.2fV (%d%%)\n", currentBatteryVoltage, currentBatteryPercentage);
-
 
   SPI.begin();
   initReader();
@@ -213,7 +195,6 @@ void loop() {
   manageDoorLock();
   checkManualDoorUnlock(); 
 
-  checkBatteryStatus();
  
   
 
@@ -271,46 +252,7 @@ void loadConfigurationValues() {
   Serial.println("   Firebase DB: " + DATABASE_URL.substring(0, 30) + "...");
 }
 
-void checkBatteryStatus() {
-  if (millis() - lastBatteryCheck > BATTERY_CHECK_INTERVAL) {
-    lastBatteryCheck = millis();
-    updateBatteryReadings();
-    
-    
-    Serial.printf("🔋 Battery Update: %.2fV (%d%%)\n", currentBatteryVoltage, currentBatteryPercentage);
 
-    const float CHARGE_THRESHOLD_mA = 50.0; 
-
-    Serial.println("  Current (mA): "); Serial.print(current_mA);
-    if (current_mA > CHARGE_THRESHOLD_mA) {
-      Serial.println("STATUS: Charging");
-    } else if (current_mA < -CHARGE_THRESHOLD_mA) {
-      Serial.println("STATUS: Discharging");
-    } else {
-      Serial.println("STATUS: Idle / very small current");
-    }
-
-    shunt_mV = ina219.getShuntVoltage_mV();
-    Serial.println("  Shunt V: "); Serial.print(shunt_mV);
-  }
-
-
-  
-}
-
-
-void updateBatteryReadings() {
-    currentBatteryVoltage = ina219.getBusVoltage_V();
-    currentBatteryPercentage = calculateBatteryPercentage(currentBatteryVoltage);
-
-    current_mA = ina219.getCurrent_mA();    
-
-}
-
-int calculateBatteryPercentage(float voltage) {
-  float percentage = ((voltage - BATTERY_MIN_VOLTAGE) / (BATTERY_MAX_VOLTAGE - BATTERY_MIN_VOLTAGE)) * 100.0;
-  return constrain((int)percentage, 0, 100);
-}
 
 // ---------- Network Update Handler ----------
 void handleNetworkUpdates() {
