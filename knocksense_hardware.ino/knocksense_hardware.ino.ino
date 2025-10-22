@@ -202,6 +202,19 @@ void loop() {
     checkManualDoorUnlock();
   }
 
+  // Attempt to re-establish stream periodically when Firebase is ready
+  static unsigned long lastStreamRetry = 0;
+  if (Firebase.ready() && !unlockStreamActive && (millis() - lastStreamRetry > 10000)) {
+    Serial.println("🔁 Attempting to restart unlock command stream...");
+    if (Firebase.RTDB.beginStream(&fbStream, "/door_unlock_commands")) {
+      unlockStreamActive = true;
+      Serial.println("✅ Stream reconnected to /door_unlock_commands");
+    } else {
+      Serial.println("❌ Stream restart failed: " + fbStream.errorReason());
+    }
+    lastStreamRetry = millis();
+  }
+
  
   
 
@@ -335,6 +348,9 @@ void mytokenStatusCallback(TokenInfo info) {
      Serial_Printf("Token info: type = %s, status = %s\n", getTokenType(info), getTokenStatus(info));
      Serial_Printf("Token error: %s\n", getTokenError(info).c_str());
      Serial.println("Error");
+     // Force reconnect path so we obtain a fresh token and restart streams
+     firebaseConnected = false;
+     unlockStreamActive = false;
   }
 }
 
