@@ -15,7 +15,7 @@ class NotificationIconWidget extends ConsumerWidget {
   const NotificationIconWidget({
     Key? key,
     this.iconColor,
-    this.iconSize = 26,
+    this.iconSize = 29,
     this.badgeColor,
     this.badgeTextColor,
     this.iconData = Icons.notifications_off_outlined,

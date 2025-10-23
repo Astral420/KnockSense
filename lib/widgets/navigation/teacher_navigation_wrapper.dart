@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:knocksense/screens/teacher/teacher_more_screen.dart';
 import 'package:knocksense/screens/teacher/teacher_appointment_history.dart';
 import 'package:knocksense/screens/dashboard/teacher_dashboard.dart';
+import 'package:knocksense/widgets/navigation/admin_nav_wrapper.dart';
 
 // Provider to manage the current tab index for teacher
 final teacherCurrentTabProvider = StateProvider<int>((ref) => 0);
@@ -31,36 +32,38 @@ class _TeacherNavigationWrapperState extends ConsumerState<MainNavigationTeacher
   Widget build(BuildContext context) {
     final currentTab = ref.watch(teacherCurrentTabProvider);
 
-    return Scaffold(
-      body: IndexedStack(
-        index: currentTab,
-        children: const [
-          TeacherDashboard(),           // Index 0
-          TeacherAppointmentHistory(),  // Index 1
-          TeacherMoreScreen(),          // Index 2
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.black,
-        unselectedItemColor: Colors.grey,
-        currentIndex: currentTab,
-        onTap: (index) => ref.read(teacherCurrentTabProvider.notifier).state = index,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.history),
-            label: 'History',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.more_horiz),
-            label: 'More',
-          ),
-        ],
-      ),
+    return SharedNavScaffold(
+      currentIndex: currentTab,
+      onIndexChanged: (index) =>
+          ref.read(teacherCurrentTabProvider.notifier).state = index,
+      pages: const [
+        TeacherDashboard(),
+        TeacherAppointmentHistory(),
+        TeacherMoreScreen(),
+      ],
+      items: const [
+        NavItemSvg(
+          assetUnselected: 'assets/icons/home_unselected.svg',
+          assetSelected: 'assets/icons/home_selected.svg',
+          iconWidth: 29,
+          iconHeight: 29,
+          semanticsLabel: 'Home',
+        ),
+        NavItemSvg(
+          assetUnselected: 'assets/icons/schedule.svg',
+          assetSelected: 'assets/icons/schedule.svg',
+          iconWidth: 29,
+          iconHeight: 29,
+          semanticsLabel: 'History',
+        ),
+        NavItemSvg(
+          assetUnselected: 'assets/icons/more_unselected.svg',
+          assetSelected: 'assets/icons/more_selected.svg',
+          iconWidth: 29,
+          iconHeight: 29,
+          semanticsLabel: 'More',
+        ),
+      ],
     );
   }
 }

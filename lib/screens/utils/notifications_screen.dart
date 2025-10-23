@@ -25,6 +25,51 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     return name[0].toUpperCase() + name.substring(1);
   }
 
+  String _getDisplayBody(NotificationModel notification) {
+    final body = notification.body;
+    final teacherResponse =
+        (notification.data?['teacherResponse'] as String?)?.trim();
+
+    if (teacherResponse == null || teacherResponse.isEmpty) {
+      return body;
+    }
+
+    final normalizedResponse = teacherResponse.toLowerCase();
+    final lines = body.split('\n');
+    final filteredLines = <String>[];
+
+    for (final line in lines) {
+      final trimmedLine = line.trim();
+      if (trimmedLine.isEmpty) {
+        continue;
+      }
+
+      final lowerLine = trimmedLine.toLowerCase();
+
+      if (lowerLine.startsWith('notes:')) {
+        final content = trimmedLine.substring(6).trim();
+        if (content.isEmpty || content.toLowerCase() == normalizedResponse) {
+          continue;
+        }
+      }
+
+      if (lowerLine.startsWith('teacher response:')) {
+        final content = trimmedLine.substring(17).trim();
+        if (content.isEmpty || content.toLowerCase() == normalizedResponse) {
+          continue;
+        }
+      }
+
+      filteredLines.add(trimmedLine);
+    }
+
+    if (filteredLines.isEmpty) {
+      return teacherResponse;
+    }
+
+    return filteredLines.join('\n');
+  }
+
   void _showClearAllConfirmation(BuildContext context, UserModel user) {
     showDialog(
       context: context,
@@ -326,6 +371,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     required NotificationModel notification,
     required UserModel user,
   }) {
+    final displayBody = _getDisplayBody(notification);
     return Dismissible(
       key: Key(notification.id),
       direction: DismissDirection.endToStart,
@@ -421,7 +467,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      notification.body,
+                      displayBody,
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.brown[700],
@@ -579,11 +625,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 
   void _showInfoDialog(BuildContext context, NotificationModel notification) {
+    final displayBody = _getDisplayBody(notification);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(notification.title),
-        content: Text(notification.body),
+        content: Text(displayBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -599,7 +646,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     NotificationModel notification,
   ) {
     final teacherResponse = notification.data?['teacherResponse'] as String?;
-    
+    final displayBody = _getDisplayBody(notification);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -608,7 +656,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(notification.body),
+            Text(displayBody),
             if (teacherResponse != null) ...[
               const SizedBox(height: 16),
               const Text(

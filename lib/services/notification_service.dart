@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
+import 'package:knocksense/models/notification_preferences.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -23,6 +24,17 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   final FirebaseDatabase _database = FirebaseDatabase.instance;
 
+  static const String _channelId = 'appointments_v2';
+  static const String _channelName = 'Appointment Notifications';
+  static const String _channelDescription = 'Notifications for appointment updates';
+  static const String _channelSoundResource = 'notification_sound';
+
+  NotificationPreferenceState _currentPreferences =
+      NotificationPreferenceState.defaults;
+  NotificationPreferenceState _lastAppliedChannelPreferences =
+      NotificationPreferenceState.defaults;
+  bool _hasCreatedChannel = false;
+
   // Store subscribed teacher UIDs locally (for this session)
   final Set<String> _subscribedTeachers = {};
 
@@ -34,7 +46,7 @@ class NotificationService {
 
     await _requestPermission();
     await _initializeLocalNotifications();
-    await _createNotificationChannel();
+    await _ensureNotificationChannel(_currentPreferences);
     
     final token = await _messaging.getToken();
     debugPrint('FCM Token: $token');
@@ -42,6 +54,75 @@ class NotificationService {
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
+  }
+
+  Future<void> applyPreferences(NotificationPreferenceState preferences) async {
+    _currentPreferences = preferences;
+    if (!_isPlatformSupported) {
+      return;
+    }
+    await _ensureNotificationChannel(preferences);
+  }
+
+  Future<void> _ensureNotificationChannel(
+    NotificationPreferenceState preferences,
+  ) async {
+    if (!_isPlatformSupported) {
+      return;
+    }
+
+    final androidImplementation = _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    if (androidImplementation == null) {
+      debugPrint('Android notifications implementation not available');
+      return;
+    }
+
+    final bool needsUpdate = !_hasCreatedChannel ||
+        _lastAppliedChannelPreferences.vibrateEnabled !=
+            preferences.vibrateEnabled ||
+        _lastAppliedChannelPreferences.soundEnabled !=
+            preferences.soundEnabled;
+
+    if (!needsUpdate) {
+      return;
+    }
+
+    try {
+      await androidImplementation.deleteNotificationChannel(_channelId);
+    } catch (e) {
+      debugPrint('Failed to delete existing channel $_channelId: $e');
+    }
+
+    if (!_hasCreatedChannel) {
+      try {
+        await androidImplementation.deleteNotificationChannel('appointments');
+        debugPrint('Removed legacy appointments channel');
+      } catch (_) {}
+    }
+
+    RawResourceAndroidNotificationSound? sound;
+    if (preferences.soundEnabled) {
+      sound = const RawResourceAndroidNotificationSound(
+        _channelSoundResource,
+      );
+    }
+
+    final channel = AndroidNotificationChannel(
+      _channelId,
+      _channelName,
+      description: _channelDescription,
+      importance: Importance.high,
+      playSound: preferences.soundEnabled,
+      enableVibration: preferences.vibrateEnabled,
+      sound: sound,
+    );
+
+    await androidImplementation.createNotificationChannel(channel);
+    _lastAppliedChannelPreferences = preferences;
+    _hasCreatedChannel = true;
   }
 
 
@@ -178,14 +259,19 @@ class NotificationService {
           )
         : null;
 
+    final androidPreferences = _currentPreferences;
+
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'appointments',
-      'Appointment Notifications',
-      channelDescription: 'Notifications for appointment updates',
+      _channelId,
+      _channelName,
+      channelDescription: _channelDescription,
       importance: Importance.high,
       priority: Priority.high,
-      playSound: true,
-      sound: RawResourceAndroidNotificationSound('notification_sound'),
+      playSound: androidPreferences.soundEnabled,
+      enableVibration: androidPreferences.vibrateEnabled,
+      sound: androidPreferences.soundEnabled
+          ? const RawResourceAndroidNotificationSound(_channelSoundResource)
+          : null,
       icon: '@mipmap/launcher_icon',
       styleInformation: bigTextStyleInformation,
     );
@@ -347,24 +433,4 @@ class NotificationService {
     if (!_isPlatformSupported) return;
     debugPrint('Message opened app: ${message.data}');
   }
-}
-
-Future<void> _createNotificationChannel() async {
-  const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'appointments',
-    'Appointment Notifications',
-    description: 'Notifications for appointment updates',
-    importance: Importance.high,
-    playSound: true,
-    enableVibration: true,
-  );
-
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-  
-  await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
-  
-  debugPrint('Android notification channel created');
 }

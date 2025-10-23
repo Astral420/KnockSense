@@ -39,44 +39,73 @@ class _AdminNavWrapperState extends ConsumerState<AdminNavWrapper> {
       const AdminMoreScreen(),
     ];
 
+    return SharedNavScaffold(
+      currentIndex: currentIndex,
+      onIndexChanged: (index) =>
+          ref.read(adminNavIndexProvider.notifier).state = index,
+      pages: pages,
+      items: const [
+        NavItemSvg(
+          assetUnselected: 'assets/icons/home_unselected.svg',
+          assetSelected: 'assets/icons/home_selected.svg',
+          iconWidth: 29,
+          iconHeight: 29,
+          semanticsLabel: 'Home',
+        ),
+        NavItemSvg(
+          assetUnselected: 'assets/icons/faculty_unselected.svg',
+          assetSelected: 'assets/icons/faculty_selected.svg',
+          iconWidth: 29,
+          iconHeight: 29,
+          semanticsLabel: 'Faculty',
+        ),
+        NavItemSvg(
+          assetUnselected: 'assets/icons/rfid_unselected.svg',
+          assetSelected: 'assets/icons/rfid_selected.svg',
+          iconWidth: 29,
+          iconHeight: 29,
+          semanticsLabel: 'RFID',
+        ),
+        NavItemSvg(
+          assetUnselected: 'assets/icons/more_unselected.svg',
+          assetSelected: 'assets/icons/more_selected.svg',
+          iconWidth: 29,
+          iconHeight: 29,
+          semanticsLabel: 'More',
+        ),
+      ],
+    );
+  }
+}
+
+class SharedNavScaffold extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onIndexChanged;
+  final List<Widget> pages;
+  final List<NavItemSvg> items;
+  final bool resizeToAvoidBottomInset;
+
+  const SharedNavScaffold({
+    super.key,
+    required this.currentIndex,
+    required this.onIndexChanged,
+    required this.pages,
+    required this.items,
+    this.resizeToAvoidBottomInset = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: resizeToAvoidBottomInset,
       body: IndexedStack(
         index: currentIndex,
         children: pages,
       ),
       bottomNavigationBar: AdminNavBar(
         currentIndex: currentIndex,
-        onTap: (index) => ref.read(adminNavIndexProvider.notifier).state = index,
-        items: const [
-          NavItemSvg(
-            assetUnselected: 'assets/icons/home_unselected.svg',
-            assetSelected: 'assets/icons/home_selected.svg',
-            iconWidth: 29,
-            iconHeight: 29,
-            semanticsLabel: 'Home',
-          ),
-          NavItemSvg(
-            assetUnselected: 'assets/icons/faculty_unselected.svg',
-            assetSelected: 'assets/icons/faculty_selected.svg',
-            iconWidth: 29,
-            iconHeight: 29,
-            semanticsLabel: 'Faculty',
-          ),
-          NavItemSvg(
-            assetUnselected: 'assets/icons/rfid_unselected.svg',
-            assetSelected: 'assets/icons/rfid_selected.svg',
-            iconWidth: 29,
-            iconHeight: 29,
-            semanticsLabel: 'RFID',
-          ),
-          NavItemSvg(
-            assetUnselected: 'assets/icons/more_unselected.svg',
-            assetSelected: 'assets/icons/more_selected.svg',
-            iconWidth: 29,
-            iconHeight: 29,
-            semanticsLabel: 'More',
-          ),
-        ],
+        onTap: onIndexChanged,
+        items: items,
       ),
     );
   }
@@ -110,6 +139,8 @@ class NavItemSvg {
   final double iconWidth;
   final double iconHeight;
   final String semanticsLabel;
+  final Color? selectedColor;
+  final Color? unselectedColor;
 
   const NavItemSvg({
     required this.assetUnselected,
@@ -117,6 +148,8 @@ class NavItemSvg {
     required this.iconWidth,
     required this.iconHeight,
     this.semanticsLabel = '',
+    this.selectedColor,
+    this.unselectedColor,
   });
 }
 
@@ -134,6 +167,9 @@ class AdminNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final itemCount = items.length;
+    final double itemWidth = kMenuWidth / itemCount;
+
     return Material(
       color: kBarBg,
       elevation: 0,
@@ -167,17 +203,21 @@ class AdminNavBar extends StatelessWidget {
                         final item = items[i];
                         return _NavItemButton(
                           selected: selected,
-                          width: kItemWidth,
+                          width: itemWidth,
                           height: kItemHeight,
                           iconWidth: item.iconWidth,
                           iconHeight: item.iconHeight,
                           svgPath: selected ? item.assetSelected : item.assetUnselected,
+                          color: selected ? item.selectedColor : item.unselectedColor,
                           onTap: () => onTap(i),
                           semanticsLabel: item.semanticsLabel,
                         );
                       }),
                     ),
-                    _TopIndicator(currentIndex: currentIndex),
+                    _TopIndicator(
+                      currentIndex: currentIndex,
+                      itemWidth: itemWidth,
+                    ),
                   ],
                 ),
               ),
@@ -197,6 +237,7 @@ class _NavItemButton extends StatelessWidget {
   final double iconHeight;
   final String svgPath;
   final String semanticsLabel;
+  final Color? color;
   final VoidCallback onTap;
 
   const _NavItemButton({
@@ -208,6 +249,7 @@ class _NavItemButton extends StatelessWidget {
     required this.svgPath,
     required this.onTap,
     this.semanticsLabel = '',
+    this.color,
   });
 
   @override
@@ -226,6 +268,8 @@ class _NavItemButton extends StatelessWidget {
               svgPath,
               width: iconWidth,
               height: iconHeight,
+              colorFilter:
+                  color != null ? ColorFilter.mode(color!, BlendMode.srcIn) : null,
             ),
             const SizedBox(height: 4),
             Text(
@@ -245,11 +289,12 @@ class _NavItemButton extends StatelessWidget {
 
 class _TopIndicator extends StatelessWidget {
   final int currentIndex;
-  const _TopIndicator({required this.currentIndex});
+  final double itemWidth;
+  const _TopIndicator({required this.currentIndex, required this.itemWidth});
 
   @override
   Widget build(BuildContext context) {
-    final double left = currentIndex * kItemWidth + (kItemWidth - kTopIndicatorW) / 2;
+    final double left = currentIndex * itemWidth + (itemWidth - kTopIndicatorW) / 2;
 
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 200),

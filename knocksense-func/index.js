@@ -11,6 +11,69 @@ try {
 	admin.initializeApp();
 } catch (e) {}
 
+// Transform manual door unlock requests -> commands with validation
+exports.onManualDoorUnlockRequest = onValueWritten({
+  ref: '/door_unlock_requests/{teacherID}',
+  region: 'asia-southeast1',
+  instance: 'knocksense-21180-default-rtdb',
+}, async (event) => {
+  const teacherID = event.params.teacherID;
+  const db2 = admin.database();
+  const after = event.data.after.val();
+  if (!after) return; // deleted
+
+  // Only act on pending requests
+  const status = String(after.status || '');
+  if (status !== 'pending') return;
+
+  const teacherUid = String(after.teacherUid || '');
+  const teacherName = String(after.teacherName || '');
+  const unlockDuration = Number(after.unlockDuration || 4000);
+
+  if (!teacherUid) {
+    // Mark invalid request
+    await event.data.after.ref.child('status').set('rejected');
+    await event.data.after.ref.child('reason').set('missing_teacher_uid');
+    await event.data.after.ref.child('processedAt').set(admin.database.ServerValue.TIMESTAMP);
+    return;
+  }
+
+  try {
+    // Validate teacher is not offline
+    const statusSnap = await db2.ref(`roles/teacher/${teacherUid}/active_status`).get();
+    const activeStatus = statusSnap.exists() ? String(statusSnap.val()) : 'offline';
+
+    if (activeStatus === 'offline') {
+      await event.data.after.ref.child('status').set('rejected');
+      await event.data.after.ref.child('reason').set('teacher_offline');
+      await event.data.after.ref.child('processedAt').set(admin.database.ServerValue.TIMESTAMP);
+      return;
+    }
+
+    // Write command for device to consume
+    const commandRef = db2.ref(`door_unlock_commands/${teacherID}`);
+    await commandRef.set({
+      status: 'pending',
+      teacherUid,
+      teacherName,
+      unlockDuration,
+      createdAt: admin.database.ServerValue.TIMESTAMP,
+      source: 'function',
+    });
+
+    // Mark request as queued/processed
+    await event.data.after.ref.update({
+      status: 'queued',
+      processedAt: admin.database.ServerValue.TIMESTAMP,
+    });
+  } catch (e) {
+    console.error('❌ Error handling manual unlock request:', e);
+    await event.data.after.ref.child('status').set('error');
+    await event.data.after.ref.child('reason').set('internal_error');
+    await event.data.after.ref.child('processedAt').set(admin.database.ServerValue.TIMESTAMP);
+  }
+});
+
 const db = admin.database();
 
 const PROJECT_ID = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT;
@@ -38,10 +101,10 @@ function buildFcmMessageFromQueueItem(item) {
 	const android = {
 		priority: 'high',
 		notification: {
-			channelId: 'appointments',
-			sound: 'default',
+			channelId: 'appointments_v2',
+			sound: 'notification_sound',
 			defaultVibrateTimings: true,
-			defaultSound: true,
+			// defaultSound: true,
 		},
 	};
 

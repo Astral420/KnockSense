@@ -537,227 +537,278 @@ Widget _buildDefaultAvatar(bool isBusy, bool isOffline) {
   Widget _buildManualDoorUnlockCard(dynamic userData) {
     final manualUnlockState = ref.watch(manualDoorUnlockProvider);
     final manualUnlockStatus = ref.watch(manualUnlockStatusProvider(userData.uid));
+    final statusAsync = ref.watch(teacherStatusProvider(userData.uid));
 
-    return GestureDetector(
-      onTap: () => _requestManualUnlock(userData),
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFFE8F5E8), // Light green
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Door Unlock',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2E7D32), // Dark green
-                ),
+    return statusAsync.when(
+      data: (status) {
+        final isOffline = status.toLowerCase() == 'offline';
+        return GestureDetector(
+          onTap: isOffline ? null : () => _requestManualUnlock(userData),
+          child: Opacity(
+            opacity: isOffline ? 0.6 : 1.0,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E8), // Light green
+                borderRadius: BorderRadius.circular(20),
               ),
-              const SizedBox(height: 4),
-              const Text(
-                'Open door for 4 seconds\nwithout RFID scan.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF388E3C), // Medium green
-                  height: 1.2,
-                ),
-              ),
-              const Spacer(),
-              
-              // Inner container with unlock button
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4CAF50), // Green
-                  borderRadius: BorderRadius.circular(15),
-                ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Show different states based on unlock status
-                    manualUnlockState.when(
-                      data: (success) {
-                        if (success) {
-                          return Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.check,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                              ),
-                            ],
-                          );
-                        } else {
-                          return Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.lock_open,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                              ),
-                            ],
-                          );
-                        }
-                      },
-                      loading: () => Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      error: (_, __) => Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.error,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                          ),
-                        ],
+                    const Text(
+                      'Door Unlock',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2E7D32), // Dark green
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isOffline
+                          ? 'Unavailable while offline'
+                          : 'Open door for 4 seconds\nwithout RFID scan.',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF388E3C), // Medium green
+                        height: 1.2,
+                      ),
+                    ),
+                    const Spacer(),
                     
-                    const SizedBox(height: 8),
-                    
-                    // Status text
-                    manualUnlockState.when(
-                      data: (success) {
-                        if (success) {
-                          return manualUnlockStatus.when(
-                            data: (status) {
-                              switch (status) {
-                                case 'pending':
-                                  return const Text(
-                                    'Requested...',
+                    // Inner container with unlock button
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4CAF50), // Green
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: Column(
+                        children: [
+                          // Show different states based on unlock status
+                          manualUnlockState.when(
+                            data: (success) {
+                              if (success) {
+                                return Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.2),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.check,
+                                        color: Colors.white,
+                                        size: 24,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              } else {
+                                return Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.2),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.lock_open,
+                                        color: Colors.white,
+                                        size: 24,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }
+                            },
+                            loading: () => Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            error: (_, __) => Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.error,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 8),
+                          
+                          // Status text
+                          manualUnlockState.when(
+                            data: (success) {
+                              if (success) {
+                                return manualUnlockStatus.when(
+                                  data: (status) {
+                                    switch (status) {
+                                      case 'pending':
+                                        return const Text(
+                                          'Requested...',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        );
+                                      case 'unlocked':
+                                        return const Text(
+                                          'Door Unlocked!',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        );
+                                      case 'completed':
+                                        return const Text(
+                                          'Completed',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        );
+                                      default:
+                                        return const Text(
+                                          'Tap to unlock',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        );
+                                    }
+                                  },
+                                  loading: () => const Text(
+                                    'Checking...',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.white,
-                                      fontWeight: FontWeight.bold,
                                     ),
-                                  );
-                                case 'unlocked':
-                                  return const Text(
-                                    'Door Unlocked!',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  );
-                                case 'completed':
-                                  return const Text(
-                                    'Completed',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  );
-                                default:
-                                  return const Text(
+                                  ),
+                                  error: (_, __) => const Text(
                                     'Tap to unlock',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
                                     ),
-                                  );
+                                  ),
+                                );
+                              } else {
+                                return const Text(
+                                  'Tap to unlock',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                );
                               }
                             },
                             loading: () => const Text(
-                              'Checking...',
+                              'Processing...',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.white,
                               ),
                             ),
                             error: (_, __) => const Text(
-                              'Tap to unlock',
+                              'Error - Try again',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.white,
-                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                          );
-                        } else {
-                          return const Text(
-                            'Tap to unlock',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          );
-                        }
-                      },
-                      loading: () => const Text(
-                        'Processing...',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white,
-                        ),
-                      ),
-                      error: (_, __) => const Text(
-                        'Error - Try again',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white,
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
+      loading: () {
+        // While loading status, show a disabled placeholder
+        return GestureDetector(
+          onTap: null,
+          child: Opacity(
+            opacity: 0.6,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E8),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Door Unlock (checking status...)',
+                    style: TextStyle(fontSize: 16, color: Color(0xFF2E7D32))),
+              ),
+            ),
+          ),
+        );
+      },
+      error: (_, __) {
+        // On error, disable to be safe
+        return GestureDetector(
+          onTap: null,
+          child: Opacity(
+            opacity: 0.6,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E8),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Door Unlock (status unavailable)',
+                    style: TextStyle(fontSize: 16, color: Color(0xFF2E7D32))),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

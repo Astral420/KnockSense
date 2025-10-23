@@ -75,18 +75,6 @@ class AdminDashboard extends ConsumerWidget {
               color: kText,
             ),
           ),
-          const Spacer(),
-          IconButton(
-            icon: SvgPicture.asset(
-              'assets/icons/bell.svg',
-              width: 21,
-              height: 24,
-              semanticsLabel: 'Notifications',
-            ),
-            onPressed: () {
-              
-            },
-          ),
         ],
       ),
     );
@@ -100,10 +88,6 @@ class AdminDashboard extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           children: [
-            // Search Bar
-            _buildSearchBar(),
-            const SizedBox(height: 12),
-
             // Quick Actions
             _buildQuickActions(context, ref),
             const SizedBox(height: 16),
@@ -115,43 +99,6 @@ class AdminDashboard extends ConsumerWidget {
             // Recent RFID Tags
             _buildRecentRfidTags(context, rfidTags),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Container(
-      height: 43,
-      decoration: BoxDecoration(
-        color: const Color(0xFFECEDF2),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0x03000000)),
-      ),
-      child: TextField(
-        style: GoogleFonts.roboto(
-          fontSize: 15,
-          fontWeight: FontWeight.w400,
-          color: kText,
-        ),
-        decoration: InputDecoration(
-          hintText: 'Search Faculty Members',
-          hintStyle: GoogleFonts.roboto(
-            fontSize: 15,
-            fontWeight: FontWeight.w400,
-            color: const Color(0xFF565E6C),
-          ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.fromLTRB(16, 9, 16, 8),
-          prefixIcon: Padding(
-            padding: const EdgeInsets.all(12),
-            child: SvgPicture.asset(
-              'assets/icons/search.svg',
-              width: 20,
-              height: 20,
-              semanticsLabel: 'Search',
-            ),
-          ),
         ),
       ),
     );

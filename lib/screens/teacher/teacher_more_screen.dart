@@ -2,9 +2,15 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/widgets/common/notification_icon_widget.dart';
 import 'package:knocksense/widgets/common/useravatar_widget.dart';
+import 'package:knocksense/provider/notification_preferences_provider.dart';
+import 'package:knocksense/models/notification_preferences.dart';
+
+final teacherMoreExpandSettingsProvider = StateProvider<bool>((ref) => false);
 
 class TeacherMoreScreen extends ConsumerWidget {
   const TeacherMoreScreen({Key? key}) : super(key: key);
@@ -13,6 +19,7 @@ class TeacherMoreScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final authService = ref.read(authServiceProvider);
+    final notificationPreferences = ref.watch(notificationPreferencesControllerProvider);
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -118,59 +125,27 @@ class TeacherMoreScreen extends ConsumerWidget {
 
                 // Menu Items
                 Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        _buildMenuItem(
-                          context,
-                          icon: Icons.notifications_outlined,
-                          iconColor: const Color(0xFFFFC107), // Yellow/amber color
-                          title: 'Notification',
-                          onTap: () => _handleNotification(context),
-                        ),
-                        const Divider(height: 1, indent: 60),
-                        _buildMenuItem(
-                          context,
-                          icon: Icons.settings_outlined,
-                          iconColor: const Color(0xFF9E9E9E), // Grey color
-                          title: 'Settings',
-                          hasArrow: true,
-                          onTap: () => _handleSettings(context),
-                        ),
-                        const Divider(height: 1, indent: 60),
-                        _buildMenuItem(
-                          context,
-                          icon: Icons.help_outline,
-                          iconColor: const Color(0xFFFFC107), // Yellow/amber color
-                          title: 'Help',
-                          onTap: () => _handleHelp(context),
-                        ),
-                        const Divider(height: 1, indent: 60),
-                        _buildMenuItem(
-                          context,
-                          icon: Icons.logout_outlined,
-                          iconColor: const Color(0xFFFD6B6B), // Light red color
-                          title: 'Logout',
-                          onTap: () => _handleLogout(context, authService),
-                        ),
-                      ],
-                    ),
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                    children: [
+                      _buildNotificationSettingsCard(
+                        context,
+                        ref,
+                        notificationPreferences,
+                      ),
+                      _buildRegularMenuItem(
+                        label: 'Help',
+                        svgPath: 'assets/icons/help.svg',
+                        onTap: () => _handleHelp(context),
+                      ),
+                      _buildRegularMenuItem(
+                        label: 'Logout',
+                        svgPath: 'assets/icons/logout.svg',
+                        onTap: () => _handleLogout(context, authService),
+                      ),
+                    ],
                   ),
                 ),
-
-                const SizedBox(height: 100), // Space for bottom navigation
               ],
             );
           },
@@ -181,71 +156,169 @@ class TeacherMoreScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildMenuItem(
-    BuildContext context, {
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    bool hasArrow = false,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                icon,
-                color: iconColor,
-                size: 20,
+  Widget _buildNotificationSettingsCard(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<NotificationPreferenceState> preferences,
+  ) {
+    final expanded = ref.watch(teacherMoreExpandSettingsProvider);
+    final notifier =
+        ref.read(notificationPreferencesControllerProvider.notifier);
+    final prefs = preferences.asData?.value ?? NotificationPreferenceState.defaults;
+    final isLoading = preferences.isLoading;
+    final error = preferences.hasError ? preferences.error : null;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => ref.read(teacherMoreExpandSettingsProvider.notifier).state = !expanded,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  SvgPicture.asset(
+                    'assets/icons/bell.svg',
+                    width: 22,
+                    height: 22,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Notification Settings',
+                      style: GoogleFonts.roboto(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 20,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                    color: Colors.black54,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87,
+          ),
+          if (expanded) const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
+          if (expanded)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Could not load preferences. Using defaults.',
+                        style: TextStyle(fontSize: 12, color: Colors.red[400]),
+                      ),
+                    ),
+                  _buildNotificationToggleRow(
+                    icon: Icons.vibration,
+                    label: 'Vibrate',
+                    value: prefs.vibrateEnabled,
+                    isLoading: isLoading,
+                    onChanged: (value) => notifier.setVibrate(value),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildNotificationToggleRow(
+                    icon: Icons.volume_up,
+                    label: 'Sound',
+                    value: prefs.soundEnabled,
+                    isLoading: isLoading,
+                    onChanged: (value) => notifier.setSound(value),
+                  ),
+                  const SizedBox(height: 4),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotificationToggleRow({
+    required IconData icon,
+    required String label,
+    required bool value,
+    required bool isLoading,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 22, color: Colors.grey[600]),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: GoogleFonts.roboto(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.black,
+            ),
+          ),
+        ),
+        Switch(
+          value: value,
+          onChanged: isLoading ? null : onChanged,
+          thumbColor: MaterialStateProperty.all(Colors.black),
+          trackColor: MaterialStateProperty.resolveWith((states) {
+            return states.contains(MaterialState.selected)
+                ? const Color(0xFFFACC15)
+                : Colors.grey.shade300;
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRegularMenuItem({
+    required String label,
+    required String svgPath,
+    VoidCallback? onTap,
+  }) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              SvgPicture.asset(
+                svgPath,
+                width: 22,
+                height: 22,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: GoogleFonts.roboto(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 20,
+                    color: Colors.black,
+                  ),
                 ),
               ),
-            ),
-            if (hasArrow)
-              Icon(
-                Icons.keyboard_arrow_down,
-                color: Colors.grey[400],
-                size: 20,
-              ),
-          ],
+              const Icon(Icons.chevron_right_rounded, color: Colors.black54),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-
-  void _handleNotification(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Notification settings coming soon'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _handleSettings(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Settings coming soon'),
-        behavior: SnackBarBehavior.floating,
       ),
     );
   }
