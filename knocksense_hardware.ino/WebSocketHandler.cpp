@@ -2,6 +2,7 @@
 
 #include "WebSocketHandler.h"
 #include "LittleFSConfig.h"
+#include <WebSerial.h>
 
 extern float currentBatteryVoltage;
 extern int currentBatteryPercentage;
@@ -19,14 +20,14 @@ void WebSocketHandler::begin(AsyncWebServer* server) {
 
 void WebSocketHandler::onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
     if (type == WS_EVT_CONNECT) {
-        Serial.printf("WebSocket client #%u connected\n", client->id());
+        WebSerial.printf("WebSocket client #%u connected\n", client->id());
         
         
         delay(100); 
         sendSystemStatus();
         
     } else if (type == WS_EVT_DISCONNECT) {
-        Serial.printf("WebSocket client #%u disconnected\n", client->id());
+        WebSerial.printf("WebSocket client #%u disconnected\n", client->id());
     } else if (type == WS_EVT_DATA) {
         handleWebSocketMessage(arg, data, len, (AwsFrameInfo*)arg, client);
     }
@@ -93,7 +94,7 @@ void WebSocketHandler::sendSystemStatus() {
     serializeJson(doc, message);
     ws.textAll(message);
     
-    Serial.println("Sent system status - WiFi: " + String(WiFi.status() == WL_CONNECTED ? "connected" : "disconnected"));
+    WebSerial.println("Sent system status - WiFi: " + String(WiFi.status() == WL_CONNECTED ? "connected" : "disconnected"));
 }
 
 void WebSocketHandler::sendTeacherStatusUpdate(String teacherID, String newStatus) {
@@ -107,7 +108,7 @@ void WebSocketHandler::sendTeacherStatusUpdate(String teacherID, String newStatu
     serializeJson(doc, message);
     ws.textAll(message);
     
-    Serial.println("📡 Sent teacher status update via WebSocket");
+    WebSerial.println("📡 Sent teacher status update via WebSocket");
   }
 
 void WebSocketHandler::sendRfidAddedStatus(String uid, bool success, String error) {
@@ -130,7 +131,7 @@ void WebSocketHandler::sendRfidAddedStatus(String uid, bool success, String erro
     serializeJson(doc, message);
     ws.textAll(message);
     
-    Serial.println("📡 Sent RFID add status via WebSocket");
+    WebSerial.println("📡 Sent RFID add status via WebSocket");
 }
 
 void WebSocketHandler::getNewWifiConfig(String &ssid, String &password) { ssid = newSSID; password = newPassword; }

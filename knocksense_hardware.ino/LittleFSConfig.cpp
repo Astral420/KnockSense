@@ -1,15 +1,16 @@
 // File: LittleFSConfig.cpp
 
 #include "LittleFSConfig.h"
+#include <WebSerial.h>
 
 bool LittleFSConfig::begin() {
     if (!LittleFS.begin(true)) {
-        Serial.println("LittleFS mount failed!");
+        WebSerial.println("LittleFS mount failed!");
         return false;
     }
-    Serial.println("LittleFS mounted successfully");
+    WebSerial.println("LittleFS mounted successfully");
     if (!loadConfig()) {
-        Serial.println("Failed to load config, using defaults");
+        WebSerial.println("Failed to load config, using defaults");
         setDefaults();
         saveConfig();
     }
@@ -25,7 +26,7 @@ bool LittleFSConfig::loadConfig() {
     file.close();
 
     if (error) {
-        Serial.println("Failed to parse config file");
+        WebSerial.println("Failed to parse config file");
         return false;
     }
 

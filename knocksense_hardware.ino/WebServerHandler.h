@@ -6,6 +6,7 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
+#include <WebSerial.h>
 
 // Forward declaration
 class LittleFSConfig;
@@ -30,21 +31,21 @@ public:
 // Implementation
 void WebServerHandler::begin() {
   if (!LittleFS.begin()) {
-    Serial.println("LittleFS mount failed! Formatting...");
+    WebSerial.println("LittleFS mount failed! Formatting...");
     LittleFS.format();
     if (!LittleFS.begin()) {
-      Serial.println("LittleFS failed to start");
+      WebSerial.println("LittleFS failed to start");
       return;
     }
   }
-  Serial.println("LittleFS mounted successfully");
+  WebSerial.println("LittleFS mounted successfully");
   
   setupRoutes();
   serveStatic();
   
   server->begin();
-  Serial.println("Web server started on port 81");
-  Serial.println("Access via: http://192.168.4.1:81 (Firebase Auth Compatible ✅)");
+  WebSerial.println("Web server started on port 81");
+  WebSerial.println("Access via: http://192.168.4.1:81 (Firebase Auth Compatible ✅)");
 }
 
 void WebServerHandler::setupRoutes() {
@@ -232,8 +233,7 @@ void WebServerHandler::setupWiFiRoutes() {
       serializeJson(doc, response);
       request->send(200, "application/json", response);
       
-      // Trigger reconnection in main loop
-      Serial.println("WiFi config updated via API: " + ssid);
+      WebSerial.println("WiFi config updated via API: " + ssid);
       
     } else {
       request->send(500, "application/json", "{\"error\":\"Failed to update configuration\"}");
@@ -306,7 +306,7 @@ void WebServerHandler::setupWiFiRoutes() {
     // Trigger reconnection
     WiFi.disconnect();
     delay(1000);
-    Serial.println("Manual reconnection triggered via API");
+    WebSerial.println("Manual reconnection triggered via API");
   });
 }
 
@@ -352,17 +352,17 @@ void WebServerHandler::handleFileRead(AsyncWebServerRequest *request) {
     );
     response->addHeader("Content-Encoding", "gzip");
     request->send(response);
-    Serial.println("Served (gzip): " + pathWithGz);
+    WebSerial.println("Served (gzip): " + pathWithGz);
     return;
   }
   
   if (LittleFS.exists(path)) {
     request->send(LittleFS, path, getContentType(path));
-    Serial.println("Served: " + path);
+    WebSerial.println("Served: " + path);
     return;
   }
   
-  Serial.println("File not found: " + path);
+  WebSerial.println("File not found: " + path);
   
   // For SPA, serve index.html for unknown routes
   if (LittleFS.exists("/index.html.gz")) {
