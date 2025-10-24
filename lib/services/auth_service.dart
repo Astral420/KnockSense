@@ -199,6 +199,20 @@ Future<UserModel?> signInWithEmailPassword(
     studentNumber = roleData['studentNumber'];
   }
 
+  Map<String, dynamic>? existingTeacherRoleData;
+  if (role == UserRole.teacher) {
+    final roleSnapshot = await _database.ref('roles/teacher/$uid').get();
+    if (roleSnapshot.exists && roleSnapshot.value != null) {
+      try {
+        existingTeacherRoleData =
+            Map<String, dynamic>.from(roleSnapshot.value as Map);
+        teacherID = existingTeacherRoleData['teacherID'] as String? ?? teacherID;
+      } catch (e) {
+        debugPrint('Unable to parse teacher role data for $uid: $e');
+      }
+    }
+  }
+
   // Check if user exists
   final userRef = _database.ref('users/$uid');
   final snapshot = await userRef.get();
@@ -211,7 +225,7 @@ Future<UserModel?> signInWithEmailPassword(
 
     // Preserve existing teacherID for teachers
     if (role == UserRole.teacher) {
-      teacherID = existingUser.teacherID;
+      teacherID = existingUser.teacherID ?? teacherID;
     }
 
     // Only update photoUrl if we have a new one, otherwise keep existing
@@ -219,10 +233,11 @@ Future<UserModel?> signInWithEmailPassword(
       lastLogin: DateTime.now(),
       displayName: displayName,
       photoUrl: photoUrl ?? existingUser.photoUrl,
+      teacherID: teacherID ?? existingUser.teacherID,
     );
   } else {
     if (role == UserRole.teacher) {
-      teacherID = await _generateTeacherId();
+      teacherID ??= await _generateTeacherId();
     }
     
     // New user: create their data
@@ -240,7 +255,7 @@ Future<UserModel?> signInWithEmailPassword(
   }
 
   // Save the complete user object to the database
-  await userRef.set(user.toJson());
+  await userRef.update(user.toJson());
 
   // Update role index - CRITICAL FIX: Use update() instead of set()
   final Map<String, dynamic> roleIndexData = {
@@ -251,11 +266,16 @@ Future<UserModel?> signInWithEmailPassword(
   if (role == UserRole.teacher) {
     // For teachers, only update these specific fields
     // Do NOT include rfid_uid, active_status, etc. - let ESP32 manage those
-    roleIndexData['teacherID'] = teacherID;
-    
-    
+    if (teacherID != null) {
+      roleIndexData['teacherID'] = teacherID;
+    }
+
+    if (existingTeacherRoleData != null) {
+      roleIndexData.addAll(existingTeacherRoleData);
+    }
+
     await _database.ref('roles/${role.name}/$uid').update(roleIndexData);
-    
+
   } else if (role == UserRole.student) {
     roleIndexData['studentNumber'] = studentNumber;
     

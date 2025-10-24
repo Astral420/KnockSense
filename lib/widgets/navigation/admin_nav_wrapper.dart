@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:knocksense/screens/dashboard/admin_dashboard.dart';
+import 'package:knocksense/provider/admin_permissions_provider.dart';
+import 'package:knocksense/provider/auth_provider.dart';
+import 'package:knocksense/provider/connectivity_provider.dart';
+import 'package:knocksense/provider/nfc_provider.dart';
+import 'package:knocksense/provider/teacher_provider.dart';
 import 'package:knocksense/screens/admin/admin_faculty_screen.dart';
-import 'package:knocksense/screens/admin/admin_rfid_screen.dart';
 import 'package:knocksense/screens/admin/admin_more_screen.dart';
+import 'package:knocksense/screens/admin/admin_rfid_screen.dart';
+import 'package:knocksense/screens/dashboard/admin_dashboard.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // Navigation state provider
@@ -78,7 +83,7 @@ class _AdminNavWrapperState extends ConsumerState<AdminNavWrapper> {
   }
 }
 
-class SharedNavScaffold extends StatelessWidget {
+class SharedNavScaffold extends ConsumerWidget {
   final int currentIndex;
   final ValueChanged<int> onIndexChanged;
   final List<Widget> pages;
@@ -95,8 +100,27 @@ class SharedNavScaffold extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final connectivityState = ref.watch(connectivityProvider);
+
+    if (connectivityState.showReconnectMessage) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Back online. Refreshing data...'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        _refreshAfterReconnect(ref);
+        ref.read(connectivityProvider.notifier).acknowledgeReconnectMessage();
+      });
+    }
+
+    final scaffold = Scaffold(
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
       body: IndexedStack(
         index: currentIndex,
@@ -106,6 +130,87 @@ class SharedNavScaffold extends StatelessWidget {
         currentIndex: currentIndex,
         onTap: onIndexChanged,
         items: items,
+      ),
+    );
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        scaffold,
+        Align(
+          alignment: Alignment.topCenter,
+          child: IgnorePointer(
+            ignoring: true,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: connectivityState.isOffline
+                  ? const _ConnectivityBanner(
+                      key: ValueKey('offline_banner'),
+                      message: 'You are offline. Some features may be unavailable.',
+                    )
+                  : const SizedBox(key: ValueKey('offline_banner_hidden')),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+void _refreshAfterReconnect(WidgetRef ref) {
+  ref.invalidate(currentUserProvider);
+  ref.invalidate(safeCurrentUserProvider);
+  ref.invalidate(adminPermissionsProvider);
+  ref.invalidate(teachersStreamProvider);
+  ref.invalidate(rfidTagsStreamProvider);
+}
+
+class _ConnectivityBanner extends StatelessWidget {
+  final String message;
+
+  const _ConnectivityBanner({
+    super.key,
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 12, left: 16, right: 16),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFFDC2626),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 10,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.wifi_off, color: Colors.white),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    message,
+                    style: GoogleFonts.roboto(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

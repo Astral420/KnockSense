@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/provider/auth_provider.dart';
+import 'package:knocksense/provider/admin_permissions_provider.dart';
 import 'package:knocksense/provider/nfc_provider.dart';
 import 'package:knocksense/provider/teacher_provider.dart';
 import 'package:knocksense/screens/admin/admin_faculty_screen.dart';
@@ -35,6 +36,10 @@ class AdminDashboard extends ConsumerWidget {
     final authService = ref.read(authServiceProvider);
     final rfidTags = ref.watch(rfidTagsStreamProvider);
     final teachers = ref.watch(teachersStreamProvider);
+    final adminPermissions = ref.watch(adminPermissionsProvider).maybeWhen(
+          data: (value) => value,
+          orElse: () => const AdminPermissions(),
+        );
 
     return user.when(
       data: (userData) {
@@ -47,7 +52,14 @@ class AdminDashboard extends ConsumerWidget {
         return Scaffold(
           backgroundColor: kBg,
           appBar: _buildAppBar(context, userData, authService),
-          body: _buildBody(context, ref, userData, rfidTags, teachers),
+          body: _buildBody(
+            context,
+            ref,
+            userData,
+            rfidTags,
+            teachers,
+            adminPermissions,
+          ),
         );
       },
       loading: () => const Scaffold(
@@ -80,8 +92,14 @@ class AdminDashboard extends ConsumerWidget {
     );
   }
 
-  Widget _buildBody(BuildContext context, WidgetRef ref, UserModel userData, 
-      AsyncValue rfidTags, AsyncValue teachers) {
+  Widget _buildBody(
+    BuildContext context,
+    WidgetRef ref,
+    UserModel userData,
+    AsyncValue rfidTags,
+    AsyncValue teachers,
+    AdminPermissions permissions,
+  ) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
@@ -89,7 +107,7 @@ class AdminDashboard extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           children: [
             // Quick Actions
-            _buildQuickActions(context, ref),
+            _buildQuickActions(context, ref, permissions),
             const SizedBox(height: 16),
 
             // Faculty Snapshot
@@ -104,7 +122,21 @@ class AdminDashboard extends ConsumerWidget {
     );
   }
 
-  Widget _buildQuickActions(BuildContext context, WidgetRef ref) {
+  Widget _buildQuickActions(
+    BuildContext context,
+    WidgetRef ref,
+    AdminPermissions permissions,
+  ) {
+    final canManageFaculty = permissions.removeTeacherAccounts;
+    final facultyOnTap = canManageFaculty
+        ? () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const AdminFacultyScreen(),
+              ),
+            )
+        : () => _showPermissionDeniedSnack(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -124,12 +156,8 @@ class AdminDashboard extends ConsumerWidget {
                 title: 'Faculty Accounts',
                 subtitle: 'Manage Faculty Memebers',
                 svgPath: 'assets/icons/faculty.svg',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AdminFacultyScreen(),
-                  )
-                )
+                onTap: facultyOnTap,
+                enabled: canManageFaculty,
               ),
             ),
             const SizedBox(width: 12),
@@ -157,6 +185,7 @@ class AdminDashboard extends ConsumerWidget {
     required String subtitle,
     required String svgPath,
     required VoidCallback onTap,
+    bool enabled = true,
   }) {
     return AspectRatio(
       aspectRatio: 178 / 177,
@@ -166,46 +195,58 @@ class AdminDashboard extends ConsumerWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 40,
-                  backgroundColor: kBrand,
-                  child: SvgPicture.asset(
-                    svgPath,
-                    width: 24,
-                    height: 24,
+          child: Opacity(
+            opacity: enabled ? 1.0 : 0.5,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 40,
+                    backgroundColor: kBrand,
+                    child: SvgPicture.asset(
+                      svgPath,
+                      width: 24,
+                      height: 24,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  title,
-                  style: GoogleFonts.roboto(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: kText,
+                  const SizedBox(height: 14),
+                  Text(
+                    title,
+                    style: GoogleFonts.roboto(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: kText,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  style: GoogleFonts.roboto(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w400,
-                    color: kMuted,
+                  const SizedBox(height: 6),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.roboto(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w400,
+                      color: kMuted,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showPermissionDeniedSnack(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('You do not have permission to manage faculty accounts. Contact a super admin.'),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }

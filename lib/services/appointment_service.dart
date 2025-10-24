@@ -93,6 +93,9 @@ Future<void> _cleanupScheduledNotifications(String appointmentId) async {
     final rejectionNotificationKey = 'rejection_$appointmentId';
     await _database.ref('scheduled_notifications/$rejectionNotificationKey').remove();
 
+    final reminderNotificationKey = 'reminder_$appointmentId';
+    await _database.ref('scheduled_notifications/$reminderNotificationKey').remove();
+
     // Also clean up any old notifications that might have been created with .push()
     final snapshot = await _database
         .ref('scheduled_notifications')
@@ -687,6 +690,9 @@ Future<void> _autoRejectWaitAppointment({
     
     final updates = <String, dynamic>{};
     final timestamp = DateTime.now().millisecondsSinceEpoch;
+
+    final studentUid = currentData['studentUid'] as String?;
+    final teacherName = currentData['teacherName'] as String?;
     
     updates['appointments/$studentNumber/$appointmentId/status'] = 
         AppointmentStatus.cancelled.name;
@@ -704,7 +710,12 @@ Future<void> _autoRejectWaitAppointment({
     await _database.ref().update(updates);
     
     // Send notification to student
-    await _sendWaitAutoRejectionNotification(studentNumber);
+    await _sendWaitAutoRejectionNotification(
+      studentNumber: studentNumber,
+      studentUid: studentUid,
+      teacherName: teacherName,
+      appointmentId: appointmentId,
+    );
     
     // Clean up scheduled notifications
     await _cleanupScheduledNotifications(appointmentId);
@@ -715,46 +726,44 @@ Future<void> _autoRejectWaitAppointment({
   }
 }
 
-Future<void> _sendWaitAutoRejectionNotification(String studentNumber) async {
+Future<void> _sendWaitAutoRejectionNotification({
+  required String studentNumber,
+  String? studentUid,
+  String? teacherName,
+  required String appointmentId,
+}) async {
   try {
-    final studentSnapshot = await _database
-        .ref('roles/student')
-        .orderByChild('studentNumber')
-        .equalTo(studentNumber)
-        .limitToFirst(1)
-        .get();
-    
-    if (!studentSnapshot.exists || studentSnapshot.value == null) {
-      debugPrint('⚠️ Student not found for wait auto-rejection notification: $studentNumber');
-      return;
-    }
-    
-    final studentMap = studentSnapshot.value as Map;
-    final studentUid = studentMap.keys.first;
-    
-    String teacherName = 'Your professor';
-    try {
-      final appointmentSnapshot = await _database
-          .ref('appointments/$studentNumber')
-          .orderByChild('createdAt')
-          .limitToLast(1)
+    String? resolvedStudentUid = studentUid;
+    if (resolvedStudentUid == null) {
+      final studentSnapshot = await _database
+          .ref('roles/student')
+          .orderByChild('studentNumber')
+          .equalTo(studentNumber)
+          .limitToFirst(1)
           .get();
       
-      if (appointmentSnapshot.exists) {
-        final appointmentData = Map<String, dynamic>.from(
-          (appointmentSnapshot.value as Map).values.first
-        );
-        teacherName = appointmentData['teacherName'] ?? 'Your professor';
-        teacherName = teacherName.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
+      if (!studentSnapshot.exists || studentSnapshot.value == null) {
+        debugPrint('⚠️ Student not found for wait auto-rejection notification: $studentNumber');
+        return;
       }
-    } catch (e) {
-      debugPrint('Could not fetch teacher name: $e');
+
+      final studentMap = Map<String, dynamic>.from(studentSnapshot.value as Map);
+      resolvedStudentUid = studentMap.keys.first;
     }
-    
-    final String notificationBody = '$teacherName did not respond within the decision window after your wait period.';
+
+    if (resolvedStudentUid == null) {
+      debugPrint('⚠️ Unable to resolve student UID for wait auto-rejection notification: $studentNumber');
+      return;
+    }
+
+    String resolvedTeacherName = teacherName ?? 'Your professor';
+    resolvedTeacherName = resolvedTeacherName.replaceAll(RegExp(r'\s*\(.*?\)'), '').trim();
+
+    const waitMessage = 'The professor did not respond within the 2-minute decision window after your 5-minute wait period.';
+    final String notificationBody = '$resolvedTeacherName did not respond within the decision window after your wait period.';
 
     await _database.ref('notification_queue').push().set({
-      'studentUid': studentUid,
+      'studentUid': resolvedStudentUid,
       'notification': {
         'title': '⏰ Appointment Cancelled',
         'body': notificationBody,
@@ -762,7 +771,8 @@ Future<void> _sendWaitAutoRejectionNotification(String studentNumber) async {
       'data': {
         'type': 'wait_appointment_auto_cancelled',
         'studentNumber': studentNumber,
-        'teacherName': teacherName,
+        'teacherName': resolvedTeacherName,
+        'appointmentId': appointmentId,
         'click_action': 'FLUTTER_NOTIFICATION_CLICK',
         'bigText': notificationBody,
       },
@@ -770,7 +780,13 @@ Future<void> _sendWaitAutoRejectionNotification(String studentNumber) async {
       'createdAt': ServerValue.timestamp,
     });
     
-    debugPrint('✅ Wait auto-rejection notification queued for student $studentUid');
+    await _database.notifyStudentAppointmentAutoRejected(
+      studentUid: resolvedStudentUid,
+      teacherName: resolvedTeacherName,
+      message: waitMessage,
+    );
+    
+    debugPrint('✅ Wait auto-rejection notification queued for student $resolvedStudentUid');
   } catch (e) {
     debugPrint('❌ Error sending wait auto-rejection notification: $e');
   }

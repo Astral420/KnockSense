@@ -279,6 +279,27 @@ class TeacherAppointmentHistory extends ConsumerWidget {
                       color: Colors.grey[600],
                     ),
                   ),
+
+                  if ((appointment.studentNote ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Student response:',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      appointment.studentNote!.trim(),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.black87,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

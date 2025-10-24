@@ -5,8 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:knocksense/models/rfid_model.dart';
 import 'package:knocksense/models/teacher_model.dart';
+import 'package:knocksense/provider/admin_management_provider.dart';
+import 'package:knocksense/provider/admin_permissions_provider.dart';
+import 'package:knocksense/provider/auth_provider.dart';
 import 'package:knocksense/provider/nfc_provider.dart';
 import 'package:knocksense/provider/teacher_provider.dart';
+import 'package:knocksense/services/admin_teacher_service.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -27,6 +31,10 @@ class AdminFacultyScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final filteredTeachers = ref.watch(filteredTeachersProvider);
     final searchQuery = ref.watch(teacherSearchQueryProvider);
+    final permissions = ref.watch(adminPermissionsProvider).maybeWhen(
+          data: (value) => value,
+          orElse: () => const AdminPermissions(),
+        );
 
     return Scaffold(
       backgroundColor: kBg,
@@ -42,7 +50,12 @@ class AdminFacultyScreen extends ConsumerWidget {
           // Teachers List
           Expanded(
             child: filteredTeachers.when(
-              data: (teachers) => _buildTeachersList(context, ref, teachers),
+              data: (teachers) => _buildTeachersList(
+                context,
+                ref,
+                teachers,
+                permissions,
+              ),
               loading: () => const LoadingWidget(message: 'Loading faculty...'),
               error: (err, stack) => Center(
                 child: Text('Error loading faculty: $err'),
@@ -110,7 +123,12 @@ class AdminFacultyScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildTeachersList(BuildContext context, WidgetRef ref, List<TeacherModel> teachers) {
+  Widget _buildTeachersList(
+    BuildContext context,
+    WidgetRef ref,
+    List<TeacherModel> teachers,
+    AdminPermissions permissions,
+  ) {
     if (teachers.isEmpty) {
       return Center(
         child: Column(
@@ -137,12 +155,22 @@ class AdminFacultyScreen extends ConsumerWidget {
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final teacher = teachers[index];
-        return _buildFacultyCard(context, ref, teacher);
+        return _buildFacultyCard(
+          context,
+          ref,
+          teacher,
+          permissions,
+        );
       },
     );
   }
 
-  Widget _buildFacultyCard(BuildContext context, WidgetRef ref, TeacherModel teacher) {
+  Widget _buildFacultyCard(
+    BuildContext context,
+    WidgetRef ref,
+    TeacherModel teacher,
+    AdminPermissions permissions,
+  ) {
     final isOnline = teacher.activeStatus == 'online';
     final statusColor = isOnline ? kGreen : kRed;
     final statusText = isOnline ? 'Online' : 'Offline';
@@ -230,12 +258,18 @@ class AdminFacultyScreen extends ConsumerWidget {
                     onTap: () => _showChangeRfidDialog(context, ref, teacher),
                     minWidth: 120,
                   ),
-                  _buildActionButton(
-                    label: 'Delete',
-                    svgPath: 'assets/icons/trash.svg',
-                    onTap: () => _showDeleteDialog(context, ref, teacher),
-                    minWidth: 80,
-                  ),
+                  if (permissions.removeTeacherAccounts)
+                    _buildActionButton(
+                      label: 'Delete',
+                      svgPath: 'assets/icons/trash.svg',
+                      onTap: () => _showDeleteDialog(
+                        context,
+                        ref,
+                        teacher,
+                        permissions,
+                      ),
+                      minWidth: 80,
+                    ),
                 ],
               ),
             ],
@@ -390,48 +424,119 @@ class AdminFacultyScreen extends ConsumerWidget {
     );
   }
 
-  void _showDeleteDialog(BuildContext context, WidgetRef ref, TeacherModel teacher) {
+  void _showDeleteDialog(
+    BuildContext context,
+    WidgetRef ref,
+    TeacherModel teacher,
+    AdminPermissions permissions,
+  ) {
+    if (!permissions.removeTeacherAccounts) {
+      _showSnackBar(
+        context,
+        'You do not have permission to remove teacher accounts. Contact a super admin.',
+        isError: true,
+      );
+      return;
+    }
+
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Delete Account'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Are you sure you want to delete this faculty account?'),
-              const SizedBox(height: 8),
-              Text(
-                'Teacher: ${_cleanTeacherName(teacher.displayName)}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'This action cannot be undone.',
-                style: TextStyle(color: Colors.red),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Delete'),
-              onPressed: () {
-                // Implement delete functionality
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Account deleted for ${_cleanTeacherName(teacher.displayName)}'),
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        bool isDeleting = false;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Delete Account'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Are you sure you want to delete this faculty account?'),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Teacher: ${_cleanTeacherName(teacher.displayName)}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                );
-              },
-            ),
-          ],
+                  const SizedBox(height: 8),
+                  const Text(
+                    'This action cannot be undone.',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  child: const Text('Cancel'),
+                  onPressed: isDeleting ? null : () => Navigator.of(context).pop(),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  onPressed: isDeleting
+                      ? null
+                      : () async {
+                          setState(() => isDeleting = true);
+                          final currentUser = ref.read(safeCurrentUserProvider);
+                          final deletedBy = currentUser?.uid;
+
+                          if (deletedBy == null) {
+                            Navigator.of(context).pop();
+                            _showSnackBar(
+                              dialogContext,
+                              'Unable to determine current user. Please sign in again.',
+                              isError: true,
+                            );
+                            return;
+                          }
+
+                          final adminService = ref.read(adminTeacherServiceProvider);
+
+                          try {
+                            final message = await adminService.deleteTeacherAccount(
+                              teacherUid: teacher.uid,
+                              deletedBy: deletedBy,
+                            );
+
+                            if (!dialogContext.mounted) return;
+                            Navigator.of(dialogContext).pop();
+
+                            _showSnackBar(
+                              dialogContext,
+                              message ??
+                                  'Teacher account deleted. Use the web dashboard if you need to restore this account.',
+                            );
+                          } on AdminTeacherDeletionException catch (e) {
+                            if (!dialogContext.mounted) return;
+                            Navigator.of(dialogContext).pop();
+                            final errorMessage = e.code == 'permission-denied'
+                                ? 'You do not have permission to delete teacher accounts. Contact a super admin.'
+                                : '${e.message}. If you need to restore this account, please use the web dashboard.';
+                            _showSnackBar(
+                              dialogContext,
+                              errorMessage,
+                              isError: true,
+                            );
+                          } catch (e) {
+                            if (!dialogContext.mounted) return;
+                            Navigator.of(dialogContext).pop();
+                            _showSnackBar(
+                              dialogContext,
+                              'Failed to delete account: $e',
+                              isError: true,
+                            );
+                          }
+                        },
+                  child: isDeleting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Delete'),
+                ),
+              ],
+            );
+          },
         );
       },
     );

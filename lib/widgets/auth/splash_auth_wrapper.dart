@@ -39,6 +39,10 @@ class _SplashAuthWrapperState extends ConsumerState<SplashAuthWrapper>
   SheetMode _mode = SheetMode.login; // Start with login directly
   AuthPane _authPane = AuthPane.microsoft;
 
+  // ---- Account removal handling ----
+  bool _handlingAccountRemoval = false;
+  bool _accountRemovalNoticePending = false;
+
   // Sheet sizes: collapsed peek + expanded panel
   static const double _minSize = 0.10;
   static const double _maxSize = 0.45;
@@ -111,6 +115,7 @@ class _SplashAuthWrapperState extends ConsumerState<SplashAuthWrapper>
         _teaser = true;
         _sheetSize = _minSize;
         _authPane = AuthPane.microsoft;
+        _handlingAccountRemoval = false;
       });
       
       // Reset the sheet controller if needed
@@ -180,8 +185,21 @@ class _SplashAuthWrapperState extends ConsumerState<SplashAuthWrapper>
             return userDetails.when(
               data: (userModel) {
                 if (userModel == null) {
-                  return const Scaffold(
-                    body: LoadingWidget(message: 'Initializing...'),
+                  Future.microtask(() async {
+                    if (!_handlingAccountRemoval) {
+                      _handlingAccountRemoval = true;
+                      _accountRemovalNoticePending = true;
+                      final authService = ref.read(authServiceProvider);
+                      await authService.signOut();
+                      if (mounted) {
+                        setState(() {});
+                      }
+                    }
+                  });
+
+                  return _buildLoginScreen(
+                    showError: false,
+                    showAccountRemoved: true,
                   );
                 }
                 // Return the appropriate dashboard
@@ -217,7 +235,7 @@ class _SplashAuthWrapperState extends ConsumerState<SplashAuthWrapper>
     return _buildSplashScreen();
   }
 
-  Widget _buildLoginScreen({bool showError = false}) {
+  Widget _buildLoginScreen({bool showError = false, bool showAccountRemoved = false}) {
     if (!_splashComplete) {
       // If splash not complete, continue showing it
       return _buildSplashScreen();
@@ -231,6 +249,23 @@ class _SplashAuthWrapperState extends ConsumerState<SplashAuthWrapper>
         });
       }
     });
+
+    if (_accountRemovalNoticePending) {
+      Future.microtask(() {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Your account is no longer available. Please contact the administrator.'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        setState(() {
+          _accountRemovalNoticePending = false;
+        });
+      });
+    }
 
     return _buildSplashScreen();
   }

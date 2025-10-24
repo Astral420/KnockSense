@@ -489,33 +489,34 @@ class StudentDashboard extends ConsumerWidget {
                                 // START MODIFICATION
                                 subtitle: statusWithDuration.when(
                                   data: (statusData) {
-                                    String idAndDurationText;
-                                    // Determine the first line of text (ID and optional duration)
-                                    if (statusData != null && teacher.activeStatus.toLowerCase() != 'online') {
-                                      final duration = TeacherService.calculateDurationRealTime(statusData.changedAt);
-                                      idAndDurationText = '${teacher.teacherID} • $duration';
-                                    } else {
-                                      idAndDurationText = teacher.teacherID;
+                                    String? durationText;
+                                    if (statusData != null && statusData.changedAt != null) {
+                                      durationText = TeacherService.calculateDurationRealTime(
+                                        statusData.changedAt,
+                                      );
                                     }
 
-                                    // Return a Column to stack the ID/duration and the teacher note
+                                    if (durationText == null && (teacher.teacherMsg == null || teacher.teacherMsg!.isEmpty)) {
+                                      return const SizedBox.shrink();
+                                    }
+
                                     return Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        // First line: Teacher ID and duration
-                                        Text(
-                                          idAndDurationText,
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 12,
+                                        if (durationText != null)
+                                          Text(
+                                            durationText,
+                                            style: TextStyle(
+                                              color: Colors.grey[600],
+                                              fontSize: 12,
+                                            ),
                                           ),
-                                        ),
-                                        // Second line: Teacher note (if it exists)
                                         if (teacher.teacherMsg != null && teacher.teacherMsg!.isNotEmpty)
                                           Padding(
-                                            padding: const EdgeInsets.only(top: 4.0), // Add space
+                                            padding: const EdgeInsets.only(top: 4.0),
                                             child: Text(
-                                              '“${teacher.teacherMsg!}”', // Add quotes for style
+                                              '“${teacher.teacherMsg!}”',
                                               style: TextStyle(
                                                 color: Colors.grey[800],
                                                 fontSize: 12,
@@ -528,20 +529,8 @@ class StudentDashboard extends ConsumerWidget {
                                       ],
                                     );
                                   },
-                                  loading: () => Text( // Keep loading and error states simple
-                                    teacher.teacherID,
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  error: (_, __) => Text(
-                                    teacher.teacherID,
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 12,
-                                    ),
-                                  ),
+                                  loading: () => const SizedBox.shrink(),
+                                  error: (_, __) => const SizedBox.shrink(),
                                 ),
                                 // END MODIFICATION
                                 trailing: Container(
