@@ -361,7 +361,8 @@ void connectFirebase() {
   Serial.println("🔥 Testing Firebase connection...");
   WebSerial.println("🔥 Testing Firebase connection...");
   
-  if (Firebase.ready()) {
+  if (Firebase.ready() && (millis() - sendDataPrevMillis > 10000 || sendDataPrevMillis == 0)) {
+    sendDataPrevMillis = millis();
     firebaseConnected = true;
     Serial.println("✅ Firebase connected and authenticated successfully");
     WebSerial.println("✅ Firebase connected and authenticated successfully");
