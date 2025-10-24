@@ -85,30 +85,70 @@ const SCHEDULED_HANDLER_URL = process.env.SCHEDULED_NOTIFICATION_HANDLER_URL || 
   ? `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/dispatchScheduledNotification`
   : null);
 
-function buildFcmMessageFromQueueItem(item) {
-	const hasExplicitNotification = !!item.notification;
-	const notification = hasExplicitNotification
-		? item.notification
-		: ((item.title || item.body)
-			? {title: item.title || 'KnockSense', body: item.body || ''}
-			: undefined);
+const defaultNotificationPreferences = {
+  soundEnabled: true,
+  vibrateEnabled: true,
+};
 
-	const data = item.data ? Object.entries(item.data).reduce((acc, [k, v]) => {
-		acc[String(k)] = String(v);
-		return acc;
-	}, {}) : undefined;
+function normalizePreferences(prefs) {
+  if (!prefs) {
+    return {...defaultNotificationPreferences};
+  }
+  return {
+    soundEnabled: prefs.soundEnabled ?? prefs.sound ?? true,
+    vibrateEnabled: prefs.vibrateEnabled ?? prefs.vibrate ?? true,
+  };
+}
 
-	const android = {
-		priority: 'high',
-		notification: {
-			channelId: 'appointments_v2',
-			sound: 'notification_sound',
-			defaultVibrateTimings: true,
-			// defaultSound: true,
-		},
-	};
+async function getNotificationPreferences(uid) {
+  if (!uid) {
+    return {...defaultNotificationPreferences};
+  }
+  try {
+    const snapshot = await db.ref(`notifications/preferences/${uid}`).get();
+    if (!snapshot.exists()) {
+      return {...defaultNotificationPreferences};
+    }
+    return normalizePreferences(snapshot.val());
+  } catch (err) {
+    console.error(`⚠️ Failed to load notification preferences for ${uid}:`, err);
+    return {...defaultNotificationPreferences};
+  }
+}
 
-	return {notification, data, android};
+function buildFcmMessageFromQueueItem(item, preferences) {
+  const hasExplicitNotification = !!item.notification;
+  const notification = hasExplicitNotification
+    ? item.notification
+    : ((item.title || item.body)
+      ? {title: item.title || 'KnockSense', body: item.body || ''}
+      : undefined);
+
+  const data = item.data ? Object.entries(item.data).reduce((acc, [k, v]) => {
+    acc[String(k)] = String(v);
+    return acc;
+  }, {}) : undefined;
+
+  const prefs = normalizePreferences(preferences);
+
+  const androidNotification = {
+    channelId: 'appointments_v2',
+  };
+
+  if (prefs.soundEnabled) {
+    androidNotification.sound = 'notification_sound';
+  }
+
+  if (prefs.vibrateEnabled) {
+    androidNotification.defaultVibrateTimings = true;
+  }
+
+  const android = {
+    priority: 'high',
+    notification: androidNotification,
+  };
+
+  return {notification, data, android};
 }
 
 async function sendToToken(token, baseMessage) {
@@ -142,21 +182,45 @@ exports.processNotificationQueue = onValueCreated({
 	if (!item) return;
 
 	try {
-		const messageBase = buildFcmMessageFromQueueItem(item);
-
 		const sends = [];
-		if (item.to) sends.push(sendToToken(String(item.to), messageBase));
-		if (item.topic) sends.push(sendToTopic(String(item.topic), messageBase));
+		if (item.to) {
+			const targetPrefs = item.uid ? await getNotificationPreferences(String(item.uid)) : defaultNotificationPreferences;
+			const message = buildFcmMessageFromQueueItem(item, targetPrefs);
+			sends.push(sendToToken(String(item.to), message));
+		}
+		if (item.topic) {
+			const topic = String(item.topic);
+			const subscriptionsSnapshot = await db.ref('notifications/subscriptions').get();
+			if (subscriptionsSnapshot.exists()) {
+				const allSubscriptions = subscriptionsSnapshot.val();
+				for (const [studentUid, teacherMap] of Object.entries(allSubscriptions)) {
+					if (teacherMap && teacherMap[topic.replace('teacher_', '')]?.subscribed === true) {
+						const tokens = await getUserTokens(studentUid);
+						if (tokens.length > 0) {
+							const prefs = await getNotificationPreferences(studentUid);
+							const message = buildFcmMessageFromQueueItem(item, prefs);
+							sends.push(admin.messaging().sendEachForMulticast({tokens, ...message}));
+						}
+					}
+				}
+			}
+		}
 		if (item.studentUid) {
-			const tokens = await getUserTokens(String(item.studentUid));
+			const studentUid = String(item.studentUid);
+			const tokens = await getUserTokens(studentUid);
 			if (tokens.length > 0) {
-				sends.push(admin.messaging().sendEachForMulticast({tokens, ...messageBase}));
+				const studentPrefs = await getNotificationPreferences(studentUid);
+				const studentMessage = buildFcmMessageFromQueueItem(item, studentPrefs);
+				sends.push(admin.messaging().sendEachForMulticast({tokens, ...studentMessage}));
 			}
 		}
 		if (item.teacherUid) {
-			const tokens = await getUserTokens(String(item.teacherUid));
+			const teacherUid = String(item.teacherUid);
+			const tokens = await getUserTokens(teacherUid);
 			if (tokens.length > 0) {
-				sends.push(admin.messaging().sendEachForMulticast({tokens, ...messageBase}));
+				const teacherPrefs = await getNotificationPreferences(teacherUid);
+				const teacherMessage = buildFcmMessageFromQueueItem(item, teacherPrefs);
+				sends.push(admin.messaging().sendEachForMulticast({tokens, ...teacherMessage}));
 			}
 		}
 
@@ -391,13 +455,14 @@ async function dispatchTeacherNotification({notificationId, teacherUid, data}) {
   try {
     const tokens = await getUserTokens(String(teacherUid));
     if (tokens.length > 0) {
+      const teacherPrefs = await getNotificationPreferences(String(teacherUid));
       const messageBase = buildFcmMessageFromQueueItem({
         notification: {
           title,
           body,
         },
         data: data.data || {},
-      });
+      }, teacherPrefs);
 
       await Promise.allSettled(tokens.map((token) => sendToToken(token, messageBase)));
       console.log(`✅ [${notificationId}] Sent teacher FCM notifications`);
@@ -451,13 +516,14 @@ async function dispatchStudentNotification({notificationId, studentUid, data}) {
   try {
     const tokens = await getUserTokens(String(studentUid));
     if (tokens.length > 0) {
+      const studentPrefs = await getNotificationPreferences(String(studentUid));
       const messageBase = buildFcmMessageFromQueueItem({
         notification: {
           title,
           body,
         },
         data: data.data || {},
-      });
+      }, studentPrefs);
 
       await Promise.allSettled(tokens.map((token) => sendToToken(token, messageBase)));
       console.log(`✅ [${notificationId}] Sent student FCM notifications`);
@@ -491,15 +557,6 @@ exports.onTeacherStatusChange = onValueWritten({
 	const body = status === 'online'
 		? `${cleanDisplayName} is available for appointments.`
 		: `${cleanDisplayName} is unavailable. Schedule an appointment instead.`;
-	const base = buildFcmMessageFromQueueItem({
-		notification: {title, body},
-		data: {type: 'teacher_status', teacherUid: teacherUid, status: String(after), displayName: cleanDisplayName},
-	});
-	try {
-		await sendToTopic(topic, base);
-	} catch (e) {
-		console.error('Failed to send teacher status notification:', e);
-	}
 	try {
 		// Get all students subscribed to this teacher (topic: teacher_{teacherUid})
 		const subscriptionsSnapshot = await db.ref('notifications/subscriptions').get();
@@ -508,14 +565,13 @@ exports.onTeacherStatusChange = onValueWritten({
 		  const allSubscriptions = subscriptionsSnapshot.val();
 		  const statusEmoji = after === 'online' ? '✅' : after === 'busy' ? '🟡' : '⚫';
 		  const statusText = after === 'online' ? 'now online' : after === 'busy' ? 'now busy' : 'now offline';
-		  
-		  // Find all students subscribed to this teacher
 		  const notificationPromises = [];
+		  const sendPromises = [];
 		  for (const [studentUid, studentSubscriptions] of Object.entries(allSubscriptions)) {
 			// Check if this student is subscribed to the teacher
 			if (studentSubscriptions[teacherUid] && studentSubscriptions[teacherUid].subscribed === true) {
 			  const notificationRef = db.ref(`user_notifications/${studentUid}`).push();
-			  
+  
 			  const notificationBody = status === 'online'
 				? `${cleanDisplayName} is available for appointments.`
 				: `${cleanDisplayName} is unavailable. Schedule an appointment instead.`;
@@ -534,10 +590,28 @@ exports.onTeacherStatusChange = onValueWritten({
 			  };
 			  
 			  notificationPromises.push(notificationRef.set(notification));
+			  const tokens = await getUserTokens(String(studentUid));
+			  if (tokens.length > 0) {
+				const prefs = await getNotificationPreferences(String(studentUid));
+				const message = buildFcmMessageFromQueueItem({
+				  notification: {
+					title: `${statusEmoji} ${cleanDisplayName} is ${statusText}`,
+					body: notificationBody,
+				  },
+				  data: {
+					type: 'teacher_status',
+					teacherUid: teacherUid,
+					status: String(after),
+					displayName: cleanDisplayName,
+				  },
+				}, prefs);
+				sendPromises.push(admin.messaging().sendEachForMulticast({tokens, ...message}));
+			  }
 			}
 		  }
 		  
 		  await Promise.all(notificationPromises);
+		  await Promise.allSettled(sendPromises);
 		  console.log(`✅ Created ${notificationPromises.length} user notifications for teacher status change`);
 		} else {
 		  console.log('ℹ️ No subscriptions found');
@@ -557,7 +631,6 @@ exports.onTeacherMessageChange = onValueWritten({
 	const after = event.data.after.val();
 	if (before === after) return;
 	const teacherUid = event.params.teacherUid;
-	const topic = `teacher_${teacherUid}`;
 	let displayName = 'Your professor';
 	try {
 		const nameSnap = await db.ref(`roles/teacher/${teacherUid}/displayName`).get();
@@ -566,15 +639,6 @@ exports.onTeacherMessageChange = onValueWritten({
 	const messageText = after == null ? '' : String(after);
 	const title = `${displayName} posted an update`;
 	const body = messageText || 'Note cleared';
-	const base = buildFcmMessageFromQueueItem({
-		notification: {title, body},
-		data: {type: 'teacher_msg', teacherUid: teacherUid, displayName, message: messageText},
-	});
-	try {
-		await sendToTopic(topic, base);
-	} catch (e) {
-		console.error('Failed to send teacher message notification:', e);
-	}
 	try {
 		// Get all students subscribed to this teacher
 		const subscriptionsSnapshot = await db.ref('notifications/subscriptions').get();
@@ -584,11 +648,12 @@ exports.onTeacherMessageChange = onValueWritten({
 		  
 		  // Find all students subscribed to this teacher
 		  const notificationPromises = [];
+		  const sendPromises = [];
 		  for (const [studentUid, studentSubscriptions] of Object.entries(allSubscriptions)) {
 			// Check if this student is subscribed to the teacher
 			if (studentSubscriptions[teacherUid] && studentSubscriptions[teacherUid].subscribed === true) {
 			  const notificationRef = db.ref(`user_notifications/${studentUid}`).push();
-			  
+  
 			  const notification = {
 				userId: studentUid,
 				title: `📝 ${displayName} posted an update`,
@@ -604,10 +669,28 @@ exports.onTeacherMessageChange = onValueWritten({
 			  };
 			  
 			  notificationPromises.push(notificationRef.set(notification));
+			  const tokens = await getUserTokens(String(studentUid));
+			  if (tokens.length > 0) {
+				const prefs = await getNotificationPreferences(String(studentUid));
+				const message = buildFcmMessageFromQueueItem({
+				  notification: {
+					title: `📝 ${displayName} posted an update`,
+					body,
+				  },
+				  data: {
+					type: 'teacher_msg',
+					teacherUid: teacherUid,
+					displayName,
+					message: messageText,
+				  },
+				}, prefs);
+				sendPromises.push(admin.messaging().sendEachForMulticast({tokens, ...message}));
+			  }
 			}
 		  }
 		  
 		  await Promise.all(notificationPromises);
+		  await Promise.allSettled(sendPromises);
 		  console.log(`✅ Created ${notificationPromises.length} user notifications for teacher message`);
 		} else {
 		  console.log('ℹ️ No subscriptions found');

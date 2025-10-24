@@ -48,7 +48,7 @@ class _MainNavigationStudentState extends ConsumerState<MainNavigationStudent> {
         ),
         NavItemSvg(
           assetUnselected: 'assets/icons/schedule.svg',
-          assetSelected: 'assets/icons/schedule.svg',
+          assetSelected: 'assets/icons/schedule_selected.svg',
           iconWidth: 29,
           iconHeight: 29,
           semanticsLabel: 'History',

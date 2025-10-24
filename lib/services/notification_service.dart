@@ -125,6 +125,21 @@ class NotificationService {
     _hasCreatedChannel = true;
   }
 
+  Future<void> saveRemotePreferences(
+    String uid,
+    NotificationPreferenceState preferences,
+  ) async {
+    try {
+      await _database.ref('notifications/preferences/$uid').set({
+        'sound': preferences.soundEnabled,
+        'vibrate': preferences.vibrateEnabled,
+        'updatedAt': ServerValue.timestamp,
+      });
+    } catch (e) {
+      debugPrint('❌ Failed to persist notification preferences for $uid: $e');
+    }
+  }
+
 
   Future<void> _requestPermission() async {
     final settings = await _messaging.requestPermission(

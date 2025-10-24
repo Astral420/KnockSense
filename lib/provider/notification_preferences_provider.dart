@@ -124,6 +124,7 @@ class NotificationPreferencesController
       updated,
       prefs: prefs,
     );
+    await _notificationService.saveRemotePreferences(user.uid, updated);
     await _notificationService.applyPreferences(updated);
   }
 

@@ -51,7 +51,7 @@ class _TeacherNavigationWrapperState extends ConsumerState<MainNavigationTeacher
         ),
         NavItemSvg(
           assetUnselected: 'assets/icons/schedule.svg',
-          assetSelected: 'assets/icons/schedule.svg',
+          assetSelected: 'assets/icons/schedule_selected.svg',
           iconWidth: 29,
           iconHeight: 29,
           semanticsLabel: 'History',
