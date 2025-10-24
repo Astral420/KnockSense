@@ -71,6 +71,13 @@ bool isDoorUnlocked = false;
 bool firebaseConnected = false;
 bool unlockStreamActive = false;
 
+const unsigned long FIREBASE_RECONNECT_INTERVAL = 60000;
+const unsigned long TOKEN_REFRESH_RETRY_INTERVAL = 30000;
+unsigned long lastFirebaseReconnectAttempt = 0;
+unsigned long lastTokenRefreshAttempt = 0;
+firebase_auth_token_status currentTokenStatus = token_status_uninitialized;
+bool lastFirebaseReadyState = false;
+
 // Firebase credentials (loaded from config)
 String API_KEY;
 String DATABASE_URL;
@@ -94,6 +101,7 @@ void checkManualDoorUnlock();
 void processUnlockStream();
 void executeManualUnlock(String teacherID, String teacherName, String teacherUid, int duration);
 void logManualUnlockEvent(String teacherID, String teacherName, String teacherUid, int duration);
+void maintainFirebaseSession(bool firebaseReady);
 
 
 
@@ -218,6 +226,8 @@ void setup() {
 
 // ---------- Main Loop ----------
 void loop() {
+  bool firebaseReady = Firebase.ready();
+
   // Core system functions
   checkRFID();
   manageDoorLock();
@@ -227,9 +237,11 @@ void loop() {
     checkManualDoorUnlock();
   }
 
+  maintainFirebaseSession(firebaseReady);
+
   // Attempt to re-establish stream periodically when Firebase is ready
   static unsigned long lastStreamRetry = 0;
-  if (Firebase.ready() && !unlockStreamActive && (millis() - lastStreamRetry > 10000)) {
+  if (firebaseReady && !unlockStreamActive && (millis() - lastStreamRetry > 10000)) {
     if (Firebase.RTDB.beginStream(&fbStream, "/door_unlock_commands")) {
       unlockStreamActive = true;
       Serial.println("✅ Stream reconnected to /door_unlock_commands");
@@ -258,6 +270,7 @@ void loop() {
     if (networkMgr.isSTAConnected() && !firebaseConnected) {
       connectFirebase();
     }
+    maintainFirebaseSession(firebaseReady);
     lastFirebaseCheck = millis();
   }
   
@@ -350,26 +363,51 @@ void connectFirebase() {
   
   firebaseConfig.api_key = API_KEY;
   firebaseConfig.database_url = DATABASE_URL;
-  auth.user.email = ADMIN_EMAIL;
-  auth.user.password = ADMIN_PASSWORD;
-
-  Firebase.begin(&firebaseConfig, &auth);
-  Firebase.reconnectWiFi(true);
   firebaseConfig.token_status_callback = mytokenStatusCallback;
+  firebaseConfig.signer.preRefreshSeconds = 5 * 60; // refresh 5 minutes before expiry
+
+  bool usingCachedCredentials = false;
+  if (fsConfig.hasFirebaseTokens() && fsConfig.config.firebase_refresh_token.length() > 0) {
+    time_t now = time(nullptr);
+    unsigned long expiresAt = fsConfig.getFirebaseTokenExpiry();
+    unsigned long secondsUntilExpiry = 0;
+    if (expiresAt > 0 && now > 0 && expiresAt > static_cast<unsigned long>(now)) {
+      secondsUntilExpiry = expiresAt - static_cast<unsigned long>(now);
+      if (secondsUntilExpiry > 3600) {
+        secondsUntilExpiry = 3600;
+      }
+    }
+
+    Serial.println("♻️ Using cached Firebase refresh token for authentication");
+    WebSerial.println("♻️ Using cached Firebase refresh token for authentication");
+    Firebase.setIdToken(&firebaseConfig,
+                        fsConfig.config.firebase_id_token.c_str(),
+                        secondsUntilExpiry,
+                        fsConfig.config.firebase_refresh_token.c_str());
+    firebaseConfig.signer.tokens.expires = expiresAt;
+    auth.user.email = "";
+    auth.user.password = "";
+    usingCachedCredentials = true;
+  } else {
+    auth.user.email = ADMIN_EMAIL;
+    auth.user.password = ADMIN_PASSWORD;
+  }
+
+  Firebase.reconnectWiFi(true);
+  Firebase.begin(&firebaseConfig, &auth);
+  currentTokenStatus = token_status_uninitialized;
+  lastFirebaseReconnectAttempt = millis();
+  lastTokenRefreshAttempt = millis();
 
   // Test connection
   Serial.println("🔥 Testing Firebase connection...");
   WebSerial.println("🔥 Testing Firebase connection...");
   
-  if (Firebase.ready() && (millis() - sendDataPrevMillis > 10000 || sendDataPrevMillis == 0)) {
-    sendDataPrevMillis = millis();
+  if (Firebase.ready()) {
     firebaseConnected = true;
     Serial.println("✅ Firebase connected and authenticated successfully");
     WebSerial.println("✅ Firebase connected and authenticated successfully");
-    
-    
     wsHandler.sendNetworkEvent("firebase_connected", "Database connection established");
-    // Start streaming manual unlock commands
     Serial.println("📡 Starting stream: /door_unlock_commands ...");
     WebSerial.println("📡 Starting stream: /door_unlock_commands ...");
     if (Firebase.RTDB.beginStream(&fbStream, "/door_unlock_commands")) {
@@ -383,6 +421,11 @@ void connectFirebase() {
     }
   } else {
     firebaseConnected = false;
+    if (usingCachedCredentials) {
+      Serial.println("⚠️ Cached credentials invalid, clearing stored Firebase tokens");
+      WebSerial.println("⚠️ Cached credentials invalid, clearing stored Firebase tokens");
+      fsConfig.clearFirebaseTokens();
+    }
     Serial.println("❌ Firebase authentication failed: " + fbdo.errorReason());
     WebSerial.println("❌ Firebase authentication failed: " + fbdo.errorReason());
     wsHandler.sendNetworkEvent("firebase_failed", "Database connection failed");
@@ -390,19 +433,105 @@ void connectFirebase() {
 }
 
 void mytokenStatusCallback(TokenInfo info) {
+  currentTokenStatus = info.status;
+
   if (info.status == token_status_ready) {
     Serial.println("✅ Firebase token is ready and valid.");
     WebSerial.println("✅ Firebase token is ready and valid.");
-  } else {
-     Serial.printf("Token info: type = %s, status = %s\n", getTokenType(info), getTokenStatus(info));
-     WebSerial.printf("Token info: type = %s, status = %s\n", getTokenType(info), getTokenStatus(info));
-     Serial.printf("Token error: %s\n", getTokenError(info).c_str());
-     WebSerial.printf("Token error: %s\n", getTokenError(info).c_str());
-     Serial.println("Error");
-     WebSerial.println("Error");
-     // Force reconnect path so we obtain a fresh token and restart streams
-     firebaseConnected = false;
-     unlockStreamActive = false;
+
+    const char *idTokenCStr = Firebase.getToken();
+    const char *refreshTokenCStr = Firebase.getRefreshToken();
+    String newIdToken = idTokenCStr ? String(idTokenCStr) : String("");
+    String newRefreshToken = refreshTokenCStr ? String(refreshTokenCStr) : String("");
+    unsigned long expiresAt = firebaseConfig.signer.tokens.expires;
+
+    bool shouldPersist = newRefreshToken.length() > 0;
+    if (shouldPersist) {
+      if (fsConfig.config.firebase_refresh_token != newRefreshToken ||
+          fsConfig.config.firebase_id_token != newIdToken ||
+          fsConfig.config.firebase_token_expires_at != expiresAt) {
+        fsConfig.storeFirebaseTokens(newIdToken, newRefreshToken, expiresAt);
+        Serial.println("💾 Stored refreshed Firebase credentials to LittleFS");
+        WebSerial.println("💾 Stored refreshed Firebase credentials to LittleFS");
+      }
+    }
+
+    lastTokenRefreshAttempt = millis();
+  } else if (info.status == token_status_on_refresh) {
+    Serial.println("🔄 Firebase token refresh in progress...");
+    WebSerial.println("🔄 Firebase token refresh in progress...");
+  } else if (info.status == token_status_error) {
+    Serial.printf("Token info: type = %s, status = %s\n", getTokenType(info), getTokenStatus(info));
+    WebSerial.printf("Token info: type = %s, status = %s\n", getTokenType(info), getTokenStatus(info));
+    Serial.printf("Token error: %s\n", getTokenError(info).c_str());
+    WebSerial.printf("Token error: %s\n", getTokenError(info).c_str());
+    Serial.println("Error");
+    WebSerial.println("Error");
+
+    fsConfig.clearFirebaseTokens();
+    firebaseConnected = false;
+    unlockStreamActive = false;
+    lastTokenRefreshAttempt = millis();
+  }
+}
+
+void maintainFirebaseSession(bool firebaseReady) {
+  unsigned long now = millis();
+
+  if (firebaseReady) {
+    if (!lastFirebaseReadyState) {
+      Serial.println("✅ Firebase session ready");
+      WebSerial.println("✅ Firebase session ready");
+    }
+    lastFirebaseReadyState = true;
+    firebaseConnected = true;
+    lastTokenRefreshAttempt = now;
+    return;
+  }
+
+  if (lastFirebaseReadyState) {
+    Serial.println("⚠️ Firebase ready() reported false - monitoring token state");
+    WebSerial.println("⚠️ Firebase ready() reported false - monitoring token state");
+  }
+  lastFirebaseReadyState = false;
+  firebaseConnected = false;
+
+  if (!networkMgr.isSTAConnected()) {
+    return;
+  }
+
+  firebase_auth_token_status status = currentTokenStatus;
+
+  if (status == token_status_on_initialize ||
+      status == token_status_on_signing ||
+      status == token_status_on_request ||
+      status == token_status_on_refresh) {
+    return; // Token workflow in progress.
+  }
+
+  if (status == token_status_error) {
+    if (now - lastFirebaseReconnectAttempt >= FIREBASE_RECONNECT_INTERVAL) {
+      Serial.println("🔄 Reconnecting to Firebase after token error...");
+      WebSerial.println("🔄 Reconnecting to Firebase after token error...");
+      connectFirebase();
+    }
+    return;
+  }
+
+  if (status == token_status_uninitialized) {
+    if (now - lastFirebaseReconnectAttempt >= FIREBASE_RECONNECT_INTERVAL) {
+      Serial.println("🔄 Firebase session uninitialized - attempting reconnect");
+      WebSerial.println("🔄 Firebase session uninitialized - attempting reconnect");
+      connectFirebase();
+    }
+    return;
+  }
+
+  if (now - lastTokenRefreshAttempt >= TOKEN_REFRESH_RETRY_INTERVAL) {
+    Serial.println("🔄 Requesting Firebase token refresh...");
+    WebSerial.println("🔄 Requesting Firebase token refresh...");
+    Firebase.refreshToken(&firebaseConfig);
+    lastTokenRefreshAttempt = now;
   }
 }
 

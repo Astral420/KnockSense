@@ -38,6 +38,9 @@ bool LittleFSConfig::loadConfig() {
     config.admin_password = doc["admin_password"] | "";
     config.firebase_api_key = doc["firebase_api_key"] | "";
     config.firebase_db_url = doc["firebase_db_url"] | "";
+    config.firebase_id_token = doc["firebase_id_token"] | "";
+    config.firebase_refresh_token = doc["firebase_refresh_token"] | "";
+    config.firebase_token_expires_at = doc["firebase_token_expires_at"] | 0;
     config.dhcp_enabled = doc["dhcp_enabled"] | true;
     config.relay_pin = doc["relay_pin"] | 32;
     config.door_open_duration = doc["door_open_duration"] | 6000;
@@ -59,6 +62,9 @@ bool LittleFSConfig::saveConfig() {
     doc["admin_password"] = config.admin_password;
     doc["firebase_api_key"] = config.firebase_api_key;
     doc["firebase_db_url"] = config.firebase_db_url;
+    doc["firebase_id_token"] = config.firebase_id_token;
+    doc["firebase_refresh_token"] = config.firebase_refresh_token;
+    doc["firebase_token_expires_at"] = config.firebase_token_expires_at;
     doc["dhcp_enabled"] = config.dhcp_enabled;
     doc["relay_pin"] = config.relay_pin;
     doc["door_open_duration"] = config.door_open_duration;
@@ -84,6 +90,9 @@ void LittleFSConfig::setDefaults() {
     config.admin_password = "Cv250a178abcd!";
     config.firebase_api_key = "AIzaSyADwTJ55RaBvjvpulAY7T7ORW2dnxZFNqQ";
     config.firebase_db_url = "https://knocksense-21180-default-rtdb.asia-southeast1.firebasedatabase.app";
+    config.firebase_id_token = "";
+    config.firebase_refresh_token = "";
+    config.firebase_token_expires_at = 0;
     config.dhcp_enabled = true;
     config.relay_pin = 32;
     config.door_open_duration = 6000;
@@ -101,6 +110,27 @@ size_t LittleFSConfig::getUsedSpace() { return LittleFS.usedBytes(); }
 size_t LittleFSConfig::getTotalSpace() { return LittleFS.totalBytes(); }
 bool LittleFSConfig::updateWiFiConfig(String ssid, String password) { config.wifi_ssid = ssid; config.wifi_password = password; return saveConfig(); }
 bool LittleFSConfig::updateFirebaseConfig(String apiKey, String dbUrl, String email, String password) { /* Implementation here */ return saveConfig(); }
+void LittleFSConfig::storeFirebaseTokens(const String& idToken, const String& refreshToken, unsigned long expiresAt) {
+    config.firebase_id_token = idToken;
+    config.firebase_refresh_token = refreshToken;
+    config.firebase_token_expires_at = expiresAt;
+    saveConfig();
+}
+
+void LittleFSConfig::clearFirebaseTokens() {
+    config.firebase_id_token = "";
+    config.firebase_refresh_token = "";
+    config.firebase_token_expires_at = 0;
+    saveConfig();
+}
+
+bool LittleFSConfig::hasFirebaseTokens() const {
+    return config.firebase_refresh_token.length() > 0;
+}
+
+unsigned long LittleFSConfig::getFirebaseTokenExpiry() const {
+    return config.firebase_token_expires_at;
+}
 void LittleFSConfig::incrementFailCount() { config.wifi_fail_count++; config.last_connection_attempt = millis(); saveConfig(); }
 void LittleFSConfig::resetFailCount() { if (config.wifi_fail_count > 0) { config.wifi_fail_count = 0; saveConfig(); } }
 bool LittleFSConfig::shouldRetryConnection() { if (!config.auto_reconnect || config.wifi_fail_count >= 5) return false; unsigned long retryDelay = 30000 * (config.wifi_fail_count + 1); return (millis() - config.last_connection_attempt) > retryDelay; }

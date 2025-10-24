@@ -21,6 +21,9 @@ public:
         String admin_password;
         String firebase_api_key;
         String firebase_db_url;
+        String firebase_id_token;
+        String firebase_refresh_token;
+        unsigned long firebase_token_expires_at;
         bool dhcp_enabled;
         IPAddress static_ip;
         IPAddress gateway;
@@ -52,6 +55,10 @@ public:
     
     bool updateWiFiConfig(String ssid, String password);
     bool updateFirebaseConfig(String apiKey, String dbUrl, String email, String password);
+    void storeFirebaseTokens(const String& idToken, const String& refreshToken, unsigned long expiresAt);
+    void clearFirebaseTokens();
+    bool hasFirebaseTokens() const;
+    unsigned long getFirebaseTokenExpiry() const;
     void incrementFailCount();
     void resetFailCount();
     bool shouldRetryConnection();
