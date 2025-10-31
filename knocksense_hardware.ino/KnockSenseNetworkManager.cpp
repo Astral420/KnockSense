@@ -86,7 +86,7 @@ void KnockSenseNetworkManager::connectWiFi() {
 void KnockSenseNetworkManager::forceReconnect() {
     WebSerial.println("Forcing WiFi reconnection");
     staConnected = false;
-    WiFi.disconnect(true);
+    WiFi.disconnect(false);
     delay(1000);
     config->resetFailCount();
     connectWiFi();

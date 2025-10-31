@@ -5,6 +5,15 @@ import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/services/microsoft_graph_service.dart';
 import 'package:knocksense/services/notification_service.dart';
 
+class AuthBanException implements Exception {
+  final String message;
+
+  AuthBanException(this.message);
+
+  @override
+  String toString() => message;
+}
+
 class AuthService {
   final FirebaseAuth _auth;
   final FirebaseDatabase _database;
@@ -18,6 +27,36 @@ class AuthService {
         _database = database,
         _graphService = graphService;
 
+  Future<String?> _getBanMessage(String? email) async {
+    if (email == null || email.isEmpty) {
+      return null;
+    }
+
+    final normalizedEmail = _normalizeEmail(email);
+    final emailKey = _encodeKey(normalizedEmail);
+    final snapshot = await _database.ref('banned_teacher_emails/$emailKey').get();
+    debugPrint('[AuthService] Ban lookup for "$normalizedEmail" -> exists=${snapshot.exists} value=${snapshot.value}');
+
+    if (!snapshot.exists || snapshot.value == null) {
+      return null;
+    }
+
+    final data = snapshot.value is Map
+        ? Map<String, dynamic>.from(snapshot.value as Map)
+        : <String, dynamic>{};
+
+    final reason = data['reason'] as String?;
+    if (reason != null && reason.trim().isNotEmpty) {
+      return reason;
+    }
+
+    return 'This account has been permanently removed. Please contact an administrator to regain access.';
+  }
+
+  String _normalizeEmail(String email) => email.trim().toLowerCase();
+
+  String _encodeKey(String key) => key.replaceAll(RegExp(r'[.#$\[\]]'), '_');
+
   // Microsoft Sign In (for teachers and students)
   Future<UserModel?> signInWithMicrosoft() async {
   try {
@@ -28,6 +67,12 @@ class AuthService {
     });
 
     final userCredential = await _auth.signInWithProvider(microsoftProvider);
+
+    final banMessage = await _getBanMessage(userCredential.user?.email);
+    if (banMessage != null) {
+      await _auth.signOut();
+      throw AuthBanException(banMessage);
+    }
 
     if (userCredential.user != null) {
       String? accessToken;
@@ -131,15 +176,21 @@ Future<UserModel?> signInWithEmailPassword(
   Future<String> _generateTeacherId() async {
   try {
     final counterRef = _database.ref('counters/teacherIdCounter');
-    
-    // Use transaction to ensure atomic increment
-    final transactionResult = await counterRef.runTransaction((currentValue) {
-      int nextId = 1;
-      if (currentValue != null && currentValue is int) {
-        nextId = currentValue + 1;
-      }
-      return Transaction.success(nextId);
-    });
+
+    TransactionResult transactionResult;
+    try {
+      transactionResult = await counterRef.runTransaction((currentValue) {
+        int nextId = 1;
+        if (currentValue != null && currentValue is int) {
+          nextId = currentValue + 1;
+        }
+        return Transaction.success(nextId);
+      });
+    } on FirebaseException catch (e, stack) {
+      debugPrint('[AuthService] teacherId transaction failed: ${e.code} ${e.message}');
+      debugPrintStack(stackTrace: stack);
+      rethrow;
+    }
     
     if (transactionResult.committed && transactionResult.snapshot.value != null) {
       final teacherNumber = transactionResult.snapshot.value as int;
@@ -164,6 +215,12 @@ Future<UserModel?> signInWithEmailPassword(
 }) async {
   final String uid = firebaseUser.uid;
   final String email = firebaseUser.email ?? '';
+
+  final banMessage = await _getBanMessage(email);
+  if (!isAdmin && banMessage != null) {
+    await _auth.signOut();
+    throw AuthBanException(banMessage);
+  }
 
   // Prioritize principalName for the displayName, with fallbacks
   final String displayName =
@@ -255,7 +312,13 @@ Future<UserModel?> signInWithEmailPassword(
   }
 
   // Save the complete user object to the database
-  await userRef.update(user.toJson());
+  try {
+    await userRef.update(user.toJson());
+  } on FirebaseException catch (e, stack) {
+    debugPrint('[AuthService] users/$uid update failed: ${e.code} ${e.message}');
+    debugPrintStack(stackTrace: stack);
+    rethrow;
+  }
 
   // Update role index - CRITICAL FIX: Use update() instead of set()
   final Map<String, dynamic> roleIndexData = {
@@ -274,13 +337,25 @@ Future<UserModel?> signInWithEmailPassword(
       roleIndexData.addAll(existingTeacherRoleData);
     }
 
-    await _database.ref('roles/${role.name}/$uid').update(roleIndexData);
+    try {
+      await _database.ref('roles/${role.name}/$uid').update(roleIndexData);
+    } on FirebaseException catch (e, stack) {
+      debugPrint('[AuthService] roles/${role.name}/$uid update failed: ${e.code} ${e.message}');
+      debugPrintStack(stackTrace: stack);
+      rethrow;
+    }
 
   } else if (role == UserRole.student) {
     roleIndexData['studentNumber'] = studentNumber;
     
     // For students, we can use set() since there's no ESP32 data
-    await _database.ref('roles/${role.name}/$uid').set(roleIndexData);
+    try {
+      await _database.ref('roles/${role.name}/$uid').set(roleIndexData);
+    } on FirebaseException catch (e, stack) {
+      debugPrint('[AuthService] roles/${role.name}/$uid set failed: ${e.code} ${e.message}');
+      debugPrintStack(stackTrace: stack);
+      rethrow;
+    }
   
   // ADD THIS BLOCK
   } else if (role == UserRole.admin || role == UserRole.super_admin) {

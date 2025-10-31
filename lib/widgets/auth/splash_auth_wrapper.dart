@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:knocksense/models/user_models.dart';
 import 'package:knocksense/provider/auth_provider.dart';
+import 'package:knocksense/services/auth_service.dart';
 import 'package:knocksense/screens/auth/onboarding_screen.dart';
 import 'package:knocksense/widgets/common/loading_widget.dart';
 import 'package:knocksense/widgets/navigation/student_nav_wrapper.dart';
@@ -59,6 +60,7 @@ class _SplashAuthWrapperState extends ConsumerState<SplashAuthWrapper>
 
   // Track previous auth state to detect logout
   User? _previousUser;
+  bool _waitingForUserRecord = false;
 
   @override
   void initState() {
@@ -167,6 +169,17 @@ class _SplashAuthWrapperState extends ConsumerState<SplashAuthWrapper>
     
     // CRITICAL FIX: Detect logout and reset state
     authState.whenData((currentUser) {
+      final previousUid = _previousUser?.uid;
+      final currentUid = currentUser?.uid;
+
+      if (previousUid != currentUid) {
+        _waitingForUserRecord = currentUid != null;
+        if (currentUid == null) {
+          _accountRemovalNoticePending = false;
+          _handlingAccountRemoval = false;
+        }
+      }
+
       if (_previousUser != null && currentUser == null) {
         // User just logged out
         _resetAuthState();
@@ -185,6 +198,12 @@ class _SplashAuthWrapperState extends ConsumerState<SplashAuthWrapper>
             return userDetails.when(
               data: (userModel) {
                 if (userModel == null) {
+                  if (_waitingForUserRecord) {
+                    return const Scaffold(
+                      body: LoadingWidget(message: 'Setting up your account...'),
+                    );
+                  }
+
                   Future.microtask(() async {
                     if (!_handlingAccountRemoval) {
                       _handlingAccountRemoval = true;
@@ -201,6 +220,8 @@ class _SplashAuthWrapperState extends ConsumerState<SplashAuthWrapper>
                     showError: false,
                     showAccountRemoved: true,
                   );
+                } else {
+                  _waitingForUserRecord = false;
                 }
                 // Return the appropriate dashboard
                 return _buildAuthenticatedView(userModel);
@@ -603,6 +624,13 @@ class _LoginPaneState extends State<_LoginPane> {
         );
       }
       // Note: Don't set loading to false on success - the auth state change will rebuild the widget
+    } on AuthBanException catch (e) {
+      if (mounted) {
+        widget.onLoadingChange(false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
     } catch (e) {
       if (mounted) {
         widget.onLoadingChange(false);
@@ -632,6 +660,13 @@ class _LoginPaneState extends State<_LoginPane> {
         );
       }
       // Note: Don't set loading to false on success - the auth state change will rebuild the widget
+    } on AuthBanException catch (e) {
+      if (mounted) {
+        widget.onLoadingChange(false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
     } catch (e) {
       if (mounted) {
         widget.onLoadingChange(false);

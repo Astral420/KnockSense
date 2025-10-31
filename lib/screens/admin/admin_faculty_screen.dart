@@ -492,9 +492,9 @@ class AdminFacultyScreen extends ConsumerWidget {
                           final adminService = ref.read(adminTeacherServiceProvider);
 
                           try {
-                            final message = await adminService.deleteTeacherAccount(
+                            final message = await adminService.archiveTeacherAccount(
                               teacherUid: teacher.uid,
-                              deletedBy: deletedBy,
+                              archivedBy: deletedBy,
                             );
 
                             if (!dialogContext.mounted) return;
@@ -503,14 +503,14 @@ class AdminFacultyScreen extends ConsumerWidget {
                             _showSnackBar(
                               dialogContext,
                               message ??
-                                  'Teacher account deleted. Use the web dashboard if you need to restore this account.',
+                                  'Teacher account archived. Use the web dashboard to restore or hard delete this account.',
                             );
                           } on AdminTeacherDeletionException catch (e) {
                             if (!dialogContext.mounted) return;
                             Navigator.of(dialogContext).pop();
                             final errorMessage = e.code == 'permission-denied'
-                                ? 'You do not have permission to delete teacher accounts. Contact a super admin.'
-                                : '${e.message}. If you need to restore this account, please use the web dashboard.';
+                                ? 'You do not have permission to archive teacher accounts. Contact a super admin.'
+                                : '${e.message}. Use the web dashboard to restore or hard delete this account if needed.';
                             _showSnackBar(
                               dialogContext,
                               errorMessage,
@@ -521,7 +521,7 @@ class AdminFacultyScreen extends ConsumerWidget {
                             Navigator.of(dialogContext).pop();
                             _showSnackBar(
                               dialogContext,
-                              'Failed to delete account: $e',
+                              'Failed to archive account: $e',
                               isError: true,
                             );
                           }
