@@ -313,6 +313,7 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final viewInsets = MediaQuery.of(context).viewInsets;
     // Check appointment type and status
     final isScheduledDue = _isScheduledAppointmentRequiringResponse();
     final isSpecialInstant = widget.appointment.isSpecial;
@@ -323,18 +324,24 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
     final isMeetLater = widget.appointment.status == AppointmentStatus.accepted && 
                         widget.appointment.teacherAction == TeacherAction.meetLater;
     
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFFDF6E3),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header with student info
-            Row(
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(bottom: viewInsets.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFFDF6E3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header with student info
+                Row(
               children: [
                 // Use UserAvatar.custom instead of hardcoded CircleAvatar
                 UserAvatar.custom(
@@ -462,23 +469,25 @@ class _TeacherResponseWidgetState extends ConsumerState<TeacherResponseWidget> {
               ),
             ],
             
-            const SizedBox(height: 24),
-            
-            // Decision logic for which UI to show
-            if (isScheduledDue && widget.appointment.status == AppointmentStatus.pending) ...[
-              // For scheduled appointments when professor was offline/busy
-              _buildScheduledAppointmentResponseUI(),
-            ] else if (isSpecialInstant && widget.appointment.status == AppointmentStatus.pending) ...[
-              _buildSpecialAppointmentUI(),
-            ] else if (isWaiting) ...[
-              _buildWaitingManagementUI(),
-            ] else if (isMeetLater) ...[
-              _buildMeetLaterManagementUI(),
-            ] else ...[
-              // Regular pending appointment (immediate request when online)
-              _buildPendingAppointmentUI(),
-            ],
-          ],
+                const SizedBox(height: 24),
+                
+                // Decision logic for which UI to show
+                if (isScheduledDue && widget.appointment.status == AppointmentStatus.pending) ...[
+                  // For scheduled appointments when professor was offline/busy
+                  _buildScheduledAppointmentResponseUI(),
+                ] else if (isSpecialInstant && widget.appointment.status == AppointmentStatus.pending) ...[
+                  _buildSpecialAppointmentUI(),
+                ] else if (isWaiting) ...[
+                  _buildWaitingManagementUI(),
+                ] else if (isMeetLater) ...[
+                  _buildMeetLaterManagementUI(),
+                ] else ...[
+                  // Regular pending appointment (immediate request when online)
+                  _buildPendingAppointmentUI(),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -569,100 +569,96 @@ class AdminRfidScreen extends ConsumerWidget {
           builder: (context, setState) {
             return AlertDialog(
               title: const Text('Assign RFID to Teacher'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'RFID UID: ${tag.rfid_uid}',
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  if (isLoading)
-                    const Center(child: CircularProgressIndicator())
-                  else if (teachers.isEmpty)
-                    const Text('No teachers found in the system.')
-                  else ...[
-                    const Text('Select Teacher:'),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: selectedTeacherID,
-                      hint: const Text('Choose a teacher'),
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'RFID UID: ${tag.rfid_uid}',
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.bold,
                       ),
-                      items: [
-                        // Option to unassign
-                        const DropdownMenuItem<String>(
-                          value: null,
-                          child: Text(
-                            'Unassign',
-                            style: TextStyle(fontStyle: FontStyle.italic),
+                    ),
+                    const SizedBox(height: 16),
+                    if (isLoading)
+                      const Center(child: CircularProgressIndicator())
+                    else if (teachers.isEmpty)
+                      const Text('No teachers found in the system.')
+                    else ...[
+                      const Text('Select Teacher:'),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String?>(
+                        value: selectedTeacherID,
+                        isExpanded: true,
+                        hint: const Text('Choose a teacher'),
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
                           ),
                         ),
-                        // Teacher options
-                        ...teachers.map((teacher) {
-                          return DropdownMenuItem<String>(
-                            value: teacher['teacherID'] as String?,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  teacher['displayName'] ?? 'Unknown Name',
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                              ],
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text(
+                              'Unassign',
+                              style: TextStyle(fontStyle: FontStyle.italic),
                             ),
-                          );
-                        }).toList(),
-                      ],
-                      onChanged: (String? value) {
-                        setState(() {
-                          selectedTeacherID = value;
-                        });
-                      },
-                    ),
-                    
-                    // Show current assignment info if exists
-                    if (tag.assignedTo != null) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: Colors.blue.shade200),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline, 
-                                 size: 16, 
-                                 color: Colors.blue.shade700),
-                            const SizedBox(width: 8),
-                            Expanded(
+                          ),
+                          ...teachers.map((teacher) {
+                            return DropdownMenuItem<String?>(
+                              value: teacher['teacherID'] as String?,
                               child: Text(
-                                'Currently assigned to: ${tag.assignedTo}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.blue.shade700,
+                                teacher['displayName'] ?? 'Unknown Name',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            );
+                          }).toList(),
+                        ],
+                        onChanged: (String? value) {
+                          setState(() {
+                            selectedTeacherID = value;
+                          });
+                        },
+                      ),
+                      if (tag.assignedTo != null) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                size: 16,
+                                color: Colors.blue.shade700,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Currently assigned to: ${tag.assignedTo}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.blue.shade700,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ],
-                ],
+                ),
               ),
               actions: <Widget>[
                 TextButton(

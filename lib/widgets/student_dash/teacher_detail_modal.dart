@@ -108,82 +108,69 @@ class _TeacherDetailModalState extends ConsumerState<TeacherDetailModal> {
     bool hasPendingAppointment,
     AsyncValue statusWithDuration,
   ) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(20),
-        ),
-      ),
-      // FIXED: Use Flexible height with proper constraints
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.9, // Max 90% of screen height
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle bar
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(2),
-            ),
+    final viewInsets = MediaQuery.of(context).viewInsets;
+
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(bottom: viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(20),
           ),
-          
-          // FIXED: Scrollable content for overflow prevention
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Teacher profile section with duration
-                  _buildTeacherProfileSection(teacher, statusWithDuration),
-                  
-                  const SizedBox(height: 20), // Reduced spacing
-                  
-                  // Status notifications
-                  ..._buildStatusNotifications(teacher, hasPendingAppointment),
-                  
-                  // NEW: Error and Info Messages Display
-                  if (_errorMessage != null) ...[
-                    _buildErrorMessage(_errorMessage!),
-                    const SizedBox(height: 12), // Reduced spacing
-                  ],
-                  if (_infoMessage != null) ...[
-                    _buildInfoMessage(_infoMessage!),
-                    const SizedBox(height: 12), // Reduced spacing
-                  ],
-                  
-                  // Teacher message if available
-                  if (teacher.teacherMsg != null && teacher.teacherMsg!.isNotEmpty) ...[
-                    _buildTeacherMessage(teacher.teacherMsg!),
-                    const SizedBox(height: 16), // Reduced spacing
-                  ],
-                  
-                  // Note input field
-                  _buildNoteInputField(),
-                  
-                  // Date/Time selection (show when scheduling)
-                  if (_showSchedulingOptions) ...[
-                    const SizedBox(height: 16), // Reduced spacing
-                    _buildDateTimeSelection(),
-                  ],
-                  
-                  const SizedBox(height: 20), // Reduced spacing
-                  
-                  // Action buttons
-                  _buildActionButtons(teacher, currentUser, hasPendingAppointment),
-                  
-                  const SizedBox(height: 8),
-                ],
+        ),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ),
-        ],
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTeacherProfileSection(teacher, statusWithDuration),
+                    const SizedBox(height: 20),
+                    ..._buildStatusNotifications(teacher, hasPendingAppointment),
+                    if (_errorMessage != null) ...[
+                      _buildErrorMessage(_errorMessage!),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_infoMessage != null) ...[
+                      _buildInfoMessage(_infoMessage!),
+                      const SizedBox(height: 12),
+                    ],
+                    if (teacher.teacherMsg != null && teacher.teacherMsg!.isNotEmpty) ...[
+                      _buildTeacherMessage(teacher.teacherMsg!),
+                      const SizedBox(height: 16),
+                    ],
+                    _buildNoteInputField(),
+                    if (_showSchedulingOptions) ...[
+                      const SizedBox(height: 16),
+                      _buildDateTimeSelection(),
+                    ],
+                    const SizedBox(height: 20),
+                    _buildActionButtons(teacher, currentUser, hasPendingAppointment),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -6,6 +6,7 @@ import 'package:knocksense/models/appointment_model.dart';
 import 'package:knocksense/provider/appointment_provider.dart';
 import 'package:knocksense/widgets/common/notification_icon_widget.dart';
 import 'dart:async';
+import 'dart:ui' as ui;
 
 // Debounce timer for date range updates
 Timer? _debounceTimer;
@@ -430,32 +431,79 @@ class _AppointmentHistoryCard extends StatelessWidget {
                   
                   // Show scheduled time first if it's a scheduled appointment
                   if (isScheduledAppointment) ...[
-                    Row(
-                      children: [
-                        // Icon(
-                        //   Icons.schedule,
-                        //   size: 11,
-                        //   color: Colors.blue[600],
-                        // ),
-                        const SizedBox(width: 0),
-                        Text(
-                          'Scheduled: ',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.blue[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        Flexible(
-                          child: Text(
-                            DateFormat('MM/dd/yy, h:mm a').format(displayDate),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final scheduleText = DateFormat('MM/dd/yy, h:mm a').format(displayDate);
+                        final textPainter = TextPainter(
+                          text: TextSpan(
+                            text: 'Scheduled: ',
                             style: TextStyle(
                               fontSize: 10,
-                              color: Colors.blue[700],
+                              color: Colors.blue[600],
+                              fontWeight: FontWeight.w500,
                             ),
+                            children: [
+                              TextSpan(
+                                text: scheduleText,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.blue[700],
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                          maxLines: 1,
+                          textDirection: ui.TextDirection.ltr,
+                        )
+                          ..layout(maxWidth: constraints.maxWidth);
+
+                        final fitsSingleLine = textPainter.didExceedMaxLines == false;
+
+                        final scheduleRow = RichText(
+                          text: TextSpan(
+                            text: 'Scheduled: ',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.blue[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: scheduleText,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.blue[700],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (fitsSingleLine) {
+                          return scheduleRow;
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Scheduled:',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.blue[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Text(
+                              scheduleText,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.blue[700],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 2),
                   ],

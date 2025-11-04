@@ -224,232 +224,226 @@ class _RejectAllModalState extends ConsumerState<RejectAllModal> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFFDF6E3),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.only(
-          bottom: 16,
-          left: 20,
-          right: 20,
-          top: 16,
+    final viewInsets = MediaQuery.of(context).viewInsets;
+
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(bottom: viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFFDF6E3),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Drag handle
-            Center(
-              child: Container(
-                width: 40,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
+        child: SafeArea(
+          top: false,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
             ),
-            
-            const SizedBox(height: 24),
-            
-            // Header with student avatars and info
-            Row(
-              children: [
-                _buildStudentAvatars(),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _getStudentNames(),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${widget.appointmentsToReject.length} pending appointment${widget.appointmentsToReject.length == 1 ? '' : 's'}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      _buildStudentAvatars(),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _getStudentNames(),
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${widget.appointmentsToReject.length} pending appointment${widget.appointmentsToReject.length == 1 ? '' : 's'}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade700,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Text(
+                          'Bulk Reject',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade700,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Text(
-                    'Bulk Reject',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                  const SizedBox(height: 20),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Reject All Appointments',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.red,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Please provide a reason for rejecting all pending appointments. This reason will be sent to all students.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
-            ),
-            
-            const SizedBox(height: 20),
-            
-            // Warning message container
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Reject All Appointments',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.red,
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _reasonController,
+                    onChanged: (_) => _clearReasonError(),
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'e.g., "Emergency meeting", "Unavailable for today"',
+                      hintStyle: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 14,
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: _hasError ? Colors.red : Colors.grey[200]!,
+                          width: _hasError ? 2 : 1,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: _hasError ? Colors.red : Colors.grey[200]!,
+                          width: _hasError ? 2 : 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: _hasError ? Colors.red : Colors.deepPurple,
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.all(16),
                     ),
+                    textCapitalization: TextCapitalization.sentences,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Please provide a reason for rejecting all pending appointments. This reason will be sent to all students.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+                  if (_hasError) ...[
+                    const SizedBox(height: 8),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'A reason is required.',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
+                  ],
+                  const SizedBox(height: 24),
+                  Column(
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _isRejecting ? null : _handleRejectAll,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.shade700,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            disabledBackgroundColor: Colors.grey[300],
+                          ),
+                          icon: _isRejecting
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : const Icon(Icons.block, size: 20),
+                          label: Text(
+                            _isRejecting ? 'Rejecting...' : 'Reject All Appointments',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton(
+                          onPressed: _isRejecting ? null : () => Navigator.pop(context),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.grey[600],
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-            
-            const SizedBox(height: 20),
-            
-            // Reason input field
-            TextField(
-              controller: _reasonController,
-              onChanged: (_) => _clearReasonError(),
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: 'e.g., "Emergency meeting", "Unavailable for today"',
-                hintStyle: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 14,
-                ),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: _hasError ? Colors.red : Colors.grey[200]!,
-                    width: _hasError ? 2 : 1,
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: _hasError ? Colors.red : Colors.grey[200]!,
-                    width: _hasError ? 2 : 1,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: _hasError ? Colors.red : Colors.deepPurple,
-                    width: 2,
-                  ),
-                ),
-                contentPadding: const EdgeInsets.all(16),
-              ),
-              textCapitalization: TextCapitalization.sentences,
-            ),
-            
-            if (_hasError) ...[
-              const SizedBox(height: 8),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'A reason is required.',
-                  style: TextStyle(
-                    color: Colors.red,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-            
-            const SizedBox(height: 24),
-            
-            // Action buttons
-            Column(
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _isRejecting ? null : _handleRejectAll,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.shade700,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      disabledBackgroundColor: Colors.grey[300],
-                    ),
-                    icon: _isRejecting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2.5,
-                            ),
-                          )
-                        : const Icon(Icons.block, size: 20),
-                    label: Text(
-                      _isRejecting ? 'Rejecting...' : 'Reject All Appointments',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(height: 16),
-                
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton(
-                    onPressed: _isRejecting ? null : () => Navigator.pop(context),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.grey[600],
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: const Text(
-                      'Cancel',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );

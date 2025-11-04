@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -273,7 +275,6 @@ class AdminNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final itemCount = items.length;
-    final double itemWidth = kMenuWidth / itemCount;
 
     return Material(
       color: kBarBg,
@@ -294,38 +295,49 @@ class AdminNavBar extends StatelessWidget {
                 topRight: Radius.circular(0),
               ),
             ),
-            child: Center(
-              child: SizedBox(
-                width: kMenuWidth,
-                height: kMenuHeight,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: List.generate(items.length, (i) {
-                        final selected = i == currentIndex;
-                        final item = items[i];
-                        return _NavItemButton(
-                          selected: selected,
-                          width: itemWidth,
-                          height: kItemHeight,
-                          iconWidth: item.iconWidth,
-                          iconHeight: item.iconHeight,
-                          svgPath: selected ? item.assetSelected : item.assetUnselected,
-                          color: selected ? item.selectedColor : item.unselectedColor,
-                          onTap: () => onTap(i),
-                          semanticsLabel: item.semanticsLabel,
-                        );
-                      }),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final double availableWidth = constraints.maxWidth;
+                final double menuWidth = math.min(kMenuWidth, availableWidth);
+                final double itemWidth = menuWidth / itemCount;
+
+                return Align(
+                  alignment: Alignment.center,
+                  child: SizedBox(
+                    width: menuWidth,
+                    height: kMenuHeight,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Row(
+                          children: List.generate(items.length, (i) {
+                            final selected = i == currentIndex;
+                            final item = items[i];
+                            return SizedBox(
+                              width: itemWidth,
+                              child: _NavItemButton(
+                                selected: selected,
+                                width: itemWidth,
+                                height: kItemHeight,
+                                iconWidth: item.iconWidth,
+                                iconHeight: item.iconHeight,
+                                svgPath: selected ? item.assetSelected : item.assetUnselected,
+                                color: selected ? item.selectedColor : item.unselectedColor,
+                                onTap: () => onTap(i),
+                                semanticsLabel: item.semanticsLabel,
+                              ),
+                            );
+                          }),
+                        ),
+                        _TopIndicator(
+                          currentIndex: currentIndex,
+                          itemWidth: itemWidth,
+                        ),
+                      ],
                     ),
-                    _TopIndicator(
-                      currentIndex: currentIndex,
-                      itemWidth: itemWidth,
-                    ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
           ),
         ),

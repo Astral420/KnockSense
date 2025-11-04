@@ -36,186 +36,185 @@ class _AddNoteModalState extends ConsumerState<AddNoteModal> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
+    final viewInsets = MediaQuery.of(context).viewInsets;
+
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(bottom: viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
         ),
-      ),
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Handle bar
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              // Title
-              Row(
+        child: SafeArea(
+          top: false,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(           
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.purple[100],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.note_add,
-                      color: Colors.purple[700],
-                      size: 20,
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Add Note',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              
-              // Description
-              Text(
-                'Add a note or status message that students will see',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              // Note input
-              TextField(
-                controller: _noteController,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  hintText: 'e.g., "In a meeting until 3 PM", "Available for consultation"',
-                  hintStyle: TextStyle(
-                    color: Colors.grey[400],
-                    fontSize: 14,
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: Colors.purple[400]!,
-                      width: 2,
-                    ),
-                  ),
-                  contentPadding: const EdgeInsets.all(16),
-                ),
-                style: const TextStyle(fontSize: 14),
-                textCapitalization: TextCapitalization.sentences,
-              ),
-              const SizedBox(height: 20),
-              
-              // Action buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: _isSaving ? null : () {
-                        Navigator.pop(context);
-                      },
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.purple[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.note_add,
+                          color: Colors.purple[700],
+                          size: 20,
                         ),
                       ),
-                      child: const Text(
-                        'Cancel',
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Add Note',
                         style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add a note or status message that students will see',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton(
-                      onPressed: _isSaving ? null : _saveNote,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.purple[600],
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        disabledBackgroundColor: Colors.purple[200],
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _noteController,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'e.g., "In a meeting until 3 PM", "Available for consultation"',
+                      hintStyle: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 14,
                       ),
-                      child: _isSaving
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Text(
-                              'Save Note',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.purple[400]!,
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.all(16),
+                    ),
+                    style: const TextStyle(fontSize: 14),
+                    textCapitalization: TextCapitalization.sentences,
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: _isSaving ? null : () {
+                            Navigator.pop(context);
+                          },
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                    ),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: _isSaving ? null : _saveNote,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.purple[600],
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            disabledBackgroundColor: Colors.purple[200],
+                          ),
+                          child: _isSaving
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : const Text(
+                                  'Save Note',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
                   ),
+                  if (widget.currentNote != null && widget.currentNote!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: _isSaving ? null : _clearNote,
+                        icon: const Icon(
+                          Icons.clear,
+                          size: 18,
+                          color: Colors.red,
+                        ),
+                        label: const Text(
+                          'Clear Note',
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
-              
-              // Clear note option if there's an existing note
-              if (widget.currentNote != null && widget.currentNote!.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Center(
-                  child: TextButton.icon(
-                    onPressed: _isSaving ? null : _clearNote,
-                    icon: const Icon(
-                      Icons.clear,
-                      size: 18,
-                      color: Colors.red,
-                    ),
-                    label: const Text(
-                      'Clear Note',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
+            ),
           ),
         ),
       ),

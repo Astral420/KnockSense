@@ -187,8 +187,8 @@ class AdminDashboard extends ConsumerWidget {
     required VoidCallback onTap,
     bool enabled = true,
   }) {
-    return AspectRatio(
-      aspectRatio: 178 / 177,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 177),
       child: Material(
         color: kSurface,
         borderRadius: BorderRadius.circular(20),
@@ -200,6 +200,7 @@ class AdminDashboard extends ConsumerWidget {
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CircleAvatar(
@@ -230,7 +231,7 @@ class AdminDashboard extends ConsumerWidget {
                       fontWeight: FontWeight.w400,
                       color: kMuted,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
