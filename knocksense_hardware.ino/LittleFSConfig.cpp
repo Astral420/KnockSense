@@ -86,10 +86,10 @@ void LittleFSConfig::setDefaults() {
     config.wifi_password = "tJSRQ4zY";
     config.ap_ssid = "KnockSense";
     config.ap_password = "12345678";
-    config.admin_email = "coolrigby101@gmail.com";
-    config.admin_password = "Cv250a178abcd!";
-    config.firebase_api_key = "AIzaSyADwTJ55RaBvjvpulAY7T7ORW2dnxZFNqQ";
-    config.firebase_db_url = "https://knocksense-21180-default-rtdb.asia-southeast1.firebasedatabase.app";
+    config.admin_email = "";
+    config.admin_password = "";
+    config.firebase_api_key = "";
+    config.firebase_db_url = "";
     config.firebase_id_token = "";
     config.firebase_refresh_token = "";
     config.firebase_token_expires_at = 0;
